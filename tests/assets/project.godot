@@ -1,0 +1,10 @@
+config_version=5
+
+[application]
+config/name="Pet3D isolated asset validation"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+
+[editor_plugins]
+enabled=PackedStringArray("res://addons/vrm/plugin.cfg")

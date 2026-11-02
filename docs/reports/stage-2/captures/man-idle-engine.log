@@ -1,0 +1,18 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+D3D12 12_0 - Forward Mobile - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5070 Ti Laptop GPU
+ERROR: Can't create shader cache folder, no shader caching will happen: user://
+   at: RendererCompositorRD (servers/rendering/renderer_rd/renderer_compositor_rd.cpp:337)
+
+[app] service state=starting pid=0 detail=正在连接后台服务…
+[app] service state=ready pid=35408 detail=后台服务已连接
+[character] loaded id=man bones=19 springs=0
+[stage0] ACTION idle
+[stage0] CHARACTER {"config":"res://assets_data/man.json","id":"man","name":"男人 · GLB"}
+[stage0] ACTION idle
+[stage0] READY {"action":"idle","adapter":"NVIDIA GeForce RTX 5070 Ti Laptop GPU","character":"男人 · GLB","character_details":{"action":"idle","animation_time":0.0,"bone_count":19,"bounds_mean_usec":184.0,"bounds_samples":1,"expressions":[],"id":"man","observed_secondary_rotation_radians":0.0,"positions":{"Head":[-11.2923450469971,126.254570007324,84.0615844726563],"Hips":[0.000471809093141928,0.786866366863251,0.0052220793440938],"LeftFoot":[0.187648952007294,-0.0191631317138672,0.0780972093343735],"LeftHand":[0.20184400677681,0.775889337062836,0.320638298988342],"RightFoot":[-0.0917406305670738,-0.0175420641899109,-0.0241007469594479],"RightHand":[-0.221468165516853,0.760128498077393,0.31105700135231]},"spring_controllers":0},"data_directory":"D:/danjigame/3D-pet-gtpdo/docs/reports/stage-2/captures/data-man","display_fallback":false,"dpi_scale":1.5,"driver":"d3d12","edge_attachment":[1,1],"elapsed":0.0,"engine":"4.7.2-stable (official)","foot_gap_px":-33913.578125,"frames_sampled":0,"last_save_error":"","native":true,"pid":49236,"renderer":"mobile","right_gap_px":-700.36328125,"saved_settings":{"character_id":"man","placement":{"edge_x":1.0,"edge_y":1.0,"x":1.0,"y":1.0},"scale":1.0,"schema_version":1.0,"screen_id":"","user_name":"你"},"service_pid":35408,"service_state":"ready","stage":1,"visible_rect":[-2827.21533203125,-34735.36328125,3259.57861328125,35440.94140625],"warnings":[],"window_position":[2828,34736],"window_size":[720,840],"work_area":[0,0,2560,1528]}
+[app] service state=ready pid=35408 detail=后台服务已连接
+[app] READY service_pid=35408 data_dir=D:/danjigame/3D-pet-gtpdo/docs/reports/stage-2/captures/data-man
+[stage0] CAPTURE result=0
+[app] service state=stopped pid=0 detail=后台服务已退出
+[app] service state=stopped pid=0 detail=后台服务已退出
+[stage0] EXIT code=0

@@ -1,0 +1,363 @@
+extends "res://scripts/pet_window.gd"
+
+const AppSettings = preload("res://scripts/app_settings.gd")
+const ServiceClient = preload("res://scripts/service_client.gd")
+const SettingsWindow = preload("res://scripts/ui/settings_window.gd")
+const ChatWindow = preload("res://scripts/ui/chat_window.gd")
+var client: Node
+var saved_settings := AppSettings.defaults()
+var data_directory := ""
+var displays: Array = []
+var settings_window: Window
+var chat_window: Window
+var notice: AcceptDialog
+var _app_ready := false
+var _closing := false
+var _applying := false
+var _display_fallback := false
+var _save_due := 0
+var _saving := {}
+var _character_rollbacks := {}
+var _last_display_state := ""
+var _warnings: Array = []
+var _last_save_error := ""
+
+func _ready() -> void:
+	_parse_options()
+	if options.has("verify-package"):
+		super._ready()
+		return
+	data_directory = str(options.get("data-dir", OS.get_environment("LOCALAPPDATA").path_join("Pet3D"))).simplify_path().trim_suffix("/")
+	if not data_directory.is_absolute_path():
+		push_error("Data directory must be absolute")
+		get_tree().quit(2)
+		return
+	if not ClassDB.class_exists("PetWindowBridge"):
+		push_error("Stage 1 native library is missing")
+		get_tree().quit(3)
+		return
+	bridge = ClassDB.instantiate("PetWindowBridge")
+	if not bridge.has_method("acquire_instance"):
+		push_error("Stage 1 native library is out of date")
+		get_tree().quit(3)
+		return
+	var acquired: int = bridge.acquire_instance("Pet3D|" + data_directory.replace("\\", "/").to_lower())
+	if acquired != 1:
+		print("[app] existing instance notified" if acquired == 0 else "[app] instance ownership failed")
+		bridge.shutdown()
+		get_tree().quit(0 if acquired == 0 else 3)
+		return
+	if not _initialize_native():
+		return
+	client = ServiceClient.new()
+	add_child(client)
+	client.connected.connect(_on_connected)
+	client.settings_received.connect(_on_settings_received)
+	client.status_changed.connect(_on_service_status)
+	client.request_finished.connect(_on_request_finished)
+	var command := _service_command()
+	client.configure(command.executable, command.arguments, bridge)
+	client.start()
+	var deadline := Time.get_ticks_msec() + 8500
+	while client.state in ["starting", "restarting"] and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	displays = _read_displays()
+	_last_display_state = JSON.stringify(displays)
+	_select_display()
+	super._ready()
+	get_window().title = "Pet3D"
+	_app_ready = true
+	_restore_placement()
+	_create_windows()
+	if not _warnings.is_empty():
+		_show_notice("设置已恢复", "\n".join(PackedStringArray(_warnings)))
+	if options.has("open-settings"):
+		_open_settings()
+	print("[app] READY service_pid=", client.process_pid, " data_dir=", data_directory)
+	if options.has("report"):
+		_write_report()
+
+func _service_command() -> Dictionary:
+	var bundled := OS.get_executable_path().get_base_dir().path_join("service/pet-service.exe")
+	if FileAccess.file_exists(bundled):
+		return {"executable": bundled, "arguments": PackedStringArray(["--data-dir", data_directory])}
+	if OS.has_feature("editor"):
+		var python := str(options.get("python", OS.get_environment("PET3D_PYTHON")))
+		if python.is_empty():
+			python = "D:/phthon lang/python.exe"
+		return {"executable": python, "arguments": PackedStringArray(["-u", ProjectSettings.globalize_path("res://../service/main.py").simplify_path(), "--data-dir", data_directory])}
+	return {"executable": bundled, "arguments": PackedStringArray(["--data-dir", data_directory])}
+
+func _initialize_native() -> bool:
+	if DisplayServer.get_name() != "Windows":
+		return true
+	if bridge == null or not bridge.configure(DisplayServer.window_get_native_handle(DisplayServer.WINDOW_HANDLE)):
+		push_error("Could not initialize Windows controls")
+		get_tree().quit(4)
+		return false
+	bridge.set_interactive(false)
+	previous_interactive = false
+	dpi_scale = bridge.get_dpi_scale()
+	return true
+
+func _build_world() -> void:
+	super._build_world()
+	_resize_role()
+
+func _load_characters() -> void:
+	super._load_characters()
+	for i in characters.size():
+		if characters[i].id == saved_settings.character_id:
+			options["character"] = str(i)
+
+func _change_character(index: int) -> void:
+	var previous_index := current_character
+	super._change_character(index)
+	if _app_ready and not _applying and current_character != previous_index and client and client.state == "ready":
+		var request_id := _save_patch({"character_id": characters[current_character].id}, false)
+		if not request_id.is_empty():
+			_character_rollbacks[request_id] = previous_index
+
+func _resize_role() -> void:
+	if DisplayServer.get_name() != "headless":
+		get_window().size = Vector2i((Vector2(480, 560) * dpi_scale * float(saved_settings.get("scale", 1))).round())
+
+func _process(delta: float) -> void:
+	if not _app_ready or _closing:
+		return
+	super._process(delta)
+	if _save_due > 0 and Time.get_ticks_msec() >= _save_due:
+		_save_due = 0
+		var patch := _placement_patch()
+		if not patch.is_empty():
+			_save_patch(patch, false)
+
+func _update_input() -> void:
+	var was_dragging: bool = drag.active
+	super._update_input()
+	if was_dragging and not drag.active:
+		_queue_position_save()
+
+func _handle_tray(action: int) -> void:
+	if action == 6:
+		_open_settings()
+	elif action == 7:
+		_open_chat()
+	else:
+		super._handle_tray(action)
+
+func _recover_position() -> void:
+	super._recover_position()
+	if _app_ready:
+		_queue_position_save()
+
+func _read_displays() -> Array:
+	var result: Variant = JSON.parse_string(bridge.get_displays_json()) if bridge else []
+	return result if result is Array else []
+
+func _select_display() -> void:
+	var selection := AppSettings.select_display(displays, str(saved_settings.get("screen_id", "")))
+	_display_fallback = selection.fallback
+	var display: Dictionary = selection.display
+	if display.is_empty():
+		return
+	var position: Array = display.position
+	for index in DisplayServer.get_screen_count():
+		if DisplayServer.screen_get_position(index) == Vector2i(int(position[0]), int(position[1])):
+			screen = index
+			return
+	screen = maxi(0, DisplayServer.get_primary_screen())
+
+func _restore_placement() -> void:
+	_select_display()
+	if DisplayServer.get_name() == "headless":
+		return
+	var work := DisplayServer.screen_get_usable_rect(screen)
+	var placement: Dictionary = saved_settings.get("placement", AppSettings.defaults().placement)
+	if _display_fallback:
+		placement = AppSettings.defaults().placement
+	_attached_edges = Vector2i(int(placement.get("edge_x", 1)), int(placement.get("edge_y", 1)))
+	var subject := _subject_rect()
+	get_window().position = ScreenMath.pin_edges(AppSettings.position_from(placement, subject, work), subject, work, _attached_edges)
+	_last_work_area = work
+
+func _check_screen() -> void:
+	if not _app_ready:
+		return
+	var latest := _read_displays()
+	var signature := JSON.stringify(latest)
+	if signature != _last_display_state:
+		_last_display_state = signature
+		displays = latest
+		_cancel_drag()
+		_restore_placement()
+		if settings_window and settings_window.visible:
+			settings_window.populate(saved_settings, displays)
+	if bridge and DisplayServer.get_name() == "Windows":
+		var actual_scale: float = bridge.get_dpi_scale()
+		if not is_equal_approx(actual_scale, dpi_scale):
+			dpi_scale = actual_scale
+			_resize_role()
+			_restore_placement()
+	super._check_screen()
+
+func _placement_patch() -> Dictionary:
+	if _display_fallback or DisplayServer.get_name() == "headless" or actor == null:
+		return {}
+	return {"placement": AppSettings.placement(get_window().position, _subject_rect(), DisplayServer.screen_get_usable_rect(screen), _attached_edges)}
+
+func _queue_position_save() -> void:
+	if _app_ready and not _closing:
+		_save_due = Time.get_ticks_msec() + 300
+
+func _create_windows() -> void:
+	settings_window = SettingsWindow.new()
+	settings_window.visible = false
+	add_child(settings_window)
+	settings_window.configure_characters(characters)
+	settings_window.size = Vector2i(Vector2(560, 440) * dpi_scale)
+	settings_window.save_requested.connect(_on_save_requested)
+	settings_window.recover_requested.connect(func(): _handle_tray(2))
+	settings_window.retry_requested.connect(client.retry)
+	chat_window = ChatWindow.new()
+	chat_window.visible = false
+	add_child(chat_window)
+	chat_window.size = Vector2i(Vector2(520, 360) * dpi_scale)
+	chat_window.retry_requested.connect(client.retry)
+	notice = AcceptDialog.new()
+	notice.title = "Pet3D"
+	add_child(notice)
+	_on_service_status(client.state, client.detail)
+
+func _open_settings() -> void:
+	if settings_window:
+		settings_window.populate(saved_settings, displays)
+		_place_utility_window(settings_window)
+		settings_window.open()
+
+func _open_chat() -> void:
+	if chat_window:
+		_place_utility_window(chat_window)
+		chat_window.open()
+
+func _place_utility_window(window: Window) -> void:
+	var target_screen := clampi(screen, 0, maxi(0, DisplayServer.get_screen_count() - 1))
+	var work := DisplayServer.screen_get_usable_rect(target_screen)
+	window.current_screen = target_screen
+	window.position = AppSettings.utility_position(window.size, work)
+
+func _on_save_requested(patch: Dictionary) -> void:
+	_save_due = 0
+	patch.merge(_placement_patch())
+	_save_patch(patch, true)
+
+func _save_patch(patch: Dictionary, user_initiated: bool) -> String:
+	if client == null or client.state != "ready":
+		var previous_error := _last_save_error
+		_last_save_error = "后台服务未连接，设置尚未保存。角色仍可使用。"
+		if settings_window:
+			settings_window.show_message(_last_save_error, true)
+		if not _closing and previous_error != _last_save_error:
+			_show_notice("位置尚未保存", _last_save_error)
+		return ""
+	var id: String = client.update_settings(patch)
+	if id.is_empty():
+		_last_save_error = "发送失败，设置尚未保存"
+		if settings_window:
+			settings_window.show_message(_last_save_error, true)
+		return ""
+	_saving[id] = user_initiated
+	if settings_window and user_initiated:
+		settings_window.show_message("正在保存…")
+	return id
+
+func _on_connected(settings: Dictionary, warnings: Array) -> void:
+	_warnings = warnings
+	_on_settings_received(settings)
+	if _app_ready and options.has("report"):
+		_write_report()
+
+func _on_settings_received(settings: Dictionary) -> void:
+	var previous := saved_settings
+	saved_settings = settings.duplicate(true)
+	if not _app_ready:
+		return
+	_applying = true
+	if not characters.is_empty() and characters[current_character].id != saved_settings.character_id:
+		for i in characters.size():
+			if characters[i].id == saved_settings.character_id:
+				_change_character(i)
+	if previous.get("scale") != saved_settings.scale:
+		_resize_role()
+	if previous.get("scale") != saved_settings.scale or previous.get("screen_id") != saved_settings.screen_id:
+		_restore_placement()
+	_applying = false
+
+func _on_request_finished(id: String, type: String, payload: Dictionary) -> void:
+	if not _saving.has(id):
+		return
+	var user_initiated: bool = _saving[id]
+	_saving.erase(id)
+	if type == "result":
+		_character_rollbacks.erase(id)
+		_last_save_error = ""
+		if settings_window:
+			settings_window.show_message("设置已保存" if user_initiated else "位置已保存")
+	else:
+		if _character_rollbacks.has(id):
+			var rollback_index := int(_character_rollbacks[id])
+			_character_rollbacks.erase(id)
+			_applying = true
+			super._change_character(rollback_index)
+			_applying = false
+		_last_save_error = "保存失败：" + str(payload.get("message", "后台服务不可用"))
+		if settings_window:
+			settings_window.show_message(_last_save_error, true)
+		if user_initiated or not _closing:
+			_show_notice("设置尚未保存", _last_save_error)
+
+func _on_service_status(state: String, detail: String) -> void:
+	print("[app] service state=", state, " pid=", client.process_pid if client else 0, " detail=", detail)
+	if settings_window:
+		settings_window.show_status(state, detail)
+	if chat_window:
+		chat_window.show_status(detail)
+	if _app_ready and options.has("report"):
+		_write_report()
+
+func _show_notice(title_: String, text: String) -> void:
+	if notice and DisplayServer.get_name() != "headless":
+		notice.title = title_
+		notice.dialog_text = text
+		notice.popup_centered(Vector2i(480, 180))
+	else:
+		print("[app] ", title_, ": ", text)
+
+func _status() -> Dictionary:
+	var data := super._status()
+	data["stage"] = 1
+	data["data_directory"] = data_directory
+	data["service_pid"] = client.process_pid if client else 0
+	data["service_state"] = client.state if client else "stopped"
+	data["saved_settings"] = saved_settings
+	data["display_fallback"] = _display_fallback
+	data["last_save_error"] = _last_save_error
+	data["warnings"] = _warnings
+	return data
+
+func _quit(code: int = 0) -> void:
+	if _closing:
+		return
+	_closing = true
+	_save_due = 0
+	_cancel_drag()
+	if client:
+		if _app_ready and client.state == "ready":
+			var patch := _placement_patch()
+			if not patch.is_empty():
+				_save_patch(patch, false)
+			var deadline := Time.get_ticks_msec() + 1800
+			while not _saving.is_empty() and Time.get_ticks_msec() < deadline:
+				await get_tree().process_frame
+		await client.stop(1.5)
+	super._quit(code)

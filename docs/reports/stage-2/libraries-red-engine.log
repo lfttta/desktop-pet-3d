@@ -1,0 +1,52 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: Cannot open file 'res://resources/animations/godette.tres'.
+   at: load (scene/resources/resource_format_text.cpp:1442)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://tests/test_stage2_libraries.gd:35)
+ERROR: Failed loading resource: res://resources/animations/godette.tres.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://tests/test_stage2_libraries.gd:35)
+ERROR: godette animation library loads
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://tests/test_stage2_libraries.gd:14)
+       [1] _initialize (res://tests/test_stage2_libraries.gd:36)
+ERROR: cartoon_skeleton skeleton path resolves
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://tests/test_stage2_libraries.gd:14)
+       [1] _initialize (res://tests/test_stage2_libraries.gd:30)
+ERROR: Cannot open file 'res://resources/animations/cartoon_skeleton.tres'.
+   at: load (scene/resources/resource_format_text.cpp:1442)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://tests/test_stage2_libraries.gd:35)
+ERROR: Failed loading resource: res://resources/animations/cartoon_skeleton.tres.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://tests/test_stage2_libraries.gd:35)
+ERROR: cartoon_skeleton animation library loads
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://tests/test_stage2_libraries.gd:14)
+       [1] _initialize (res://tests/test_stage2_libraries.gd:36)
+ERROR: man skeleton path resolves
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://tests/test_stage2_libraries.gd:14)
+       [1] _initialize (res://tests/test_stage2_libraries.gd:30)
+ERROR: Cannot open file 'res://resources/animations/man.tres'.
+   at: load (scene/resources/resource_format_text.cpp:1442)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://tests/test_stage2_libraries.gd:35)
+ERROR: Failed loading resource: res://resources/animations/man.tres.
+   at: _load (core/io/resource_loader.cpp:317)
+   GDScript backtrace (most recent call first):
+       [0] _initialize (res://tests/test_stage2_libraries.gd:35)
+ERROR: man animation library loads
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://tests/test_stage2_libraries.gd:14)
+       [1] _initialize (res://tests/test_stage2_libraries.gd:36)
+STAGE2_LIBRARY_TESTS checks=21 failures=5

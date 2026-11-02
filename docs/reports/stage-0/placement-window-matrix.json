@@ -1,0 +1,540 @@
+{
+	"cases": [
+		{
+			"action": "idle",
+			"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+			"capture": "D:/danjigame/3D-pet-gtpdo/docs/reports/stage-0/placement-0--1-1.png",
+			"character": "Godette · VRM",
+			"character_details": {
+				"action": "idle",
+				"animation_time": 0.6813,
+				"bone_count": 69,
+				"bounds_mean_usec": 1257.5,
+				"bounds_samples": 4,
+				"expressions": [
+					"blink",
+					"mouth_a"
+				],
+				"id": "godette",
+				"observed_secondary_rotation_radians": 0.0312817767262459,
+				"positions": {
+					"Head": [
+						-0.00713445898145437,
+						1.04803681373596,
+						0.0391972474753857
+					],
+					"Hips": [
+						0.0000599503400735557,
+						0.688023626804352,
+						0.0476752929389477
+					],
+					"LeftFoot": [
+						0.161231726408005,
+						0.0591170191764832,
+						0.0527282990515232
+					],
+					"LeftHand": [
+						0.159906089305878,
+						0.550295889377594,
+						0.064513087272644
+					],
+					"RightFoot": [
+						-0.12137208878994,
+						0.0665866881608963,
+						-0.021543288603425
+					],
+					"RightHand": [
+						-0.162740007042885,
+						0.538889408111572,
+						0.0511959791183472
+					]
+				},
+				"spring_controllers": 1
+			},
+			"dpi_scale": 1.5,
+			"driver": "d3d12",
+			"edge_attachment": [
+				-1,
+				1
+			],
+			"elapsed": 0.6813,
+			"engine": "4.7.2-stable (official)",
+			"foot_gap_px": 0.4378662109375,
+			"frames_sampled": 0,
+			"measured_edge_gaps": [
+				0.081298828125,
+				0.43798828125
+			],
+			"native": true,
+			"pid": 42680,
+			"renderer": "mobile",
+			"right_gap_px": 2386.20880126953,
+			"visible_rect": [
+				269.081298828125,
+				216.834518432617,
+				173.709899902344,
+				460.727600097656
+			],
+			"window_position": [
+				-269,
+				850
+			],
+			"window_size": [
+				720,
+				840
+			],
+			"work_area": [
+				0,
+				0,
+				2560,
+				1528
+			]
+		},
+		{
+			"action": "idle",
+			"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+			"capture": "D:/danjigame/3D-pet-gtpdo/docs/reports/stage-0/placement-0-1-1.png",
+			"character": "Godette · VRM",
+			"character_details": {
+				"action": "idle",
+				"animation_time": 1.34796733333333,
+				"bone_count": 69,
+				"bounds_mean_usec": 1226.3,
+				"bounds_samples": 10,
+				"expressions": [
+					"blink",
+					"mouth_a"
+				],
+				"id": "godette",
+				"observed_secondary_rotation_radians": 0.0312817767262459,
+				"positions": {
+					"Head": [
+						-0.0112114520743489,
+						1.04796290397644,
+						0.0413703471422195
+					],
+					"Hips": [
+						-0.00108081824146211,
+						0.688062131404877,
+						0.0495207980275154
+					],
+					"LeftFoot": [
+						0.161501631140709,
+						0.0592781379818916,
+						0.0528155602514744
+					],
+					"LeftHand": [
+						0.15768338739872,
+						0.551203191280365,
+						0.0654729083180428
+					],
+					"RightFoot": [
+						-0.121263444423676,
+						0.0661247745156288,
+						-0.0206815823912621
+					],
+					"RightHand": [
+						-0.158992052078247,
+						0.536530375480652,
+						0.055170152336359
+					]
+				},
+				"spring_controllers": 1
+			},
+			"dpi_scale": 1.5,
+			"driver": "d3d12",
+			"edge_attachment": [
+				1,
+				1
+			],
+			"elapsed": 1.34796733333333,
+			"engine": "4.7.2-stable (official)",
+			"foot_gap_px": 0.447998046875,
+			"frames_sampled": 0,
+			"measured_edge_gaps": [
+				0.445556640625,
+				0.447998046875
+			],
+			"native": true,
+			"pid": 42680,
+			"renderer": "mobile",
+			"right_gap_px": 0.445526123046875,
+			"visible_rect": [
+				266.626312255859,
+				216.648803710938,
+				173.928161621094,
+				460.903198242188
+			],
+			"window_position": [
+				2119,
+				850
+			],
+			"window_size": [
+				720,
+				840
+			],
+			"work_area": [
+				0,
+				0,
+				2560,
+				1528
+			]
+		},
+		{
+			"action": "idle",
+			"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+			"capture": "D:/danjigame/3D-pet-gtpdo/docs/reports/stage-0/placement-0-0--1.png",
+			"character": "Godette · VRM",
+			"character_details": {
+				"action": "idle",
+				"animation_time": 2.01467666666667,
+				"bone_count": 69,
+				"bounds_mean_usec": 1251.625,
+				"bounds_samples": 16,
+				"expressions": [
+					"blink",
+					"mouth_a"
+				],
+				"id": "godette",
+				"observed_secondary_rotation_radians": 0.0312817767262459,
+				"positions": {
+					"Head": [
+						-0.0154715403914452,
+						1.04770529270172,
+						0.0425256602466106
+					],
+					"Hips": [
+						-0.00252663088031113,
+						0.687939286231995,
+						0.0498517416417599
+					],
+					"LeftFoot": [
+						0.161776229739189,
+						0.0594604909420013,
+						0.0528569333255291
+					],
+					"LeftHand": [
+						0.156080991029739,
+						0.551687121391296,
+						0.0649484917521477
+					],
+					"RightFoot": [
+						-0.121041491627693,
+						0.0656599849462509,
+						-0.0195210464298725
+					],
+					"RightHand": [
+						-0.159838646650314,
+						0.535091757774353,
+						0.0574960932135582
+					]
+				},
+				"spring_controllers": 1
+			},
+			"dpi_scale": 1.5,
+			"driver": "d3d12",
+			"edge_attachment": [
+				0,
+				-1
+			],
+			"elapsed": 2.01467666666667,
+			"engine": "4.7.2-stable (official)",
+			"foot_gap_px": 1066.47436523438,
+			"frame_interval_p95_ms": 33.3333333333333,
+			"frames_sampled": 1,
+			"measured_edge_gaps": [
+				2.59228515625,
+				0.508941650390625
+			],
+			"native": true,
+			"pid": 42680,
+			"renderer": "mobile",
+			"right_gap_px": 2.59222412109375,
+			"visible_rect": [
+				264.327819824219,
+				216.508941650391,
+				174.079956054688,
+				461.016693115234
+			],
+			"window_position": [
+				2119,
+				-216
+			],
+			"window_size": [
+				720,
+				840
+			],
+			"work_area": [
+				0,
+				0,
+				2560,
+				1528
+			]
+		},
+		{
+			"action": "idle",
+			"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+			"capture": "D:/danjigame/3D-pet-gtpdo/docs/reports/stage-0/placement-1--1-1.png",
+			"character": "剑士 · GLB",
+			"character_details": {
+				"action": "idle",
+				"animation_time": 0.654591666666667,
+				"bone_count": 28,
+				"bounds_mean_usec": 1308.2,
+				"bounds_samples": 5,
+				"expressions": [],
+				"id": "swordsman",
+				"observed_secondary_rotation_radians": 0.0,
+				"positions": {
+					"Head": [
+						-0.0186055302619934,
+						1.30429601669312,
+						0.00990266725420952
+					],
+					"Hips": [
+						0.000167633421369828,
+						0.799164950847626,
+						-0.0369020886719227
+					],
+					"LeftFoot": [
+						0.158161669969559,
+						0.0807103291153908,
+						0.052909504622221
+					],
+					"LeftHand": [
+						0.185521170496941,
+						0.724035978317261,
+						0.140404418110847
+					],
+					"RightFoot": [
+						-0.0749595761299133,
+						0.0798891857266426,
+						-0.0430635437369347
+					],
+					"RightHand": [
+						-0.227687120437622,
+						0.710175693035126,
+						0.124317944049835
+					]
+				},
+				"spring_controllers": 0
+			},
+			"dpi_scale": 1.5,
+			"driver": "d3d12",
+			"edge_attachment": [
+				-1,
+				1
+			],
+			"elapsed": 2.66926833333333,
+			"engine": "4.7.2-stable (official)",
+			"foot_gap_px": 0.65771484375,
+			"frame_interval_p95_ms": 85.3233333333333,
+			"frames_sampled": 20,
+			"measured_edge_gaps": [
+				0.903060913085938,
+				0.65771484375
+			],
+			"native": true,
+			"pid": 42680,
+			"renderer": "mobile",
+			"right_gap_px": 2361.03530883789,
+			"visible_rect": [
+				244.903060913086,
+				221.316711425781,
+				198.061630249023,
+				455.025573730469
+			],
+			"window_position": [
+				-244,
+				851
+			],
+			"window_size": [
+				720,
+				840
+			],
+			"work_area": [
+				0,
+				0,
+				2560,
+				1528
+			]
+		},
+		{
+			"action": "idle",
+			"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+			"capture": "D:/danjigame/3D-pet-gtpdo/docs/reports/stage-0/placement-1-1-1.png",
+			"character": "剑士 · GLB",
+			"character_details": {
+				"action": "idle",
+				"animation_time": 1.32125166666667,
+				"bone_count": 28,
+				"bounds_mean_usec": 1316.09090909091,
+				"bounds_samples": 11,
+				"expressions": [],
+				"id": "swordsman",
+				"observed_secondary_rotation_radians": 0.0,
+				"positions": {
+					"Head": [
+						-0.0237871110439301,
+						1.30427443981171,
+						0.013748412951827
+					],
+					"Hips": [
+						-0.0017370335990563,
+						0.799246430397034,
+						-0.0337733961641788
+					],
+					"LeftFoot": [
+						0.157885789871216,
+						0.0809000208973885,
+						0.0527327433228493
+					],
+					"LeftHand": [
+						0.183681726455688,
+						0.724877774715424,
+						0.143118381500244
+					],
+					"RightFoot": [
+						-0.0753163024783134,
+						0.0799964517354965,
+						-0.0435253418982029
+					],
+					"RightHand": [
+						-0.221433654427528,
+						0.706907331943512,
+						0.130052089691162
+					]
+				},
+				"spring_controllers": 0
+			},
+			"dpi_scale": 1.5,
+			"driver": "d3d12",
+			"edge_attachment": [
+				1,
+				1
+			],
+			"elapsed": 3.33592833333333,
+			"engine": "4.7.2-stable (official)",
+			"foot_gap_px": 0.66693115234375,
+			"frame_interval_p95_ms": 33.334,
+			"frames_sampled": 40,
+			"measured_edge_gaps": [
+				0.506103515625,
+				0.6668701171875
+			],
+			"native": true,
+			"pid": 42680,
+			"renderer": "mobile",
+			"right_gap_px": 0.506011962890625,
+			"visible_rect": [
+				244.931411743164,
+				221.242630004883,
+				197.562576293945,
+				455.090454101563
+			],
+			"window_position": [
+				2117,
+				851
+			],
+			"window_size": [
+				720,
+				840
+			],
+			"work_area": [
+				0,
+				0,
+				2560,
+				1528
+			]
+		},
+		{
+			"action": "idle",
+			"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+			"capture": "D:/danjigame/3D-pet-gtpdo/docs/reports/stage-0/placement-1-0--1.png",
+			"character": "剑士 · GLB",
+			"character_details": {
+				"action": "idle",
+				"animation_time": 1.987912,
+				"bone_count": 28,
+				"bounds_mean_usec": 1309.0,
+				"bounds_samples": 17,
+				"expressions": [],
+				"id": "swordsman",
+				"observed_secondary_rotation_radians": 0.0,
+				"positions": {
+					"Head": [
+						-0.0301184020936489,
+						1.30387389659882,
+						0.015563421882689
+					],
+					"Hips": [
+						-0.00417366437613964,
+						0.799030721187592,
+						-0.0332851372659206
+					],
+					"LeftFoot": [
+						0.157655760645866,
+						0.0810789614915848,
+						0.0524829104542732
+					],
+					"LeftHand": [
+						0.181617870926857,
+						0.724899888038635,
+						0.142844513058662
+					],
+					"RightFoot": [
+						-0.0754014402627945,
+						0.0801174938678741,
+						-0.0439021810889244
+					],
+					"RightHand": [
+						-0.222208991646767,
+						0.704524576663971,
+						0.134352594614029
+					]
+				},
+				"spring_controllers": 0
+			},
+			"dpi_scale": 1.5,
+			"driver": "d3d12",
+			"edge_attachment": [
+				0,
+				-1
+			],
+			"elapsed": 4.00258866666666,
+			"engine": "4.7.2-stable (official)",
+			"foot_gap_px": 1072.70306396484,
+			"frame_interval_p95_ms": 33.3333333333333,
+			"frames_sampled": 60,
+			"measured_edge_gaps": [
+				1.62646484375,
+				0.283523559570313
+			],
+			"native": true,
+			"pid": 42680,
+			"renderer": "mobile",
+			"right_gap_px": 1.62652587890625,
+			"visible_rect": [
+				243.551483154297,
+				221.28352355957,
+				197.821990966797,
+				455.013427734375
+			],
+			"window_position": [
+				2117,
+				-221
+			],
+			"window_size": [
+				720,
+				840
+			],
+			"work_area": [
+				0,
+				0,
+				2560,
+				1528
+			]
+		}
+	],
+	"failures": 0
+}

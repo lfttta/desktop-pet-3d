@@ -1,0 +1,10 @@
+{
+  "date": "2026-11-01",
+  "root": "D:\\danjigame\\3D-pet-gtpdo",
+  "engine": "D:\\danjigame\\GODDOT  WORD\\Godot_v4.7.2-stable_win64.exe",
+  "engine_sha256": "AB1824F85BFD8E0E4128182C000C4003A3E042245B2967848D089B2A04B22424",
+  "python": "Python 3.13.14",
+  "v3_reference_sha256": "4FC11758A189371EE980B9B2C96A57A41D3B8DCB8D8028D738245683B7D1743A",
+  "godot_release_template_sha256": "D34D36F3BE1A6C49C56525AE86469B92E4F417DDF0B43CF00DD80C385C4B0562",
+  "git_used": false
+}

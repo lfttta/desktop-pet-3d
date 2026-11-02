@@ -1,0 +1,56 @@
+{
+	"avatar_sample_m": {
+		"idle": {
+			"frames": 251,
+			"godot_skeleton_motion_scale": 0.757685363292694,
+			"hip_motion_scale": 0.749748274093097,
+			"length": 8.33333301544189,
+			"position_tracks": 1,
+			"rotation_tracks": 52
+		},
+		"wave": {
+			"frames": 17,
+			"godot_skeleton_motion_scale": 0.757685363292694,
+			"hip_motion_scale": 0.749748274093097,
+			"length": 0.533333361148834,
+			"position_tracks": 1,
+			"rotation_tracks": 52
+		}
+	},
+	"godette": {
+		"idle": {
+			"frames": 251,
+			"godot_skeleton_motion_scale": 0.645653247833252,
+			"hip_motion_scale": 0.513277845505109,
+			"length": 8.33333301544189,
+			"position_tracks": 1,
+			"rotation_tracks": 45
+		},
+		"wave": {
+			"frames": 17,
+			"godot_skeleton_motion_scale": 0.645653247833252,
+			"hip_motion_scale": 0.513277845505109,
+			"length": 0.533333361148834,
+			"position_tracks": 1,
+			"rotation_tracks": 45
+		}
+	},
+	"swordsman": {
+		"idle": {
+			"frames": 251,
+			"godot_skeleton_motion_scale": 1.0,
+			"hip_motion_scale": 0.807954210676497,
+			"length": 8.33333301544189,
+			"position_tracks": 1,
+			"rotation_tracks": 19
+		},
+		"wave": {
+			"frames": 17,
+			"godot_skeleton_motion_scale": 1.0,
+			"hip_motion_scale": 0.807954210676497,
+			"length": 0.533333361148834,
+			"position_tracks": 1,
+			"rotation_tracks": 19
+		}
+	}
+}

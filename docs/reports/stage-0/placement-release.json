@@ -1,0 +1,86 @@
+{
+	"action": "idle",
+	"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+	"character": "Godette · VRM",
+	"character_details": {
+		"action": "idle",
+		"animation_time": 1.60006233333332,
+		"bone_count": 69,
+		"bounds_mean_usec": 1061.26615186615,
+		"bounds_samples": 3885,
+		"expressions": [
+			"blink",
+			"mouth_a"
+		],
+		"id": "godette",
+		"observed_secondary_rotation_radians": 3.08051872253418,
+		"positions": {
+			"Head": [
+				-0.0134297618642449,
+				1.04777097702026,
+				0.0420419089496136
+			],
+			"Hips": [
+				-0.0016791153466329,
+				0.687925636768341,
+				0.0494018271565437
+			],
+			"LeftFoot": [
+				0.161504507064819,
+				0.0593458376824856,
+				0.0524790920317173
+			],
+			"LeftHand": [
+				0.156926706433296,
+				0.551174998283386,
+				0.0639689266681671
+			],
+			"RightFoot": [
+				-0.121441341936588,
+				0.0658790096640587,
+				-0.0196483377367258
+			],
+			"RightHand": [
+				-0.158989235758781,
+				0.535482048988342,
+				0.0574263036251068
+			]
+		},
+		"spring_controllers": 1
+	},
+	"dpi_scale": 1.5,
+	"driver": "d3d12",
+	"edge_attachment": [
+		0,
+		0
+	],
+	"elapsed": 527.433333333511,
+	"engine": "4.7.2-stable (official)",
+	"foot_gap_px": 47.4710693359375,
+	"frame_interval_p95_ms": 33.3333333333333,
+	"frames_sampled": 16757,
+	"native": true,
+	"pid": 37152,
+	"renderer": "mobile",
+	"right_gap_px": 234.859771728516,
+	"visible_rect": [
+		265.050933837891,
+		216.596069335938,
+		174.089294433594,
+		460.932861328125
+	],
+	"window_position": [
+		1886,
+		803
+	],
+	"window_size": [
+		720,
+		840
+	],
+	"work_area": [
+		0,
+		0,
+		2560,
+		1528
+	]
+}

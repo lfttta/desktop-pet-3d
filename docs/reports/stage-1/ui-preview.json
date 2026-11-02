@@ -1,0 +1,105 @@
+{
+	"action": "idle",
+	"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+	"character": "Godette · VRM",
+	"character_details": {
+		"action": "idle",
+		"animation_time": 0.524066999998857,
+		"bone_count": 69,
+		"bounds_mean_usec": 8569.91537488602,
+		"bounds_samples": 33997,
+		"expressions": [
+			"blink",
+			"mouth_a"
+		],
+		"id": "godette",
+		"observed_secondary_rotation_radians": 0.43464607000351,
+		"positions": {
+			"Head": [
+				-0.00717836664989591,
+				1.04803383350372,
+				0.0378356873989105
+			],
+			"Hips": [
+				0.00027709431014955,
+				0.688045799732208,
+				0.0474884398281574
+			],
+			"LeftFoot": [
+				0.161306068301201,
+				0.0590965151786804,
+				0.0528761669993401
+			],
+			"LeftHand": [
+				0.160157293081284,
+				0.550559163093567,
+				0.0640669614076614
+			],
+			"RightFoot": [
+				-0.121340200304985,
+				0.0664662271738052,
+				-0.0212727915495634
+			],
+			"RightHand": [
+				-0.163180589675903,
+				0.539055168628693,
+				0.0518962293863297
+			]
+		},
+		"spring_controllers": 1
+	},
+	"data_directory": "D:/danjigame/3D-pet-gtpdo/tests/stage1/ui-preview",
+	"display_fallback": false,
+	"dpi_scale": 1.5,
+	"driver": "d3d12",
+	"edge_attachment": [
+		-1,
+		0
+	],
+	"elapsed": 4040.04443066101,
+	"engine": "4.7.2-stable (official)",
+	"foot_gap_px": 384.441772460938,
+	"frame_interval_p95_ms": 33.3333333333333,
+	"frames_sampled": 18000,
+	"last_save_error": "",
+	"native": true,
+	"pid": 42296,
+	"renderer": "mobile",
+	"right_gap_px": 2385.37643432617,
+	"saved_settings": {
+		"character_id": "godette",
+		"placement": {
+			"edge_x": -1.0,
+			"edge_y": 0.0,
+			"x": 0.0341298699378967,
+			"y": 0.748403818819535
+		},
+		"scale": 1.0,
+		"schema_version": 1.0,
+		"screen_id": "",
+		"user_name": "你"
+	},
+	"service_pid": 0,
+	"service_state": "stopped",
+	"stage": 1,
+	"visible_rect": [
+		268.727630615234,
+		216.799880981445,
+		173.895935058594,
+		460.758361816406
+	],
+	"window_position": [
+		-268,
+		466
+	],
+	"window_size": [
+		720,
+		840
+	],
+	"work_area": [
+		0,
+		0,
+		2560,
+		1528
+	]
+}

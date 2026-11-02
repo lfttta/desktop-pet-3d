@@ -1,0 +1,106 @@
+{
+	"action": "idle",
+	"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+	"character": "Godette · VRM",
+	"character_details": {
+		"action": "idle",
+		"animation_time": 2.115121,
+		"bone_count": 69,
+		"bounds_mean_usec": 1475.66666666667,
+		"bounds_samples": 18,
+		"expressions": [
+			"blink",
+			"mouth_a"
+		],
+		"id": "godette",
+		"observed_secondary_rotation_radians": 0.0338236801326275,
+		"positions": {
+			"Head": [
+				-0.0125754252076149,
+				0.410651415586472,
+				-0.00534984422847629
+			],
+			"Hips": [
+				0.000255130435107276,
+				0.050902284681797,
+				0.00282382010482252
+			],
+			"LeftFoot": [
+				0.124463818967342,
+				0.339648067951202,
+				0.0143185881897807
+			],
+			"LeftHand": [
+				0.138769298791885,
+				-0.118819907307625,
+				-0.0221319571137428
+			],
+			"RightFoot": [
+				-0.188977956771851,
+				0.346091449260712,
+				-0.100175157189369
+			],
+			"RightHand": [
+				-0.100040517747402,
+				-0.131078362464905,
+				0.0491222031414509
+			]
+		},
+		"spring_controllers": 1
+	},
+	"data_directory": "D:/danjigame/3D-pet-gtpdo/docs/reports/stage-2/visual-godette-data",
+	"display_fallback": false,
+	"dpi_scale": 1.5,
+	"driver": "d3d12",
+	"edge_attachment": [
+		0,
+		0
+	],
+	"elapsed": 2.015121,
+	"engine": "4.7.2-stable (official)",
+	"foot_gap_px": 173.455017089844,
+	"frame_interval_p95_ms": 33.3333333333333,
+	"frames_sampled": 1,
+	"last_save_error": "",
+	"native": true,
+	"pid": 52456,
+	"renderer": "mobile",
+	"right_gap_px": 95.7635192871094,
+	"saved_settings": {
+		"character_id": "godette",
+		"placement": {
+			"edge_x": 0.0,
+			"edge_y": 0.0,
+			"x": 0.928582859039307,
+			"y": 0.886459590252781
+		},
+		"scale": 1.0,
+		"schema_version": 1.0,
+		"screen_id": "",
+		"user_name": "你"
+	},
+	"service_pid": 0,
+	"service_state": "stopped",
+	"stage": 1,
+	"visible_rect": [
+		265.205017089844,
+		394.978332519531,
+		174.031463623047,
+		361.566650390625
+	],
+	"warnings": [],
+	"window_position": [
+		2025,
+		598
+	],
+	"window_size": [
+		720,
+		840
+	],
+	"work_area": [
+		0,
+		0,
+		2560,
+		1528
+	]
+}

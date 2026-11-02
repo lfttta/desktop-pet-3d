@@ -1,0 +1,2 @@
+DISPLAYS_JSON:[{"id":"\\\\?\\DISPLAY#BOE0D55#5&14d2c526&1&UID4352#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}","name":"Generic PnP Monitor","position":[0,0],"size":[2560,1600],"work_area":[0,0,2560,1528],"primary":true}]
+PASS: 212 stage1 subprocess/resource assertions

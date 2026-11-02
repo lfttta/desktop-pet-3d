@@ -1,0 +1,12 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[character] loaded id=godette bones=69 springs=1
+[character] loaded id=cartoon_skeleton bones=27 springs=0
+[character] loaded id=man bones=19 springs=0
+UNBOUNDED_POSE man {"action":"recover","animation_time":0.0,"bone_count":19,"bounds_mean_usec":89.0,"bounds_samples":1,"expressions":[],"id":"man","observed_secondary_rotation_radians":0.0,"positions":{"Head":[0.544280350208282,21.2176628112793,-152.54557800293],"Hips":[0.000471808336442336,0.853500664234161,0.00248811137862504],"LeftFoot":[-0.240505382418633,0.595039904117584,-0.796125113964081],"LeftHand":[0.173600912094116,1.25660538673401,-0.598681807518005],"RightFoot":[0.221759527921677,0.834130823612213,-0.855122864246368],"RightHand":[-0.205344498157501,1.222088098526,-0.621784865856171]},"spring_controllers":0}
+ERROR: man keeps mapped bones within a plausible humanoid span
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://tests/test_stage2_character_view.gd:15)
+       [1] run (res://tests/test_stage2_character_view.gd:52)
+STAGE2_CHARACTER_VIEW_TESTS checks=57 failures=1

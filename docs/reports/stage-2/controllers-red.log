@@ -1,0 +1,22 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+SCRIPT ERROR: Parse Error: Preload file "res://scripts/animation/action_controller.gd" does not exist.
+   at: GDScript::reload (res://tests/test_stage2_controllers.gd:3)
+SCRIPT ERROR: Parse Error: Preload file "res://scripts/animation/expression_controller.gd" does not exist.
+   at: GDScript::reload (res://tests/test_stage2_controllers.gd:4)
+SCRIPT ERROR: Parse Error: Preload file "res://scripts/animation/mouth_driver.gd" does not exist.
+   at: GDScript::reload (res://tests/test_stage2_controllers.gd:5)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "controller" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_stage2_controllers.gd:23)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "wave" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_stage2_controllers.gd:25)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "drag" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_stage2_controllers.gd:28)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "recover" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_stage2_controllers.gd:34)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "expressions" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_stage2_controllers.gd:40)
+SCRIPT ERROR: Parse Error: Cannot infer the type of "mouth" variable because the value doesn't have a set type.
+   at: GDScript::reload (res://tests/test_stage2_controllers.gd:52)
+ERROR: Failed to load script "res://tests/test_stage2_controllers.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript_resource_format.cpp:46)

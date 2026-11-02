@@ -1,0 +1,103 @@
+{
+	"action": "idle",
+	"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+	"character": "卡通骨骼人 · GLB",
+	"character_details": {
+		"action": "idle",
+		"animation_time": 0.0,
+		"bone_count": 27,
+		"bounds_mean_usec": 1119.25,
+		"bounds_samples": 40,
+		"expressions": [],
+		"id": "cartoon_skeleton",
+		"observed_secondary_rotation_radians": 0.0,
+		"positions": {
+			"Head": [
+				-0.117401786148548,
+				0.159514203667641,
+				0.973846554756165
+			],
+			"Hips": [
+				-0.0000938745433813892,
+				0.00263758026994765,
+				-0.00402501691132784
+			],
+			"LeftFoot": [
+				0.226229816675186,
+				0.618014454841614,
+				-0.0822022184729576
+			],
+			"LeftHand": [
+				0.731114685535431,
+				0.194648399949074,
+				1.45867037773132
+			],
+			"RightFoot": [
+				-0.266272336244583,
+				0.611559629440308,
+				-0.106414169073105
+			],
+			"RightHand": [
+				-0.0997035652399063,
+				0.350750118494034,
+				1.42815673351288
+			]
+		},
+		"spring_controllers": 0
+	},
+	"data_directory": "D:/danjigame/3D-pet-gtpdo/docs/reports/stage-2/captures-final/data-cartoon_skeleton",
+	"display_fallback": false,
+	"dpi_scale": 1.5,
+	"driver": "d3d12",
+	"edge_attachment": [
+		1,
+		0
+	],
+	"elapsed": 3.20316966666667,
+	"engine": "4.7.2-stable (official)",
+	"foot_gap_px": 311.394287109375,
+	"frame_interval_p95_ms": 33.37,
+	"frames_sampled": 40,
+	"last_save_error": "",
+	"native": true,
+	"pid": 43240,
+	"renderer": "mobile",
+	"right_gap_px": -8.47161865234375,
+	"saved_settings": {
+		"character_id": "cartoon_skeleton",
+		"placement": {
+			"edge_x": 1.0,
+			"edge_y": 0.0,
+			"x": 0.909611415863037,
+			"y": 0.794263110735029
+		},
+		"scale": 1.0,
+		"schema_version": 1.0,
+		"screen_id": "",
+		"user_name": "你"
+	},
+	"service_pid": 0,
+	"service_state": "stopped",
+	"stage": 1,
+	"visible_rect": [
+		113.025382995605,
+		456.628112792969,
+		460.446228027344,
+		359.977600097656
+	],
+	"warnings": [],
+	"window_position": [
+		1995,
+		400
+	],
+	"window_size": [
+		720,
+		840
+	],
+	"work_area": [
+		0,
+		0,
+		2560,
+		1528
+	]
+}

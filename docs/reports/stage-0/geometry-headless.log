@@ -1,0 +1,5 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[stage0] ACTION idle
+[stage0] READY {"action":"idle","adapter":"","character":"几何窗口验证","dpi_scale":1.0,"driver":"d3d12","elapsed":0.0,"engine":"4.7.2-stable (official)","frames_sampled":0,"native":false,"pid":50584,"renderer":"mobile","window_position":[0,0],"window_size":[64,64]}
+[stage0] EXIT code=0

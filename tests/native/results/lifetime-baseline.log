@@ -1,0 +1,3 @@
+FAIL: worker finalization must finish while owner is joining without pumping
+FAIL: bridge reserves Ctrl+Alt+Q with RegisterHotKey
+FAIL: 10 lifetime/hotkey assertions, 2 failures

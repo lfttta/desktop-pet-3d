@@ -1,0 +1,10 @@
+[configuration]
+
+entry_symbol = "pet_window_library_init"
+compatibility_minimum = "4.7.2"
+reloadable = false
+
+[libraries]
+
+windows.debug.x86_64 = "res://addons/pet_window/bin/pet_window.windows.debug.x86_64.dll"
+windows.release.x86_64 = "res://addons/pet_window/bin/pet_window.windows.release.x86_64.dll"

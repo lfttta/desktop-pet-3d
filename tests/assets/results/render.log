@@ -1,0 +1,7 @@
+D:\danjigame\3D-pet-gtpdo\tools\assets\render_pose_review.py:26: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  m.use_nodes=True
+00:08.109  render           | Saved: 'D:\danjigame\3D-pet-gtpdo\tests\assets\local_only\pose_review.png'
+POSE_REVIEW D:\danjigame\3D-pet-gtpdo\tests\assets\local_only\pose_review.png
+Blender 5.2.3 LTS (hash e13b728c6880 built 2026-10-22 01:37:16)
+
+Blender quit

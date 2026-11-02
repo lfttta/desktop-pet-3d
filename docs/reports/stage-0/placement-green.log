@@ -1,0 +1,9 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[character] loaded id=godette bones=69 springs=1
+PLACEMENT_SAMPLE godette idle rect=[P: (269.5038, 217.7949), S: (171.9121, 458.7678)] window=(2118, 859)
+PLACEMENT_SAMPLE godette wave rect=[P: (236.504, 251.3406), S: (193.0419, 425.6332)] window=(2130, 859)
+[character] loaded id=swordsman bones=28 springs=0
+PLACEMENT_SAMPLE swordsman idle rect=[P: (245.8065, 222.297), S: (196.288, 453.0421)] window=(2117, 860)
+PLACEMENT_SAMPLE swordsman wave rect=[P: (198.9532, 210.7065), S: (273.1102, 465.2157)] window=(2087, 860)
+PLACEMENT_TESTS checks=27 failures=0

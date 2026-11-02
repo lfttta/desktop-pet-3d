@@ -1,0 +1,10 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+D3D12 12_0 - Forward Mobile - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5070 Ti Laptop GPU
+
+[character] loaded id=godette bones=69 springs=1
+[stage0] ACTION idle
+[stage0] CHARACTER {"config":"res://assets_data/godette.json","id":"godette","name":"Godette · VRM"}
+[stage0] ACTION idle
+[stage0] READY {"action":"idle","adapter":"NVIDIA GeForce RTX 5070 Ti Laptop GPU","character":"Godette · VRM","character_details":{"action":"idle","animation_time":0.0,"bone_count":69,"expressions":["blink","mouth_a"],"id":"godette","observed_secondary_rotation_radians":0.0,"positions":{"Head":[0.00000000542402034398037,1.05258131027222,0.0211071204394102],"Hips":[0.0000000115416485257924,0.690854430198669,0.0440070182085037],"LeftFoot":[0.172827541828156,0.0688802972435951,0.00861976016312838],"LeftHand":[0.486472010612488,0.956062793731689,0.0063012377358973],"RightFoot":[-0.172826781868935,0.0688802674412727,0.00861973501741886],"RightHand":[-0.486472070217133,0.956062793731689,0.00630141887813807]},"spring_controllers":1},"dpi_scale":1.5,"driver":"d3d12","elapsed":0.0,"engine":"4.7.2-stable (official)","frames_sampled":0,"native":true,"pid":36920,"renderer":"mobile","window_position":[1820,678],"window_size":[720,840]}
+[stage0] CAPTURE result=0
+[stage0] EXIT code=0

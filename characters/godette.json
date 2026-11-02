@@ -1,0 +1,4279 @@
+{
+  "schema_version": 1,
+  "id": "godette",
+  "model_path": "res://models/godette.vrm",
+  "format": "vrm0",
+  "animation_library": "res://motions/cache/godette.tres",
+  "animation_library_name": "shared",
+  "animations": [
+    "idle",
+    "wave"
+  ],
+  "animation_root": "model_instance",
+  "skeleton_path": "Skeleton3D",
+  "bone_map": {
+    "Hips": "Hips",
+    "Spine": "Spine",
+    "Chest": "Chest",
+    "Neck": "Neck",
+    "Head": "Head",
+    "LeftShoulder": "LeftShoulder",
+    "LeftUpperArm": "LeftUpperArm",
+    "LeftLowerArm": "LeftLowerArm",
+    "LeftHand": "LeftHand",
+    "LeftUpperLeg": "LeftUpperLeg",
+    "LeftLowerLeg": "LeftLowerLeg",
+    "LeftFoot": "LeftFoot",
+    "LeftToes": "LeftToes",
+    "LeftThumbMetacarpal": "LeftThumbMetacarpal",
+    "LeftThumbProximal": "LeftThumbProximal",
+    "LeftThumbDistal": "LeftThumbDistal",
+    "LeftIndexProximal": "LeftIndexProximal",
+    "LeftIndexIntermediate": "LeftIndexIntermediate",
+    "LeftIndexDistal": "LeftIndexDistal",
+    "LeftMiddleProximal": "LeftMiddleProximal",
+    "LeftMiddleIntermediate": "LeftMiddleIntermediate",
+    "LeftMiddleDistal": "LeftMiddleDistal",
+    "LeftLittleProximal": "LeftLittleProximal",
+    "LeftLittleIntermediate": "LeftLittleIntermediate",
+    "LeftLittleDistal": "LeftLittleDistal",
+    "RightShoulder": "RightShoulder",
+    "RightUpperArm": "RightUpperArm",
+    "RightLowerArm": "RightLowerArm",
+    "RightHand": "RightHand",
+    "RightUpperLeg": "RightUpperLeg",
+    "RightLowerLeg": "RightLowerLeg",
+    "RightFoot": "RightFoot",
+    "RightToes": "RightToes",
+    "RightThumbMetacarpal": "RightThumbMetacarpal",
+    "RightThumbProximal": "RightThumbProximal",
+    "RightThumbDistal": "RightThumbDistal",
+    "RightIndexProximal": "RightIndexProximal",
+    "RightIndexIntermediate": "RightIndexIntermediate",
+    "RightIndexDistal": "RightIndexDistal",
+    "RightMiddleProximal": "RightMiddleProximal",
+    "RightMiddleIntermediate": "RightMiddleIntermediate",
+    "RightMiddleDistal": "RightMiddleDistal",
+    "RightLittleProximal": "RightLittleProximal",
+    "RightLittleIntermediate": "RightLittleIntermediate",
+    "RightLittleDistal": "RightLittleDistal"
+  },
+  "source_bone_map": {
+    "Hips": "mixamorig1_Hips",
+    "Spine": "mixamorig1_Spine",
+    "Chest": "mixamorig1_Spine2",
+    "Neck": "mixamorig1_Neck",
+    "Head": "mixamorig1_Head",
+    "LeftShoulder": "mixamorig1_LeftShoulder",
+    "LeftUpperArm": "mixamorig1_LeftArm",
+    "LeftLowerArm": "mixamorig1_LeftForeArm",
+    "LeftHand": "mixamorig1_LeftHand",
+    "LeftUpperLeg": "mixamorig1_LeftUpLeg",
+    "LeftLowerLeg": "mixamorig1_LeftLeg",
+    "LeftFoot": "mixamorig1_LeftFoot",
+    "LeftToes": "mixamorig1_LeftToeBase",
+    "LeftThumbMetacarpal": "mixamorig1_LeftHandThumb1",
+    "LeftThumbProximal": "mixamorig1_LeftHandThumb2",
+    "LeftThumbDistal": "mixamorig1_LeftHandThumb3",
+    "LeftIndexProximal": "mixamorig1_LeftHandIndex1",
+    "LeftIndexIntermediate": "mixamorig1_LeftHandIndex2",
+    "LeftIndexDistal": "mixamorig1_LeftHandIndex3",
+    "LeftMiddleProximal": "mixamorig1_LeftHandMiddle1",
+    "LeftMiddleIntermediate": "mixamorig1_LeftHandMiddle2",
+    "LeftMiddleDistal": "mixamorig1_LeftHandMiddle3",
+    "LeftLittleProximal": "mixamorig1_LeftHandPinky1",
+    "LeftLittleIntermediate": "mixamorig1_LeftHandPinky2",
+    "LeftLittleDistal": "mixamorig1_LeftHandPinky3",
+    "RightShoulder": "mixamorig1_RightShoulder",
+    "RightUpperArm": "mixamorig1_RightArm",
+    "RightLowerArm": "mixamorig1_RightForeArm",
+    "RightHand": "mixamorig1_RightHand",
+    "RightUpperLeg": "mixamorig1_RightUpLeg",
+    "RightLowerLeg": "mixamorig1_RightLeg",
+    "RightFoot": "mixamorig1_RightFoot",
+    "RightToes": "mixamorig1_RightToeBase",
+    "RightThumbMetacarpal": "mixamorig1_RightHandThumb1",
+    "RightThumbProximal": "mixamorig1_RightHandThumb2",
+    "RightThumbDistal": "mixamorig1_RightHandThumb3",
+    "RightIndexProximal": "mixamorig1_RightHandIndex1",
+    "RightIndexIntermediate": "mixamorig1_RightHandIndex2",
+    "RightIndexDistal": "mixamorig1_RightHandIndex3",
+    "RightMiddleProximal": "mixamorig1_RightHandMiddle1",
+    "RightMiddleIntermediate": "mixamorig1_RightHandMiddle2",
+    "RightMiddleDistal": "mixamorig1_RightHandMiddle3",
+    "RightLittleProximal": "mixamorig1_RightHandPinky1",
+    "RightLittleIntermediate": "mixamorig1_RightHandPinky2",
+    "RightLittleDistal": "mixamorig1_RightHandPinky3"
+  },
+  "source_to_target_yaw_degrees": 180,
+  "display": {
+    "units": "meters",
+    "up": "+Y",
+    "model_forward": "-Z",
+    "rotation_degrees": [
+      0,
+      180,
+      0
+    ],
+    "scale": 1.0,
+    "ground_offset_y": -1.44903467003132e-07,
+    "rest_bounds_min": [
+      -0.615837097167969,
+      1.44903467003132e-07,
+      -0.206254526972771
+    ],
+    "rest_bounds_max": [
+      0.6158337593078611,
+      1.495314955711364,
+      0.301307916641235
+    ]
+  },
+  "rest": {
+    "bones": [
+      {
+        "global_rest": {
+          "position": [
+            0.0,
+            0.0502839982509613,
+            0.0
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "Armature_rootJoint",
+        "parent": 68,
+        "rest": {
+          "position": [
+            0.0,
+            0.0502839982509613,
+            0.0
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.0,
+            0.0502839982509613,
+            0.0
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -7.19099935153622e-09,
+            0.645653247833252,
+            -0.0411277189850807
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "Hips",
+        "parent": 0,
+        "rest": {
+          "position": [
+            -7.19099935153622e-09,
+            0.595369219779968,
+            -0.0411277189850807
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -7.19099935153622e-09,
+            0.645653247833252,
+            -0.0411277189850807
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -7.19100823332042e-09,
+            0.645653188228607,
+            -0.0411277711391449
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "Spine",
+        "parent": 1,
+        "rest": {
+          "position": [
+            -8.88178419700125e-15,
+            -5.96046447753906e-08,
+            -5.21540641784668e-08
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -7.19100823332042e-09,
+            0.645653188228607,
+            -0.0411277711391449
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -6.27251628415593e-09,
+            0.760607540607452,
+            -0.0358745977282524
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "Chest",
+        "parent": 2,
+        "rest": {
+          "position": [
+            9.18491949164491e-10,
+            0.114954352378845,
+            0.00525317341089249
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -6.27251628415593e-09,
+            0.760607540607452,
+            -0.0358745977282524
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -9.33327193308742e-10,
+            0.922325849533081,
+            -0.00588677451014519
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "Neck",
+        "parent": 3,
+        "rest": {
+          "position": [
+            5.33918909084719e-09,
+            0.161718308925629,
+            0.0299878232181072
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -9.33327193308742e-10,
+            0.922325849533081,
+            -0.00588677451014519
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -3.34462457729501e-09,
+            0.983712911605835,
+            -0.0197261199355125
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "Head",
+        "parent": 4,
+        "rest": {
+          "position": [
+            -2.41129738398627e-09,
+            0.0613870620727539,
+            -0.0138393454253674
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -3.34462457729501e-09,
+            0.983712911605835,
+            -0.0197261199355125
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.0547437109053135,
+            1.20032274723053,
+            -0.172952383756638
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "brow1.l_Armature",
+        "parent": 5,
+        "rest": {
+          "position": [
+            -0.0547437071800232,
+            0.216609835624695,
+            -0.153226256370544
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.0547437109053135,
+            1.20032274723053,
+            -0.172952383756638
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.099744439125061,
+            1.20267689228058,
+            -0.155864968895912
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "brow2.l_Armature",
+        "parent": 6,
+        "rest": {
+          "position": [
+            -0.0450007282197475,
+            0.00235414505004883,
+            0.0170874148607254
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.099744439125061,
+            1.20267689228058,
+            -0.155864968895912
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.0547436475753784,
+            1.20032274723053,
+            -0.172952383756638
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "brow1.r_Armature",
+        "parent": 5,
+        "rest": {
+          "position": [
+            0.0547436513006687,
+            0.216609835624695,
+            -0.153226256370544
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.0547436475753784,
+            1.20032274723053,
+            -0.172952383756638
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.0997443646192551,
+            1.20267689228058,
+            -0.155865013599396
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "brow2.r_Armature",
+        "parent": 8,
+        "rest": {
+          "position": [
+            0.0450007170438766,
+            0.00235414505004883,
+            0.0170873701572418
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.0997443646192551,
+            1.20267689228058,
+            -0.155865013599396
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            3.42595996016826e-09,
+            1.25178265571594,
+            0.0194358006119728
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "HairBall_Center",
+        "parent": 5,
+        "rest": {
+          "position": [
+            6.77058453746326e-09,
+            0.268069744110107,
+            0.0391619205474854
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            3.42595996016826e-09,
+            1.25178265571594,
+            0.0194358006119728
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            2.61446935212462e-08,
+            1.42125916481018,
+            0.147648245096207
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "HairBall_Center_End",
+        "parent": 10,
+        "rest": {
+          "position": [
+            2.27187335610779e-08,
+            0.169476509094238,
+            0.128212437033653
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            2.61446935212462e-08,
+            1.42125916481018,
+            0.147648245096207
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            3.42595996016826e-09,
+            1.25178265571594,
+            0.0194358006119728
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "HairBall_R",
+        "parent": 5,
+        "rest": {
+          "position": [
+            6.77058453746326e-09,
+            0.268069744110107,
+            0.0391619205474854
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            3.42595996016826e-09,
+            1.25178265571594,
+            0.0194358006119728
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.220678403973579,
+            1.28171825408936,
+            0.19990012049675
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "HairBall_R_End",
+        "parent": 12,
+        "rest": {
+          "position": [
+            0.220678403973579,
+            0.0299355983734131,
+            0.180464327335358
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.220678403973579,
+            1.28171825408936,
+            0.19990012049675
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            3.42595996016826e-09,
+            1.25178265571594,
+            0.0194358006119728
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "HairBall_L",
+        "parent": 5,
+        "rest": {
+          "position": [
+            6.77058453746326e-09,
+            0.268069744110107,
+            0.0391619205474854
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            3.42595996016826e-09,
+            1.25178265571594,
+            0.0194358006119728
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.220678299665451,
+            1.28171825408936,
+            0.199900180101395
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "HairBall_L_End",
+        "parent": 14,
+        "rest": {
+          "position": [
+            -0.220678299665451,
+            0.0299355983734131,
+            0.180464386940002
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.220678299665451,
+            1.28171825408936,
+            0.199900180101395
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.0599999502301216,
+            1.31348514556885,
+            -0.145526856184006
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "FrontHair_Center_R",
+        "parent": 5,
+        "rest": {
+          "position": [
+            0.0599999539554119,
+            0.329772233963013,
+            -0.125800728797913
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.0599999502301216,
+            1.31348514556885,
+            -0.145526856184006
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.059999942779541,
+            1.24535071849823,
+            -0.178868800401688
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "FrontHair_Center_R_End",
+        "parent": 16,
+        "rest": {
+          "position": [
+            -7.45058059692383e-09,
+            -0.0681344270706177,
+            -0.0333419442176819
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.059999942779541,
+            1.24535071849823,
+            -0.178868800401688
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.149999961256981,
+            1.26580047607422,
+            -0.0455268360674381
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "FrontHair_L",
+        "parent": 5,
+        "rest": {
+          "position": [
+            -0.149999961256981,
+            0.282087564468384,
+            -0.0258007161319256
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.149999961256981,
+            1.26580047607422,
+            -0.0455268360674381
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.152888953685761,
+            1.19062054157257,
+            -0.0552023872733116
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "FrontHair_L_End",
+        "parent": 18,
+        "rest": {
+          "position": [
+            -0.0028889924287796,
+            -0.0751799345016479,
+            -0.00967555120587349
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.152888953685761,
+            1.19062054157257,
+            -0.0552023872733116
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.149999976158142,
+            1.2658007144928,
+            -0.0455268807709217
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "FrontHair_R",
+        "parent": 5,
+        "rest": {
+          "position": [
+            0.149999976158142,
+            0.282087802886963,
+            -0.0258007608354092
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.149999976158142,
+            1.2658007144928,
+            -0.0455268807709217
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.152888968586922,
+            1.19062077999115,
+            -0.0552024319767952
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "FrontHair_R_End",
+        "parent": 20,
+        "rest": {
+          "position": [
+            0.0028889924287796,
+            -0.0751799345016479,
+            -0.00967555120587349
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.152888968586922,
+            1.19062077999115,
+            -0.0552024319767952
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.0500000081956387,
+            1.31348490715027,
+            -0.145526796579361
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "FrontHair_Center_L",
+        "parent": 5,
+        "rest": {
+          "position": [
+            -0.0500000044703484,
+            0.329771995544434,
+            -0.125800669193268
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.0500000081956387,
+            1.31348490715027,
+            -0.145526796579361
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.0500000156462193,
+            1.24535048007965,
+            -0.178868740797043
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "FrontHair_Center_L_End",
+        "parent": 22,
+        "rest": {
+          "position": [
+            -7.45058059692383e-09,
+            -0.0681344270706177,
+            -0.0333419442176819
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.0500000156462193,
+            1.24535048007965,
+            -0.178868740797043
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.0248291958123446,
+            0.888686537742615,
+            -0.0058886893093586
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            0.5,
+            -0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftShoulder",
+        "parent": 3,
+        "rest": {
+          "position": [
+            -0.0248291902244091,
+            0.128078997135162,
+            0.0299859084188938
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            0.5,
+            -0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.0248291958123446,
+            0.888686537742615,
+            -0.0058886893093586
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            0.5,
+            -0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.121740706264973,
+            0.907126307487488,
+            -0.00588858313858509
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftUpperArm",
+        "parent": 24,
+        "rest": {
+          "position": [
+            1.06170773506165e-07,
+            -0.0969115123152733,
+            0.018439769744873
+          ],
+          "rotation_xyzw": [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.121740706264973,
+            0.907126307487488,
+            -0.00588858313858509
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.306755542755127,
+            0.894311189651489,
+            -0.00450462708249688
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            -0.70710676908493,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftLowerArm",
+        "parent": 25,
+        "rest": {
+          "position": [
+            -0.00138395605608821,
+            -0.185014843940735,
+            0.0128151178359985
+          ],
+          "rotation_xyzw": [
+            0.0,
+            -0.70710676908493,
+            0.0,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.306755542755127,
+            0.894311189651489,
+            -0.00450462708249688
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            -0.70710676908493,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.45464301109314,
+            0.89350950717926,
+            -0.00588899850845337
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftHand",
+        "parent": 26,
+        "rest": {
+          "position": [
+            0.000801682472229004,
+            -0.147887468338013,
+            -0.00138437142595649
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.70710676908493,
+            0.0,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.45464301109314,
+            0.89350950717926,
+            -0.00588899850845337
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.545257389545441,
+            0.890933394432068,
+            -0.0225741192698479
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftIndexProximal",
+        "parent": 27,
+        "rest": {
+          "position": [
+            0.0166851207613945,
+            -0.090614378452301,
+            0.00257611274719238
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.545257389545441,
+            0.890933394432068,
+            -0.0225741192698479
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.570191085338593,
+            0.890310764312744,
+            -0.022574195638299
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftIndexIntermediate",
+        "parent": 28,
+        "rest": {
+          "position": [
+            7.63684511184692e-08,
+            -0.0249336957931519,
+            0.00062263011932373
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.570191085338593,
+            0.890310764312744,
+            -0.022574195638299
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.593474686145782,
+            0.888932466506958,
+            -0.0225742887705565
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftIndexDistal",
+        "parent": 29,
+        "rest": {
+          "position": [
+            9.31322574615479e-08,
+            -0.0232836008071899,
+            0.00137829780578613
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.593474686145782,
+            0.888932466506958,
+            -0.0225742887705565
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.544719398021698,
+            0.890932559967041,
+            0.0187319722026587
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftMiddleProximal",
+        "parent": 27,
+        "rest": {
+          "position": [
+            -0.024620970711112,
+            -0.0900763869285584,
+            0.00257694721221924
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.544719398021698,
+            0.890932559967041,
+            0.0187319722026587
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.56965297460556,
+            0.890310049057007,
+            0.0187318902462721
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftMiddleIntermediate",
+        "parent": 31,
+        "rest": {
+          "position": [
+            8.19563865661621e-08,
+            -0.0249335765838623,
+            0.00062251091003418
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.56965297460556,
+            0.890310049057007,
+            0.0187318902462721
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.59293657541275,
+            0.888931632041931,
+            0.0187318027019501
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftMiddleDistal",
+        "parent": 32,
+        "rest": {
+          "position": [
+            8.7544322013855e-08,
+            -0.0232836008071899,
+            0.00137841701507568
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.59293657541275,
+            0.888931632041931,
+            0.0187318027019501
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.545692622661591,
+            0.888236045837402,
+            0.0342617370188236
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftLittleProximal",
+        "parent": 27,
+        "rest": {
+          "position": [
+            -0.040150735527277,
+            -0.0910496115684509,
+            0.00527346134185791
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.545692622661591,
+            0.888236045837402,
+            0.0342617370188236
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.570626318454742,
+            0.887613534927368,
+            0.0342616476118565
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftLittleIntermediate",
+        "parent": 34,
+        "rest": {
+          "position": [
+            8.94069671630859e-08,
+            -0.0249336957931519,
+            0.00062251091003418
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.570626318454742,
+            0.887613534927368,
+            0.0342616476118565
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.593910038471222,
+            0.886235237121582,
+            0.0342615619301796
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftLittleDistal",
+        "parent": 35,
+        "rest": {
+          "position": [
+            8.5681676864624e-08,
+            -0.0232837200164795,
+            0.00137829780578613
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.593910038471222,
+            0.886235237121582,
+            0.0342615619301796
+          ],
+          "rotation_xyzw": [
+            0.5,
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.490656733512878,
+            0.883647441864014,
+            -0.0278540011495352
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            0.673887252807617,
+            0.214186728000641,
+            0.214186728000641
+          ],
+          "scale": [
+            1.0,
+            0.999392330646515,
+            0.999392330646515
+          ]
+        },
+        "name": "LeftThumbMetacarpal",
+        "parent": 27,
+        "rest": {
+          "position": [
+            0.0219650026410818,
+            -0.0360137224197388,
+            0.00986206531524658
+          ],
+          "rotation_xyzw": [
+            -0.214186728000641,
+            0.673887252807617,
+            0.214186728000641,
+            0.673887252807617
+          ],
+          "scale": [
+            1.0,
+            0.999392330646515,
+            0.999392330646515
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.490656733512878,
+            0.883647441864014,
+            -0.0278540011495352
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            0.673887252807617,
+            0.214186728000641,
+            0.214186728000641
+          ],
+          "scale": [
+            1.0,
+            0.999392330646515,
+            0.999392330646515
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.511973202228546,
+            0.865230441093445,
+            -0.0457657873630524
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            0.673887252807617,
+            0.214186757802963,
+            0.214186757802963
+          ],
+          "scale": [
+            0.999999940395355,
+            0.999392151832581,
+            0.999392151832581
+          ]
+        },
+        "name": "LeftThumbProximal",
+        "parent": 37,
+        "rest": {
+          "position": [
+            -0.0184169989079237,
+            -0.0277630686759949,
+            0.00231923256069422
+          ],
+          "rotation_xyzw": [
+            -1.49011629702045e-08,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            0.999999940395355,
+            0.99999988079071,
+            0.99999988079071
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.511973202228546,
+            0.865230441093445,
+            -0.0457657873630524
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            0.673887252807617,
+            0.214186757802963,
+            0.214186757802963
+          ],
+          "scale": [
+            0.999999940395355,
+            0.999392151832581,
+            0.999392151832581
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.525275886058807,
+            0.854436159133911,
+            -0.0483273901045322
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            0.673887252807617,
+            0.214186728000641,
+            0.214186728000641
+          ],
+          "scale": [
+            0.999999940395355,
+            0.999392330646515,
+            0.999392330646515
+          ]
+        },
+        "name": "LeftThumbDistal",
+        "parent": 38,
+        "rest": {
+          "position": [
+            -0.0107942819595337,
+            -0.0123480381444097,
+            -0.00559217529371381
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.00000011920929,
+            1.00000011920929
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.525275886058807,
+            0.854436159133911,
+            -0.0483273901045322
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            0.673887252807617,
+            0.214186728000641,
+            0.214186728000641
+          ],
+          "scale": [
+            0.999999940395355,
+            0.999392330646515,
+            0.999392330646515
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.0248291958123446,
+            0.888686537742615,
+            -0.00588868372142315
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            -0.5,
+            -0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightShoulder",
+        "parent": 3,
+        "rest": {
+          "position": [
+            0.02482920140028,
+            0.128078997135162,
+            0.0299859140068293
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            -0.5,
+            -0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.0248291958123446,
+            0.888686537742615,
+            -0.00588868372142315
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            -0.5,
+            -0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.121740706264973,
+            0.907126307487488,
+            -0.00588861666619778
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightUpperArm",
+        "parent": 40,
+        "rest": {
+          "position": [
+            -6.70552253723145e-08,
+            -0.0969115123152733,
+            0.018439769744873
+          ],
+          "rotation_xyzw": [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.121740706264973,
+            0.907126307487488,
+            -0.00588861666619778
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.306755602359772,
+            0.894311189651489,
+            -0.00450469506904483
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.70710676908493,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightLowerArm",
+        "parent": 41,
+        "rest": {
+          "position": [
+            0.00138392159715295,
+            -0.18501490354538,
+            0.0128151178359985
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.70710676908493,
+            0.0,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.306755602359772,
+            0.894311189651489,
+            -0.00450469506904483
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.70710676908493,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.454643070697784,
+            0.89350950717926,
+            -0.00588908884674311
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightHand",
+        "parent": 42,
+        "rest": {
+          "position": [
+            -0.000801682472229004,
+            -0.147887468338013,
+            -0.00138439377769828
+          ],
+          "rotation_xyzw": [
+            0.0,
+            -0.70710676908493,
+            0.0,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.454643070697784,
+            0.89350950717926,
+            -0.00588908884674311
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.545257449150085,
+            0.890933394432068,
+            -0.0225742608308792
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightIndexProximal",
+        "parent": 43,
+        "rest": {
+          "position": [
+            -0.0166851710528135,
+            -0.090614378452301,
+            0.00257611274719238
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.545257449150085,
+            0.890933394432068,
+            -0.0225742608308792
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.570191144943237,
+            0.890310764312744,
+            -0.0225743390619755
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightIndexIntermediate",
+        "parent": 44,
+        "rest": {
+          "position": [
+            -7.82310962677002e-08,
+            -0.0249336957931519,
+            0.00062263011932373
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.570191144943237,
+            0.890310764312744,
+            -0.0225743390619755
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.593474745750427,
+            0.888932466506958,
+            -0.0225744359195232
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightIndexDistal",
+        "parent": 45,
+        "rest": {
+          "position": [
+            -9.68575477600098e-08,
+            -0.0232836008071899,
+            0.00137829780578613
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.593474745750427,
+            0.888932466506958,
+            -0.0225744359195232
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.544719457626343,
+            0.890932559967041,
+            0.0187318399548531
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightMiddleProximal",
+        "parent": 43,
+        "rest": {
+          "position": [
+            0.0246209297329187,
+            -0.0900763869285584,
+            0.00257694721221924
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.544719457626343,
+            0.890932559967041,
+            0.0187318399548531
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.569653034210205,
+            0.890310049057007,
+            0.0187317561358213
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightMiddleIntermediate",
+        "parent": 47,
+        "rest": {
+          "position": [
+            -8.38190317153931e-08,
+            -0.0249335765838623,
+            0.00062251091003418
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.569653034210205,
+            0.890310049057007,
+            0.0187317561358213
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.592936635017395,
+            0.888931632041931,
+            0.018731664866209
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightMiddleDistal",
+        "parent": 48,
+        "rest": {
+          "position": [
+            -9.12696123123169e-08,
+            -0.0232836008071899,
+            0.00137841701507568
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.592936635017395,
+            0.888931632041931,
+            0.018731664866209
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.545692682266235,
+            0.888236045837402,
+            0.0342616066336632
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightLittleProximal",
+        "parent": 43,
+        "rest": {
+          "position": [
+            0.0401506945490837,
+            -0.0910496115684509,
+            0.00527346134185791
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.545692682266235,
+            0.888236045837402,
+            0.0342616066336632
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.570626378059387,
+            0.887613534927368,
+            0.0342615246772766
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightLittleIntermediate",
+        "parent": 50,
+        "rest": {
+          "position": [
+            -8.19563865661621e-08,
+            -0.0249336957931519,
+            0.00062251091003418
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.570626378059387,
+            0.887613534927368,
+            0.0342615246772766
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.593910098075867,
+            0.886235237121582,
+            0.0342614315450192
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightLittleDistal",
+        "parent": 51,
+        "rest": {
+          "position": [
+            -9.31322574615479e-08,
+            -0.0232837200164795,
+            0.00137829780578613
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.593910098075867,
+            0.886235237121582,
+            0.0342614315450192
+          ],
+          "rotation_xyzw": [
+            0.5,
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.490656822919846,
+            0.883647441864014,
+            -0.0278541184961796
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            -0.673887252807617,
+            -0.214186728000641,
+            0.214186728000641
+          ],
+          "scale": [
+            1.0,
+            0.999392330646515,
+            0.999392330646515
+          ]
+        },
+        "name": "RightThumbMetacarpal",
+        "parent": 43,
+        "rest": {
+          "position": [
+            -0.0219650287181139,
+            -0.0360137522220612,
+            0.00986206531524658
+          ],
+          "rotation_xyzw": [
+            -0.214186728000641,
+            -0.673887252807617,
+            -0.214186728000641,
+            0.673887252807617
+          ],
+          "scale": [
+            1.0,
+            0.999392330646515,
+            0.999392330646515
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.490656822919846,
+            0.883647441864014,
+            -0.0278541184961796
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            -0.673887252807617,
+            -0.214186728000641,
+            0.214186728000641
+          ],
+          "scale": [
+            1.0,
+            0.999392330646515,
+            0.999392330646515
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.511973321437836,
+            0.865230441093445,
+            -0.0457658991217613
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            -0.673887252807617,
+            -0.214186757802963,
+            0.214186757802963
+          ],
+          "scale": [
+            0.999999940395355,
+            0.999392151832581,
+            0.999392151832581
+          ]
+        },
+        "name": "RightThumbProximal",
+        "parent": 53,
+        "rest": {
+          "position": [
+            0.0184169989079237,
+            -0.0277630910277367,
+            0.00231921207159758
+          ],
+          "rotation_xyzw": [
+            -1.49011629702045e-08,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            0.999999940395355,
+            0.99999988079071,
+            0.99999988079071
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.511973321437836,
+            0.865230441093445,
+            -0.0457658991217613
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            -0.673887252807617,
+            -0.214186757802963,
+            0.214186757802963
+          ],
+          "scale": [
+            0.999999940395355,
+            0.999392151832581,
+            0.999392151832581
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.525276005268097,
+            0.854436159133911,
+            -0.0483275018632412
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            -0.673887252807617,
+            -0.214186728000641,
+            0.214186728000641
+          ],
+          "scale": [
+            0.999999940395355,
+            0.999392330646515,
+            0.999392330646515
+          ]
+        },
+        "name": "RightThumbDistal",
+        "parent": 54,
+        "rest": {
+          "position": [
+            0.0107942819595337,
+            -0.0123480381444097,
+            -0.00559217529371381
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.00000011920929,
+            1.00000011920929
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.525276005268097,
+            0.854436159133911,
+            -0.0483275018632412
+          ],
+          "rotation_xyzw": [
+            0.673887252807617,
+            -0.673887252807617,
+            -0.214186728000641,
+            0.214186728000641
+          ],
+          "scale": [
+            0.999999940395355,
+            0.999392330646515,
+            0.999392330646515
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.00173908076249063,
+            0.931700885295868,
+            0.108316399157047
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "backpack_Armature",
+        "parent": 3,
+        "rest": {
+          "position": [
+            -0.00173907447606325,
+            0.171093344688416,
+            0.1441909968853
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.00173908076249063,
+            0.931700885295868,
+            0.108316399157047
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.0010202337289229,
+            0.768992364406586,
+            0.11831047385931
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "backpack.001_Armature",
+        "parent": 56,
+        "rest": {
+          "position": [
+            0.000718847033567727,
+            -0.162708520889282,
+            0.00999407470226288
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.0010202337289229,
+            0.768992364406586,
+            0.11831047385931
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -1.36568036879225e-08,
+            0.921218514442444,
+            -0.0783944725990295
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "Ribbon",
+        "parent": 3,
+        "rest": {
+          "position": [
+            -7.38428740376662e-09,
+            0.160610973834991,
+            -0.0425198748707771
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -1.36568036879225e-08,
+            0.921218514442444,
+            -0.0783944725990295
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -1.97720702033166e-08,
+            0.860280692577362,
+            -0.113093823194504
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "Ribbon_end",
+        "parent": 58,
+        "rest": {
+          "position": [
+            -6.11526651539407e-09,
+            -0.0609378218650818,
+            -0.0346993505954742
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -1.97720702033166e-08,
+            0.860280692577362,
+            -0.113093823194504
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.109995603561401,
+            0.495771199464798,
+            0.0066683404147625
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftUpperLeg",
+        "parent": 1,
+        "rest": {
+          "position": [
+            -0.109995596110821,
+            -0.149882048368454,
+            0.0477960593998432
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.109995603561401,
+            0.495771199464798,
+            0.0066683404147625
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.142163664102554,
+            0.267328083515167,
+            -0.017667219042778
+          ],
+          "rotation_xyzw": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftLowerLeg",
+        "parent": 60,
+        "rest": {
+          "position": [
+            0.032168060541153,
+            0.228443115949631,
+            -0.0243355594575405
+          ],
+          "rotation_xyzw": [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.142163664102554,
+            0.267328083515167,
+            -0.017667219042778
+          ],
+          "rotation_xyzw": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.161519750952721,
+            0.0643737316131592,
+            -0.00805579870939255
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.70710676908493,
+            0.70710676908493,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftFoot",
+        "parent": 61,
+        "rest": {
+          "position": [
+            -0.0193560868501663,
+            0.202954351902008,
+            -0.00961142033338547
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.70710676908493,
+            -0.70710676908493,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.161519750952721,
+            0.0643737316131592,
+            -0.00805579870939255
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.70710676908493,
+            0.70710676908493,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            -0.161520287394524,
+            0.021284032613039,
+            -0.0811000540852547
+          ],
+          "rotation_xyzw": [
+            0.70710676908493,
+            0.0,
+            0.0,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "LeftToes",
+        "parent": 62,
+        "rest": {
+          "position": [
+            5.36441802978516e-07,
+            -0.0730442553758621,
+            -0.0430896990001202
+          ],
+          "rotation_xyzw": [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            -0.161520287394524,
+            0.021284032613039,
+            -0.0811000540852547
+          ],
+          "rotation_xyzw": [
+            0.70710676908493,
+            0.0,
+            0.0,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.109995603561401,
+            0.495771199464798,
+            0.00666831433773041
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightUpperLeg",
+        "parent": 1,
+        "rest": {
+          "position": [
+            0.109995611011982,
+            -0.149882048368454,
+            0.0477960333228111
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.109995603561401,
+            0.495771199464798,
+            0.00666831433773041
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.142163217067719,
+            0.267328023910522,
+            -0.0176671706140041
+          ],
+          "rotation_xyzw": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightLowerLeg",
+        "parent": 64,
+        "rest": {
+          "position": [
+            -0.0321676135063171,
+            0.228443175554276,
+            -0.0243354849517345
+          ],
+          "rotation_xyzw": [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.142163217067719,
+            0.267328023910522,
+            -0.0176671706140041
+          ],
+          "rotation_xyzw": [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.161519035696983,
+            0.0643737018108368,
+            -0.00805574748665094
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.70710676908493,
+            0.70710676908493,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightFoot",
+        "parent": 65,
+        "rest": {
+          "position": [
+            0.0193558186292648,
+            0.202954322099686,
+            -0.00961142312735319
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.70710676908493,
+            -0.70710676908493,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.161519035696983,
+            0.0643737018108368,
+            -0.00805574748665094
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.70710676908493,
+            0.70710676908493,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.161519184708595,
+            0.0212840139865875,
+            -0.0810998976230621
+          ],
+          "rotation_xyzw": [
+            0.70710676908493,
+            0.0,
+            0.0,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "RightToes",
+        "parent": 66,
+        "rest": {
+          "position": [
+            -1.49011611938477e-07,
+            -0.0730441510677338,
+            -0.0430896878242493
+          ],
+          "rotation_xyzw": [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.161519184708595,
+            0.0212840139865875,
+            -0.0810998976230621
+          ],
+          "rotation_xyzw": [
+            0.70710676908493,
+            0.0,
+            0.0,
+            0.70710676908493
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      },
+      {
+        "global_rest": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "name": "Root",
+        "parent": -1,
+        "rest": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        },
+        "world_rest": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "rotation_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ],
+          "scale": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      }
+    ],
+    "motion_scale": 0.645653247833252,
+    "path": "Skeleton3D",
+    "transform": {
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotation_xyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "scale": [
+        1.0,
+        1.0,
+        1.0
+      ]
+    }
+  },
+  "expressions": {
+    "blink": [
+      {
+        "mesh_path": "Skeleton3D/Face",
+        "index": 3,
+        "name": "morph_3",
+        "weight": 1.0
+      },
+      {
+        "mesh_path": "Skeleton3D/Face",
+        "index": 4,
+        "name": "morph_4",
+        "weight": 1.0
+      }
+    ],
+    "mouth_a": [
+      {
+        "mesh_path": "Skeleton3D/Face",
+        "index": 5,
+        "name": "morph_5",
+        "weight": 1.0
+      }
+    ]
+  },
+  "inspected_meshes": [
+    {
+      "aabb_position": [
+        -0.288116216659546,
+        0.965794205665588,
+        -0.200689971446991
+      ],
+      "aabb_size": [
+        0.576229572296143,
+        0.529520750045776,
+        0.501997888088226
+      ],
+      "blendshapes": [
+        "morph_0",
+        "morph_1",
+        "morph_2",
+        "morph_3",
+        "morph_4",
+        "morph_5",
+        "morph_6",
+        "morph_7",
+        "morph_8",
+        "morph_9",
+        "morph_10",
+        "morph_11",
+        "morph_12",
+        "morph_13",
+        "morph_14"
+      ],
+      "path": "Skeleton3D/Face",
+      "skin_rest_position": [
+        -0.288116216659546,
+        0.965794205665588,
+        -0.200689971446991
+      ],
+      "skin_rest_size": [
+        0.576229572296143,
+        0.529520750045776,
+        0.501997888088226
+      ]
+    },
+    {
+      "aabb_position": [
+        -0.615837097167969,
+        1.44905669685613e-07,
+        -0.206254526972771
+      ],
+      "aabb_size": [
+        1.23167085647583,
+        1.38716173171997,
+        0.412320911884308
+      ],
+      "blendshapes": [],
+      "path": "Skeleton3D/Body",
+      "skin_rest_position": [
+        -0.615837097167969,
+        1.44903467003132e-07,
+        -0.206254526972771
+      ],
+      "skin_rest_size": [
+        1.23167085647583,
+        1.38716161251068,
+        0.412320911884308
+      ]
+    }
+  ],
+  "source": {
+    "path": "D:\\danjigame\\3D-pet\\work-pet\\prototypes\\azpepoze\\models\\Godette_vrm_v4.vrm",
+    "sha256": "0b008f60c808eb1c83781c650e654a70d512574932e3867f80609c62d7052c6c",
+    "license_metadata": {
+      "allowedUserName": "Everyone",
+      "violentUssageName": "Allow",
+      "sexualUssageName": "Allow",
+      "commercialUssageName": "Allow",
+      "licenseName": "CC_BY",
+      "version": "0.21",
+      "author": "SirRichard94",
+      "contactInformation": "https://github.com/SirRichard94/low-poly-godette",
+      "reference": "Adapted to VRM by Lyuma",
+      "title": "Low-Poly Godette",
+      "otherPermissionUrl": "",
+      "otherLicenseUrl": "",
+      "texture": 4
+    }
+  },
+  "publishable": true,
+  "enabled_by_default": true,
+  "import_options": {
+    "vrm/bone_rename": 1,
+    "vrm/skeleton_name": "Skeleton3D",
+    "vrm/remove_end_bones": true,
+    "vrm/v1_rotate_180": true
+  },
+  "retarget_method": "prebaked world rest rotation deltas with anatomical direction rest alignment; recomposed target local rotations; only hips translation; all other local offsets and scales retain target rest",
+  "notes": [
+    "Animations sourced only from user Idle.fbx and Waving.fbx.",
+    "Publishability here describes the model only; FBX motion license provenance remains unverified."
+  ]
+}

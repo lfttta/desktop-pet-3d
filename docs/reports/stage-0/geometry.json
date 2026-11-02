@@ -1,0 +1,22 @@
+{
+	"action": "idle",
+	"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+	"character": "几何窗口验证",
+	"dpi_scale": 1.5,
+	"driver": "d3d12",
+	"elapsed": 7.02272133333332,
+	"engine": "4.7.2-stable (official)",
+	"frame_p95_ms": 33.3333333333333,
+	"frames_sampled": 151,
+	"native": false,
+	"pid": 53624,
+	"renderer": "mobile",
+	"window_position": [
+		1820,
+		678
+	],
+	"window_size": [
+		720,
+		840
+	]
+}

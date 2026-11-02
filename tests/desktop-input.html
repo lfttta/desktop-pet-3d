@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN"><meta charset="utf-8"><title>Pet3D 桌面输入验证</title>
+<style>
+body{margin:0;padding:24px;font:20px system-ui;background:#cce4f2;color:#152536;min-height:120vh}
+textarea{display:block;box-sizing:border-box;width:100%;height:70vh;margin-top:16px;padding:18px;font:22px monospace;background:#fffbea;border:3px solid #284d69;resize:none}
+button{padding:12px 24px;font:18px system-ui;cursor:pointer}#status{padding:12px;font-weight:bold}
+</style>
+<h1>Pet3D 桌面输入验证</h1>
+<p>在桌宠窗口的空白处点击下方文本框；点击角色后继续输入，检查键盘焦点是否保留。</p>
+<button id="clicker">点击计数 +1</button><span id="status">点击：0；输入事件：0</span>
+<textarea id="editor" aria-label="桌面输入验证文本框" placeholder="此页仅在本机运行，内容不会发送到网络。"></textarea>
+<script>
+let clicks=0,inputs=0; const status=document.querySelector('#status');
+function update(){status.textContent=`点击：${clicks}；输入事件：${inputs}；焦点：${document.activeElement.id}`;}
+document.querySelector('#clicker').onclick=()=>{clicks++;update()};
+document.querySelector('#editor').addEventListener('input',()=>{inputs++;update()});
+document.addEventListener('focusin',update);
+</script></html>

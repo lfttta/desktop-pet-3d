@@ -1,0 +1,36 @@
+# ========== Godot 导入缓存 ==========
+.godot/
+app/.godot/
+*.translation
+
+# ========== 构建 / 导出 / 打包产物 ==========
+build/
+dist/
+native/build/
+tools/runtime/
+tests/package_guard/build-output/
+
+# ========== 测试运行残留 ==========
+.tmp-*/
+
+# ========== Python ==========
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# ========== 编译中间产物（app/addons/bin 下运行时需要的 dll 仍入库） ==========
+*.obj
+*.pdb
+*.ilk
+*.exp
+
+# ========== 大体积本地资料：不入库，原地保留 ==========
+backups/
+experiments/
+prototypes/
+
+# ========== 临时日志（docs/reports 下的验收证据仍入库） ==========
+candidate-*-review.log
+*-reexport.log

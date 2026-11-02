@@ -1,0 +1,5 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+DISPLAYS_JSON:[{"id":"\\\\?\\DISPLAY#BOE0D55#5&14d2c526&1&UID4352#{e6f07b5f-ee97-4a90-b076-33f57bf4eaa7}","name":"Generic PnP Monitor","position":[0,0],"size":[2560,1600],"work_area":[0,0,2560,1528],"primary":true}]
+PASS: typed API cursor=(140, 825) left=false dpi_scale=1.0
+PASS: fourteen-method API, original ten preserved, Variant and ptrcall, 50 RefCounted lifecycles

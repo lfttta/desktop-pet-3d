@@ -1,0 +1,14 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+ERROR: offscreen transparent margins must not make the taskbar clickable as pet body
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://tests/test_placement.gd:12)
+       [1] _run (res://tests/test_placement.gd:36)
+[character] loaded id=godette bones=69 springs=1
+PLACEMENT_SAMPLE godette idle rect=[P: (268.5038, 216.7949), S: (173.9121, 460.7678)] window=(2117, 858)
+PLACEMENT_SAMPLE godette wave rect=[P: (235.504, 250.3406), S: (195.0419, 427.6332)] window=(2129, 858)
+[character] loaded id=swordsman bones=28 springs=0
+PLACEMENT_SAMPLE swordsman idle rect=[P: (244.8065, 221.297), S: (198.288, 455.0421)] window=(2116, 859)
+PLACEMENT_SAMPLE swordsman wave rect=[P: (197.9532, 209.7065), S: (275.1102, 467.2157)] window=(2086, 859)
+PLACEMENT_TESTS checks=28 failures=1

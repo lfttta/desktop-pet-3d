@@ -1,0 +1,53 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+TextServer: Added interface "Dummy"
+TextServer: Added interface "ICU / HarfBuzz / Graphite (Built-in)"
+Using "default" pen tablet driver...
+
+TextServer: Primary interface set to: "ICU / HarfBuzz / Graphite (Built-in)".
+CORE API HASH: 2004498165
+EDITOR API HASH: 1696660745
+Loading resource: res://tests/test_characters.gd remapped: res://tests/test_characters.gd
+Completed load for: 'res://tests/test_characters.gd' remapped 'res://tests/test_characters.gd' at thread -1
+SceneTreeFTI: traversal method DEFAULT
+Loaded system CA certificates
+Loading resource: res://models/godette.vrm remapped: res://models/godette.vrm
+Loading resource: res://.godot/imported/godette.vrm-cb968f4b947510e987ca0ff19ab4c008.scn remapped: res://.godot/imported/godette.vrm-cb968f4b947510e987ca0ff19ab4c008.scn
+Loading resource: res://addons/vrm/core/vrm_instance.gd remapped: res://addons/vrm/core/vrm_instance.gd
+Completed load for: 'res://addons/vrm/core/vrm_instance.gd' remapped 'res://addons/vrm/core/vrm_instance.gd' at thread -1
+Loading resource: res://addons/mtoon/mtoon_outline.gdshader remapped: res://addons/mtoon/mtoon_outline.gdshader
+Loading resource: res://addons/mtoon/mtoon_common.gdshaderinc remapped: res://addons/mtoon/mtoon_common.gdshaderinc
+Completed load for: 'res://addons/mtoon/mtoon_common.gdshaderinc' remapped 'res://addons/mtoon/mtoon_common.gdshaderinc' at thread -1
+Completed load for: 'res://addons/mtoon/mtoon_outline.gdshader' remapped 'res://addons/mtoon/mtoon_outline.gdshader' at thread -1
+Loading resource: res://addons/mtoon/mtoon.gdshader remapped: res://addons/mtoon/mtoon.gdshader
+Completed load for: 'res://addons/mtoon/mtoon.gdshader' remapped 'res://addons/mtoon/mtoon.gdshader' at thread -1
+Loading resource: res://addons/vrm/runtime/vrm_spring_bone_controller.gd remapped: res://addons/vrm/runtime/vrm_spring_bone_controller.gd
+Completed load for: 'res://addons/vrm/runtime/vrm_spring_bone_controller.gd' remapped 'res://addons/vrm/runtime/vrm_spring_bone_controller.gd' at thread -1
+Completed load for: 'res://models/godette.vrm' remapped 'res://models/godette.vrm' at thread -1
+Loading resource: res://motions/cache/godette.tres remapped: res://motions/cache/godette.tres
+Completed load for: 'res://motions/cache/godette.tres' remapped 'res://motions/cache/godette.tres' at thread -1
+[character] loaded id=godette bones=69 springs=1
+Loading resource: res://models/swordsman.glb remapped: res://models/swordsman.glb
+Loading resource: res://.godot/imported/swordsman.glb-c3548bf43fb38843b70b8fd76b317157.scn remapped: res://.godot/imported/swordsman.glb-c3548bf43fb38843b70b8fd76b317157.scn
+Loading resource: res://models/swordsman_0.png remapped: res://models/swordsman_0.png
+Loading resource: res://.godot/imported/swordsman_0.png-13367630be87ebaeb11a95e40c6ee0de.ctex remapped: res://.godot/imported/swordsman_0.png-13367630be87ebaeb11a95e40c6ee0de.ctex
+Completed load for: 'res://models/swordsman_0.png' remapped 'res://models/swordsman_0.png' at thread -1
+Loading resource: res://models/swordsman_1.png remapped: res://models/swordsman_1.png
+Loading resource: res://.godot/imported/swordsman_1.png-1a02e158c6c89a99b6ee4c1a05195298.ctex remapped: res://.godot/imported/swordsman_1.png-1a02e158c6c89a99b6ee4c1a05195298.ctex
+Completed load for: 'res://models/swordsman_1.png' remapped 'res://models/swordsman_1.png' at thread -1
+Loading resource: res://models/swordsman_2.png remapped: res://models/swordsman_2.png
+Loading resource: res://.godot/imported/swordsman_2.png-a68bcfe3500f2f985f20eabe4dd60d35.ctex remapped: res://.godot/imported/swordsman_2.png-a68bcfe3500f2f985f20eabe4dd60d35.ctex
+Completed load for: 'res://models/swordsman_2.png' remapped 'res://models/swordsman_2.png' at thread -1
+Loading resource: res://models/swordsman_3.png remapped: res://models/swordsman_3.png
+Loading resource: res://.godot/imported/swordsman_3.png-6c9b21a681daf3013411021a2b360d3e.ctex remapped: res://.godot/imported/swordsman_3.png-6c9b21a681daf3013411021a2b360d3e.ctex
+Completed load for: 'res://models/swordsman_3.png' remapped 'res://models/swordsman_3.png' at thread -1
+Loading resource: res://models/swordsman_4.png remapped: res://models/swordsman_4.png
+Loading resource: res://.godot/imported/swordsman_4.png-204a05db8acafef11f83ff9c47ca1a4a.ctex remapped: res://.godot/imported/swordsman_4.png-204a05db8acafef11f83ff9c47ca1a4a.ctex
+Completed load for: 'res://models/swordsman_4.png' remapped 'res://models/swordsman_4.png' at thread -1
+Loading resource: res://models/swordsman_5.png remapped: res://models/swordsman_5.png
+Loading resource: res://.godot/imported/swordsman_5.png-1061fada49fa6dbd3c564e40550e76e9.ctex remapped: res://.godot/imported/swordsman_5.png-1061fada49fa6dbd3c564e40550e76e9.ctex
+Completed load for: 'res://models/swordsman_5.png' remapped 'res://models/swordsman_5.png' at thread -1
+Completed load for: 'res://models/swordsman.glb' remapped 'res://models/swordsman.glb' at thread -1
+Loading resource: res://motions/cache/swordsman.tres remapped: res://motions/cache/swordsman.tres
+Completed load for: 'res://motions/cache/swordsman.tres' remapped 'res://motions/cache/swordsman.tres' at thread -1
+[character] loaded id=swordsman bones=28 springs=0
+CHARACTER_TESTS checks=11 failures=0

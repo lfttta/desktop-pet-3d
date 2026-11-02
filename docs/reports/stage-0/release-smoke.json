@@ -1,0 +1,66 @@
+{
+	"action": "idle",
+	"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+	"character": "Godette · VRM",
+	"character_details": {
+		"action": "idle",
+		"animation_time": 6.84200099999999,
+		"bone_count": 69,
+		"expressions": [
+			"blink",
+			"mouth_a"
+		],
+		"id": "godette",
+		"observed_secondary_rotation_radians": 0.0,
+		"positions": {
+			"Head": [
+				-0.0154417864978313,
+				0.822718262672424,
+				0.0262434799224138
+			],
+			"Hips": [
+				-0.00137909129261971,
+				0.463100999593735,
+				0.0313759036362171
+			],
+			"LeftFoot": [
+				0.162352710962296,
+				-0.165500715374947,
+				0.0363368690013886
+			],
+			"LeftHand": [
+				0.156863406300545,
+				0.327580213546753,
+				0.0481586158275604
+			],
+			"RightFoot": [
+				-0.120503187179565,
+				-0.159031048417091,
+				-0.036136157810688
+			],
+			"RightHand": [
+				-0.158416405320168,
+				0.310017764568329,
+				0.0377476885914803
+			]
+		},
+		"spring_controllers": 1
+	},
+	"dpi_scale": 1.5,
+	"driver": "d3d12",
+	"elapsed": 7.00866766666665,
+	"engine": "4.7.2-stable (official)",
+	"frame_p95_ms": 33.3333333333333,
+	"frames_sampled": 151,
+	"native": true,
+	"pid": 48912,
+	"renderer": "mobile",
+	"window_position": [
+		1820,
+		678
+	],
+	"window_size": [
+		720,
+		840
+	]
+}

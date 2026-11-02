@@ -1,0 +1,95 @@
+{
+	"action": "idle",
+	"adapter": "",
+	"character": "男人 · GLB",
+	"character_details": {
+		"action": "idle",
+		"animation_time": 3.546657,
+		"bone_count": 19,
+		"bounds_mean_usec": 114.655172413793,
+		"bounds_samples": 29,
+		"expressions": [],
+		"id": "man",
+		"observed_secondary_rotation_radians": 0.0,
+		"positions": {
+			"Head": [
+				-0.000801802205387503,
+				0.856677830219269,
+				-0.677507638931274
+			],
+			"Hips": [
+				0.000471808336442336,
+				0.853500664234161,
+				0.00248811137862504
+			],
+			"LeftFoot": [
+				-0.236158818006516,
+				0.593603789806366,
+				-0.799455106258392
+			],
+			"LeftHand": [
+				0.179979994893074,
+				1.24326801300049,
+				-0.60623562335968
+			],
+			"RightFoot": [
+				0.20046554505825,
+				0.816196024417877,
+				-0.861654043197632
+			],
+			"RightHand": [
+				-0.202386513352394,
+				1.21699857711792,
+				-0.626879453659058
+			]
+		},
+		"spring_controllers": 0
+	},
+	"data_directory": "C:/Users/lrs/AppData/Local/Temp/Pet3D-stage2-fkxo4jgj/阶段二 设置",
+	"display_fallback": false,
+	"dpi_scale": 1.0,
+	"driver": "d3d12",
+	"edge_attachment": [
+		1,
+		1
+	],
+	"elapsed": 3.51332366666667,
+	"engine": "4.7.2-stable (official)",
+	"frame_interval_p95_ms": 37.4777777777778,
+	"frames_sampled": 46,
+	"last_save_error": "",
+	"native": true,
+	"pid": 33948,
+	"renderer": "mobile",
+	"saved_settings": {
+		"character_id": "man",
+		"placement": {
+			"edge_x": 1.0,
+			"edge_y": 1.0,
+			"x": 1.0,
+			"y": 1.0
+		},
+		"scale": 1.1,
+		"schema_version": 1.0,
+		"screen_id": "",
+		"user_name": "阶段二 中文"
+	},
+	"service_pid": 0,
+	"service_state": "stopped",
+	"stage": 1,
+	"visible_rect": [
+		14.0230026245117,
+		-130.030151367188,
+		304.370910644531,
+		3329.03857421875
+	],
+	"warnings": [],
+	"window_position": [
+		0,
+		0
+	],
+	"window_size": [
+		64,
+		64
+	]
+}

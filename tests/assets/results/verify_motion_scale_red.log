@@ -1,0 +1,35 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[VRM][INFO][vrm_extension.gd] _import_post: starting VRM 0.0 import[0m
+VRM: Renamed skeleton node to Skeleton3D
+[VRM][INFO][vrm_animation.gd] setup_animation_player_v0: animation library set up complete[0m
+[VRM][INFO][vrm_extension.gd] _import_post: VRM 0.0 import complete OK[0m
+ERROR: godette idle hip height drift (motion_scale mismatch)
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://verify_libraries.gd:10)
+       [1] run (res://verify_libraries.gd:131)
+ERROR: godette wave hip height drift (motion_scale mismatch)
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://verify_libraries.gd:10)
+       [1] run (res://verify_libraries.gd:131)
+VERIFIED godette {"bone_count":69,"idle":-0.328791260719299,"wave":0.0808241367340088}
+VERIFIED swordsman {"bone_count":28,"idle":-0.411048412322998,"wave":0.115768790245056}
+[VRM][INFO][vrmc_vrm.gd] _import_post: starting VRM 1.0 import[0m
+VRM: Renamed skeleton node to Skeleton3D
+[VRM][INFO][vrmc_vrm.gd] _import_post: VRM 1.0 import complete OK[0m
+[VRM][INFO][vrmc_materials_mtoon.gd] _import_post: processing 19 materials[0m
+ERROR: avatar_sample_m idle hip height drift (motion_scale mismatch)
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://verify_libraries.gd:10)
+       [1] run (res://verify_libraries.gd:131)
+ERROR: avatar_sample_m wave hip height drift (motion_scale mismatch)
+   at: push_error (core/variant/variant_utility.cpp:1023)
+   GDScript backtrace (most recent call first):
+       [0] check (res://verify_libraries.gd:10)
+       [1] run (res://verify_libraries.gd:131)
+VERIFIED avatar_sample_m {"bone_count":191,"idle":-0.370488524436951,"wave":0.110544562339783}
+WARNING: 2 ObjectDB instances were leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)

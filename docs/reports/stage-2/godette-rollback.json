@@ -1,0 +1,106 @@
+{
+	"action": "idle",
+	"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+	"character": "Godette · VRM",
+	"character_details": {
+		"action": "idle",
+		"animation_time": 2.11238966666667,
+		"bone_count": 69,
+		"bounds_mean_usec": 1199.11111111111,
+		"bounds_samples": 18,
+		"expressions": [
+			"blink",
+			"mouth_a"
+		],
+		"id": "godette",
+		"observed_secondary_rotation_radians": 0.0342788845300674,
+		"positions": {
+			"Head": [
+				-0.015535157173872,
+				1.04767739772797,
+				0.0422865189611912
+			],
+			"Hips": [
+				-0.00258360453881323,
+				0.687925815582275,
+				0.0499945022165775
+			],
+			"LeftFoot": [
+				0.161810576915741,
+				0.0594355538487434,
+				0.0530682243406773
+			],
+			"LeftHand": [
+				0.156115353107452,
+				0.551788985729218,
+				0.0655127540230751
+			],
+			"RightFoot": [
+				-0.120983377099037,
+				0.065620169043541,
+				-0.0194808077067137
+			],
+			"RightHand": [
+				-0.159750789403915,
+				0.534986257553101,
+				0.057220995426178
+			]
+		},
+		"spring_controllers": 1
+	},
+	"data_directory": "D:/danjigame/3D-pet-gtpdo/docs/reports/stage-2/visual-godette-data",
+	"display_fallback": false,
+	"dpi_scale": 1.5,
+	"driver": "d3d12",
+	"edge_attachment": [
+		0,
+		0
+	],
+	"elapsed": 2.01239433333334,
+	"engine": "4.7.2-stable (official)",
+	"foot_gap_px": 173.465576171875,
+	"frame_interval_p95_ms": 33.3326666666667,
+	"frames_sampled": 1,
+	"last_save_error": "",
+	"native": true,
+	"pid": 9008,
+	"renderer": "mobile",
+	"right_gap_px": 99.6135864257813,
+	"saved_settings": {
+		"character_id": "godette",
+		"placement": {
+			"edge_x": 0.0,
+			"edge_y": 0.0,
+			"x": 0.927103328704834,
+			"y": 0.886468058481266
+		},
+		"scale": 1.0,
+		"schema_version": 1.0,
+		"screen_id": "",
+		"user_name": "你"
+	},
+	"service_pid": 0,
+	"service_state": "stopped",
+	"stage": 1,
+	"visible_rect": [
+		264.339416503906,
+		216.545333862305,
+		174.046997070313,
+		460.989074707031
+	],
+	"warnings": [],
+	"window_position": [
+		2022,
+		677
+	],
+	"window_size": [
+		720,
+		840
+	],
+	"work_area": [
+		0,
+		0,
+		2560,
+		1528
+	]
+}

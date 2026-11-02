@@ -1,0 +1,103 @@
+{
+	"action": "idle",
+	"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+	"character": "卡通骨骼人 · GLB",
+	"character_details": {
+		"action": "idle",
+		"animation_time": 3.31856575757576,
+		"bone_count": 27,
+		"bounds_mean_usec": 2360.03571428571,
+		"bounds_samples": 28,
+		"expressions": [],
+		"id": "cartoon_skeleton",
+		"observed_secondary_rotation_radians": 0.0,
+		"positions": {
+			"Head": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"Hips": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"LeftFoot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"LeftHand": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"RightFoot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"RightHand": [
+				0.0,
+				0.0,
+				0.0
+			]
+		},
+		"spring_controllers": 0
+	},
+	"data_directory": "D:/danjigame/3D-pet-gtpdo/docs/reports/stage-2/captures/data-cartoon_skeleton",
+	"display_fallback": false,
+	"dpi_scale": 1.5,
+	"driver": "d3d12",
+	"edge_attachment": [
+		1,
+		1
+	],
+	"elapsed": 3.21856575757576,
+	"engine": "4.7.2-stable (official)",
+	"foot_gap_px": 0.9300537109375,
+	"frame_interval_p95_ms": 33.3333333333333,
+	"frames_sampled": 37,
+	"last_save_error": "",
+	"native": true,
+	"pid": 54640,
+	"renderer": "mobile",
+	"right_gap_px": 0.4371337890625,
+	"saved_settings": {
+		"character_id": "cartoon_skeleton",
+		"placement": {
+			"edge_x": 1.0,
+			"edge_y": 1.0,
+			"x": 0.93571891784668,
+			"y": 0.999867384346368
+		},
+		"scale": 1.0,
+		"schema_version": 1.0,
+		"screen_id": "",
+		"user_name": "你"
+	},
+	"service_pid": 0,
+	"service_state": "stopped",
+	"stage": 1,
+	"visible_rect": [
+		198.629730224609,
+		590.317016601563,
+		327.933135986328,
+		318.7529296875
+	],
+	"warnings": [],
+	"window_position": [
+		2033,
+		618
+	],
+	"window_size": [
+		720,
+		840
+	],
+	"work_area": [
+		0,
+		0,
+		2560,
+		1528
+	]
+}

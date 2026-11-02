@@ -1,0 +1,142 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[   0% ] first_scan_filesystem | Started 项目初始化 (5 steps)
+[   0% ] first_scan_filesystem | 正在扫描文件结构……
+[  16% ] first_scan_filesystem | 正在加载全局类名……
+[  33% ] first_scan_filesystem | 正在校验 GDExtension……
+[  50% ] first_scan_filesystem | 正在创建自动加载脚本……
+[  66% ] first_scan_filesystem | 正在初始化插件……
+[  83% ] first_scan_filesystem | 正在启动文件扫描……
+[ DONE ] first_scan_filesystem
+
+[   0% ] update_scripts_classes | Started 正在注册全局类…… (53 steps)
+[   0% ] update_scripts_classes | 
+[   1% ] update_scripts_classes | 
+[   3% ] update_scripts_classes | 
+[   5% ] update_scripts_classes | 
+[   7% ] update_scripts_classes | VRMInstance
+[   9% ] update_scripts_classes | 
+[  11% ] update_scripts_classes | VRMSettings
+[  12% ] update_scripts_classes | VRMSpringBoneGroupSetting
+[  14% ] update_scripts_classes | 
+[  16% ] update_scripts_classes | 
+[  18% ] update_scripts_classes | 
+[  20% ] update_scripts_classes | 
+[  22% ] update_scripts_classes | 
+[  24% ] update_scripts_classes | 
+[  25% ] update_scripts_classes | 
+[  27% ] update_scripts_classes | 
+[  29% ] update_scripts_classes | 
+[  31% ] update_scripts_classes | 
+[  33% ] update_scripts_classes | 
+[  35% ] update_scripts_classes | 
+[  37% ] update_scripts_classes | 
+[  38% ] update_scripts_classes | 
+[  40% ] update_scripts_classes | 
+[  42% ] update_scripts_classes | 
+[  44% ] update_scripts_classes | 
+[  46% ] update_scripts_classes | 
+[  48% ] update_scripts_classes | 
+[  50% ] update_scripts_classes | 
+[  51% ] update_scripts_classes | 
+[  53% ] update_scripts_classes | 
+[  55% ] update_scripts_classes | 
+[  57% ] update_scripts_classes | 
+[  59% ] update_scripts_classes | 
+[  61% ] update_scripts_classes | 
+[  62% ] update_scripts_classes | 
+[  64% ] update_scripts_classes | 
+[  66% ] update_scripts_classes | 
+[  68% ] update_scripts_classes | 
+[  70% ] update_scripts_classes | VRMConstraint
+[  72% ] update_scripts_classes | VRMConstraintApplier
+[  74% ] update_scripts_classes | VRMCollider
+[  75% ] update_scripts_classes | VRMColliderGroup
+[  77% ] update_scripts_classes | VRMSpringBone
+[  79% ] update_scripts_classes | 
+[  81% ] update_scripts_classes | VRMSpringBoneController
+[  83% ] update_scripts_classes | 
+[  85% ] update_scripts_classes | 
+[  87% ] update_scripts_classes | 
+[  88% ] update_scripts_classes | 
+[  90% ] update_scripts_classes | 
+[  92% ] update_scripts_classes | 
+[  94% ] update_scripts_classes | 
+[  96% ] update_scripts_classes | 
+[ DONE ] update_scripts_classes
+
+[   0% ] _update_scan_actions | Started 正在扫描动作…… (13 steps)
+[   0% ] _update_scan_actions | vrm_constraint.svg
+[   7% ] _update_scan_actions | vrm_constraint_applier.svg
+[  14% ] _update_scan_actions | vrm_instance.svg
+[  21% ] _update_scan_actions | godette.vrm
+[  28% ] _update_scan_actions | swordsman.glb
+[  35% ] _update_scan_actions | swordsman_0.png
+[  42% ] _update_scan_actions | swordsman_1.png
+[  50% ] _update_scan_actions | swordsman_2.png
+[  57% ] _update_scan_actions | swordsman_3.png
+[  64% ] _update_scan_actions | swordsman_4.png
+[  71% ] _update_scan_actions | swordsman_5.png
+[  78% ] _update_scan_actions | idle.glb
+[  85% ] _update_scan_actions | wave.glb
+[ DONE ] _update_scan_actions
+
+[   0% ] reimport | Started 正在导入或重新导入资产 (10 steps)
+[   0% ] reimport | 正在准备重新导入文件……
+[   9% ] reimport | 正在准备重新导入文件……
+[  18% ] reimport | 正在准备重新导入文件……
+[  27% ] reimport | 正在准备重新导入文件……
+[  36% ] reimport | 正在准备重新导入文件……
+[  45% ] reimport | 正在准备重新导入文件……
+[  54% ] reimport | 正在准备重新导入文件……
+[  63% ] reimport | 正在准备重新导入文件……
+[  72% ] reimport | 正在准备重新导入文件……
+[  81% ] reimport | 正在准备重新导入文件……
+[   0% ] reimport | 正在执行重新导入的前置操作……
+[   0% ] reimport | swordsman_0.png
+[   9% ] reimport | swordsman_1.png
+[  18% ] reimport | swordsman_2.png
+[  27% ] reimport | swordsman_3.png
+[  36% ] reimport | swordsman_4.png
+[  45% ] reimport | swordsman_5.png
+[  54% ] reimport | godette.vrm
+[   0% ] import | Started 导入场景 (104 steps)
+[   0% ] import | 导入场景中...
+VRM: Renamed skeleton node to Skeleton3D
+[   1% ] import | 执行自定义脚本...
+[  99% ] import | 保存中...
+[ DONE ] import
+
+[  63% ] reimport | swordsman.glb
+[   0% ] import | Started 导入场景 (104 steps)
+[   0% ] import | 导入场景中...
+[   1% ] import | 执行自定义脚本...
+[  99% ] import | 保存中...
+[ DONE ] import
+
+[  72% ] reimport | idle.glb
+[   0% ] import | Started 导入场景 (104 steps)
+[   0% ] import | 导入场景中...
+[   1% ] import | 执行自定义脚本...
+[  99% ] import | 保存中...
+[ DONE ] import
+
+[  81% ] reimport | wave.glb
+[   0% ] import | Started 导入场景 (104 steps)
+[   0% ] import | 导入场景中...
+[   1% ] import | 执行自定义脚本...
+[  99% ] import | 保存中...
+[ DONE ] import
+
+[  90% ] reimport | 正在结束资产导入……
+[ DONE ] reimport
+
+[   0% ] reimport | Started 正在导入或重新导入资产 (10 steps)
+[   0% ] reimport | 正在执行重新导入的后置操作……
+[ DONE ] reimport
+
+[   0% ] loading_editor_layout | Started 正在加载编辑器 (5 steps)
+[   0% ] loading_editor_layout | 正在加载编辑器布局……
+[  16% ] loading_editor_layout | 正在加载停靠面板……
+[ DONE ] loading_editor_layout
+

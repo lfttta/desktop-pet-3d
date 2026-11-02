@@ -1,0 +1,13 @@
+{
+  "native": "pass",
+  "lifetime": "pass",
+  "godot_api": "pass",
+  "godot_release_api": "pass",
+  "dll_sha256": {
+    "pet_window.windows.debug.x86_64.dll": "fd19d0e593da945d2f0a806ce6fd9941e38a94012849c7fbc0d6a395cb600f72",
+    "pet_window.windows.release.x86_64.dll": "fd19d0e593da945d2f0a806ce6fd9941e38a94012849c7fbc0d6a395cb600f72"
+  },
+  "engine": "D:\\danjigame\\GODDOT  WORD\\Godot_v4.7.2-stable_win64.exe",
+  "stage1": "pass",
+  "real_desktop_ui": "not run; assigned to parent"
+}

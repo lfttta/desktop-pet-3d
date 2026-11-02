@@ -1,0 +1,14 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[app] service state=starting pid=0 detail=正在连接后台服务…
+[app] service state=ready pid=50424 detail=后台服务已连接
+[character] loaded id=swordsman bones=28 springs=0
+[stage0] ACTION idle
+[stage0] CHARACTER {"config":"res://assets_data/swordsman.json","id":"swordsman","name":"剑士 · GLB"}
+[stage0] ACTION idle
+[stage0] READY {"action":"idle","adapter":"","character":"剑士 · GLB","character_details":{"action":"idle","animation_time":0.0,"bone_count":28,"bounds_mean_usec":1408.0,"bounds_samples":1,"expressions":[],"id":"swordsman","observed_secondary_rotation_radians":0.0,"positions":{"Head":[-0.0197339355945587,1.30427932739258,0.00693138828501105],"Hips":[0.000424400874180719,0.799050092697144,-0.0382420569658279],"LeftFoot":[0.158370971679688,0.0807680189609528,0.0524041317403317],"LeftHand":[0.186698138713837,0.724774360656738,0.13780865073204],"RightFoot":[-0.0748887360095978,0.0800245255231857,-0.043603204190731],"RightHand":[-0.223226770758629,0.709422647953033,0.126590132713318]},"spring_controllers":0},"data_directory":"C:/Users/lrs/AppData/Local/Temp/Pet3D-stage1-data-q0z0kva3/恢复设置 数据","display_fallback":false,"dpi_scale":1.0,"driver":"d3d12","edge_attachment":[1,1],"elapsed":0.0,"engine":"4.7.2-stable (official)","frames_sampled":0,"last_save_error":"","native":true,"pid":48736,"renderer":"mobile","saved_settings":{"character_id":"swordsman","placement":{"edge_x":0.0,"edge_y":0.0,"x":0.25,"y":0.75},"scale":1.25,"schema_version":1.0,"screen_id":"","user_name":"阶段一 中文"},"service_pid":50424,"service_state":"ready","stage":1,"visible_rect":[22.3142204284668,15.9390048980713,16.9525833129883,36.5153579711914],"warnings":[],"window_position":[0,0],"window_size":[64,64]}
+[app] service state=ready pid=50424 detail=后台服务已连接
+[app] READY service_pid=50424 data_dir=C:/Users/lrs/AppData/Local/Temp/Pet3D-stage1-data-q0z0kva3/恢复设置 数据
+[app] service state=stopped pid=0 detail=后台服务已退出
+[app] service state=stopped pid=0 detail=后台服务已退出
+[stage0] EXIT code=0

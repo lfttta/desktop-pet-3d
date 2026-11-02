@@ -1,0 +1,18 @@
+window_bridge.cpp
+stage1_resources.cpp
+godot_entry.cpp
+正在生成代码...
+  正在创建库 pet_window.lib 和对象 pet_window.exp
+window_bridge_test.cpp
+window_bridge.cpp
+stage1_resources.cpp
+正在生成代码...
+lifetime_test.cpp
+window_bridge.cpp
+stage1_resources.cpp
+正在生成代码...
+stage1_test.cpp
+window_bridge.cpp
+stage1_resources.cpp
+正在生成代码...
+Built x64 bridge and three native regression executables. Debug/release DLLs intentionally share one optimized /MT binary with PDB symbols.

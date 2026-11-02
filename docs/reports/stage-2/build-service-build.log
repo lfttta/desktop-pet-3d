@@ -1,0 +1,74 @@
+937 INFO: PyInstaller: 6.21.0, contrib hooks: 2026.6
+937 INFO: Python: 3.13.14
+979 INFO: Platform: Windows-11-10.0.26100-SP0
+979 INFO: Python environment: D:\phthon lang
+980 INFO: wrote D:\danjigame\3D-pet-gtpdo\build\service\pet-service.spec
+987 INFO: Removing temporary files and cleaning cache in D:\danjigame\3D-pet-gtpdo\build\service\cache\pyinstaller
+1009 INFO: Module search paths (PYTHONPATH):
+['D:\\danjigame\\3D-pet-gtpdo',
+ 'D:\\phthon lang\\python313.zip',
+ 'D:\\phthon lang\\DLLs',
+ 'D:\\phthon lang\\Lib',
+ 'D:\\phthon lang',
+ 'C:\\Users\\lrs\\AppData\\Roaming\\Python\\Python313\\site-packages',
+ 'D:\\phthon lang\\Lib\\site-packages',
+ 'D:\\phthon lang\\Lib\\site-packages\\win32',
+ 'D:\\phthon lang\\Lib\\site-packages\\win32\\lib',
+ 'D:\\phthon lang\\Lib\\site-packages\\pythonwin',
+ 'D:\\danjigame\\3D-pet-gtpdo']
+2563 INFO: checking Analysis
+2563 INFO: Building Analysis because Analysis-00.toc is non existent
+2563 INFO: Looking for Python shared library...
+2563 INFO: Using Python shared library: D:\phthon lang\python313.dll
+2563 INFO: Running Analysis Analysis-00.toc
+2563 INFO: Target bytecode optimization level: 0
+2563 INFO: Initializing module dependency graph...
+2567 INFO: Initializing module graph hook caches...
+2592 INFO: Analyzing modules for base_library.zip ...
+5300 INFO: Processing standard module hook 'hook-encodings.py' from 'D:\\phthon lang\\Lib\\site-packages\\PyInstaller\\hooks'
+6253 INFO: Processing standard module hook 'hook-math.py' from 'D:\\phthon lang\\Lib\\site-packages\\PyInstaller\\hooks'
+7208 INFO: Processing standard module hook 'hook-pickle.py' from 'D:\\phthon lang\\Lib\\site-packages\\PyInstaller\\hooks'
+8020 INFO: Processing standard module hook 'hook-heapq.py' from 'D:\\phthon lang\\Lib\\site-packages\\PyInstaller\\hooks'
+8651 INFO: Caching module dependency graph...
+8694 INFO: Analyzing D:\danjigame\3D-pet-gtpdo\service\main.py
+8715 INFO: Processing standard module hook 'hook-sqlite3.py' from 'D:\\phthon lang\\Lib\\site-packages\\PyInstaller\\hooks'
+9563 INFO: Processing standard module hook 'hook-platform.py' from 'D:\\phthon lang\\Lib\\site-packages\\PyInstaller\\hooks'
+9592 INFO: Processing standard module hook 'hook-sysconfig.py' from 'D:\\phthon lang\\Lib\\site-packages\\PyInstaller\\hooks'
+9601 INFO: Processing standard module hook 'hook-_ctypes.py' from 'D:\\phthon lang\\Lib\\site-packages\\PyInstaller\\hooks'
+9611 INFO: Processing module hooks (post-graph stage)...
+9667 INFO: Performing binary vs. data reclassification (1 entries)
+9669 INFO: Looking for ctypes DLLs
+9678 INFO: Analyzing run-time hooks ...
+9678 INFO: Including run-time hook 'pyi_rth_inspect.py' from 'D:\\phthon lang\\Lib\\site-packages\\PyInstaller\\hooks\\rthooks'
+9685 INFO: Creating base_library.zip...
+9702 INFO: Looking for dynamic libraries
+10052 INFO: Extra DLL search directories (AddDllDirectory): []
+10052 INFO: Extra DLL search directories (PATH): []
+10376 INFO: Warnings written to D:\danjigame\3D-pet-gtpdo\build\service\work\pet-service\warn-pet-service.txt
+10386 INFO: Graph cross-reference written to D:\danjigame\3D-pet-gtpdo\build\service\work\pet-service\xref-pet-service.html
+10413 INFO: checking PYZ
+10413 INFO: Building PYZ because PYZ-00.toc is non existent
+10413 INFO: Building PYZ (ZlibArchive) D:\danjigame\3D-pet-gtpdo\build\service\work\pet-service\PYZ-00.pyz
+10533 INFO: Building PYZ (ZlibArchive) D:\danjigame\3D-pet-gtpdo\build\service\work\pet-service\PYZ-00.pyz completed successfully.
+10612 INFO: checking PKG
+10612 INFO: Building PKG because PKG-00.toc is non existent
+10612 INFO: Building PKG (CArchive) pet-service.pkg
+10632 INFO: Building PKG (CArchive) pet-service.pkg completed successfully.
+10633 INFO: Bootloader D:\phthon lang\Lib\site-packages\PyInstaller\bootloader\Windows-64bit-intel\run.exe
+10633 INFO: checking EXE
+10633 INFO: Building EXE because EXE-00.toc is non existent
+10634 INFO: Building EXE from EXE-00.toc
+10634 INFO: Copying bootloader EXE to D:\danjigame\3D-pet-gtpdo\build\service\work\pet-service\pet-service.exe
+10942 INFO: Copying icon to EXE
+11109 INFO: Copying 0 resources to EXE
+11109 INFO: Embedding manifest in EXE
+11276 INFO: Appending PKG archive to EXE
+11279 INFO: Fixing EXE headers
+11330 INFO: Building EXE from EXE-00.toc completed successfully.
+11332 INFO: checking COLLECT
+11332 INFO: Building COLLECT because COLLECT-00.toc is non existent
+11332 INFO: Removing dir D:\danjigame\3D-pet-gtpdo\build\service\bundle\pet-service
+11355 INFO: Building COLLECT COLLECT-00.toc
+11444 INFO: Building COLLECT COLLECT-00.toc completed successfully.
+11446 INFO: Build complete! The results are available in: D:\danjigame\3D-pet-gtpdo\build\service\bundle
+D:\danjigame\3D-pet-gtpdo\dist\stage-2\service\pet-service.exe

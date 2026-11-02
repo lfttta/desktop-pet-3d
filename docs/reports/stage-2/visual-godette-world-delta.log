@@ -1,0 +1,18 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+D3D12 12_0 - Forward Mobile - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5070 Ti Laptop GPU
+
+[app] service state=starting pid=0 detail=正在连接后台服务…
+[app] service state=ready pid=52664 detail=后台服务已连接
+[character] loaded id=godette bones=69 springs=1
+[stage0] ACTION idle
+[stage0] CHARACTER {"config":"res://assets_data/godette.json","id":"godette","name":"Godette · VRM"}
+[stage0] ACTION idle
+[stage0] READY {"action":"idle","adapter":"NVIDIA GeForce RTX 5070 Ti Laptop GPU","character":"Godette · VRM","character_details":{"action":"idle","animation_time":0.0,"bone_count":69,"bounds_mean_usec":3259.0,"bounds_samples":1,"expressions":["blink","mouth_a"],"id":"godette","observed_secondary_rotation_radians":0.0,"positions":{"Head":[-0.00827185995876789,0.41080829501152,-0.00699478155001998],"Hips":[0.000255130435107276,0.050902284681797,0.00282382010482252],"LeftFoot":[0.0226508360356092,0.314210325479507,0.097768247127533],"LeftHand":[0.128896966576576,0.0509972684085369,-0.336981952190399],"RightFoot":[-0.109160661697388,0.353005021810532,0.00112382078077644],"RightHand":[-0.080885112285614,-0.0230173319578171,-0.29783821105957]},"spring_controllers":1},"data_directory":"D:/danjigame/3D-pet-gtpdo/docs/reports/stage-2/visual-godette-data","display_fallback":false,"dpi_scale":1.5,"driver":"d3d12","edge_attachment":[1,1],"elapsed":0.0,"engine":"4.7.2-stable (official)","foot_gap_px":0.704833984375,"frames_sampled":0,"last_save_error":"","native":true,"pid":35544,"renderer":"mobile","right_gap_px":0.211639404296875,"saved_settings":{"character_id":"godette","placement":{"edge_x":1.0,"edge_y":1.0,"x":1.0,"y":1.0},"scale":1.0,"schema_version":1.0,"screen_id":"","user_name":"你"},"service_pid":52664,"service_state":"ready","stage":1,"visible_rect":[267.782623291016,395.141845703125,174.005737304688,321.1533203125],"warnings":[],"window_position":[2118,811],"window_size":[720,840],"work_area":[0,0,2560,1528]}
+[app] service state=ready pid=52664 detail=后台服务已连接
+[app] READY service_pid=52664 data_dir=D:/danjigame/3D-pet-gtpdo/docs/reports/stage-2/visual-godette-data
+[stage0] CAPTURE result=0
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2028, 638)
+[app] service state=stopped pid=0 detail=后台服务已退出
+[app] service state=stopped pid=0 detail=后台服务已退出
+[stage0] EXIT code=0

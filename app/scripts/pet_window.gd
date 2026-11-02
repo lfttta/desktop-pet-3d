@@ -1,0 +1,419 @@
+extends Node3D
+## Stage 0 application: rendering/interaction and native lifetime only.
+
+const DragState = preload("res://scripts/drag_state.gd")
+const HitRegions = preload("res://scripts/hit_regions.gd")
+const ScreenMath = preload("res://scripts/screen_math.gd")
+
+var camera: Camera3D
+var actor: Node3D
+var bridge: RefCounted
+var drag := DragState.new()
+var options := {}
+var regions: Array = []
+var elapsed := 0.0
+var frame_samples: Array[float] = []
+var hidden := false
+var captured_image := false
+var quitting := false
+var current_action := "idle"
+var current_character := 0
+var characters: Array = []
+var screen := 0
+var dpi_scale := 1.0
+var previous_interactive := false
+var status_label: Label
+var _last_work_area := Rect2i()
+var _screen_timer := 0.0
+var _geometry := false
+var _attached_edges := Vector2i(1, 1)
+
+func _ready() -> void:
+	_parse_options()
+	if options.has("verify-package"):
+		set_process(false)
+		_verify_package.call_deferred()
+		return
+	Engine.max_fps = 30
+	get_window().title = "Pet3D Stage 0"
+	get_window().close_requested.connect(_quit)
+	get_tree().auto_accept_quit = false
+	screen = maxi(0, DisplayServer.window_get_current_screen())
+	dpi_scale = clampf(DisplayServer.screen_get_dpi(screen) / 96.0, 1.0, 3.0)
+	# Install no-activate/passthrough before synchronous model/resource loading.
+	if not _initialize_native():
+		return
+	if DisplayServer.get_name() != "headless":
+		get_window().size = Vector2i(Vector2(480, 560) * dpi_scale)
+	_recover_position()
+	_build_world()
+	_geometry = options.has("geometry")
+	_load_characters()
+	if _geometry or characters.is_empty():
+		_build_geometry()
+	else:
+		_change_character(int(options.get("character", "0")))
+	if options.has("diagnostics"):
+		_build_diagnostics()
+	_play_action(str(options.get("action", "idle")))
+	_recover_position()
+	if bridge:
+		# Also consume presses that began on the desktop during model loading.
+		drag.update(bridge.is_left_button_down(), false, bridge.get_cursor_position(), get_window().position, false, true)
+	print("[stage0] READY ", JSON.stringify(_status()))
+	# Stage 1 lifecycle checks also run headless; explicit shutdown owns exit.
+
+func _verify_package() -> void:
+	# Release templates omit --script. This explicit headless entry runs the
+	# single external verifier while res:// still resolves to this EXE's PCK.
+	var path := str(options["verify-package"])
+	if DisplayServer.get_name() != "headless" or not path.is_absolute_path() or not FileAccess.file_exists(path):
+		push_error("Package verification requires --headless and an absolute verifier script path")
+		_quit(2)
+		return
+	var verifier := load(path) as Script
+	if verifier == null or not verifier.has_method("verify_package"):
+		push_error("Package verifier could not be loaded")
+		_quit(2)
+		return
+	var code: int = await verifier.verify_package(get_tree())
+	_quit(code)
+
+func _initialize_native() -> bool:
+	if options.has("no-native") or DisplayServer.get_name() != "Windows":
+		return true
+	if not ClassDB.class_exists("PetWindowBridge"):
+		push_error("Windows window bridge is missing. Rebuild native module before desktop use.")
+		_quit(3)
+		return false
+	bridge = ClassDB.instantiate("PetWindowBridge")
+	if not bridge.configure(DisplayServer.window_get_native_handle(DisplayServer.WINDOW_HANDLE)):
+		push_error("Could not initialize the native window/tray bridge.")
+		_quit(4)
+		return false
+	bridge.set_interactive(false)
+	previous_interactive = false
+	dpi_scale = bridge.get_dpi_scale()
+	return true
+
+func _parse_options() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--"):
+			var pair := arg.substr(2).split("=", true, 1)
+			options[pair[0]] = pair[1] if pair.size() == 2 else "true"
+
+func _build_world() -> void:
+	camera = Camera3D.new()
+	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	camera.size = 3.0
+	camera.position = Vector3(0, 0.9, 4)
+	add_child(camera)
+	camera.look_at(Vector3(0, 0.9, 0))
+	camera.make_current()
+	var key := DirectionalLight3D.new()
+	key.light_energy = 1.5
+	key.rotation_degrees = Vector3(-25, -30, 0)
+	add_child(key)
+	var fill := DirectionalLight3D.new()
+	fill.light_energy = 0.5
+	fill.light_color = Color(0.78, 0.85, 1)
+	fill.rotation_degrees = Vector3(-15, 150, 0)
+	add_child(fill)
+	var environment := WorldEnvironment.new()
+	environment.environment = Environment.new()
+	environment.environment.background_mode = Environment.BG_CLEAR_COLOR
+	environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	environment.environment.ambient_light_color = Color(0.8, 0.85, 0.95)
+	environment.environment.ambient_light_energy = 0.35
+	add_child(environment)
+
+func _build_geometry() -> void:
+	actor = Node3D.new()
+	actor.name = "GeometryProbe"
+	add_child(actor)
+	var body := MeshInstance3D.new()
+	var mesh := CapsuleMesh.new()
+	mesh.radius = 0.22
+	mesh.height = 1.15
+	body.mesh = mesh
+	body.position.y = 0.65
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.25, 0.65, 0.95)
+	body.material_override = mat
+	actor.add_child(body)
+	var head := MeshInstance3D.new()
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.18
+	sphere.height = 0.36
+	head.mesh = sphere
+	head.position.y = 1.42
+	head.material_override = mat
+	actor.add_child(head)
+
+func _load_characters() -> void:
+	# Asset manifest is produced by the separate repeatable asset build.
+	var path := "res://assets_data/characters.json"
+	if FileAccess.file_exists(path):
+		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+		if data is Array:
+			characters = data
+
+func _change_character(index: int) -> void:
+	if characters.is_empty():
+		return
+	var had_actor := is_instance_valid(actor)
+	var old_rect := _subject_rect()
+	var old_foot := Vector2(get_window().position) + Vector2(old_rect.get_center().x, old_rect.end.y)
+	var next_index := posmod(index, characters.size())
+	var adapter_script: Script = load("res://scripts/character_view.gd")
+	if adapter_script == null:
+		return
+	var candidate: Node3D = adapter_script.new()
+	candidate.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(candidate)
+	if not candidate.load_character(characters[next_index]):
+		candidate.queue_free()
+		push_error("Character failed validation; existing character retained")
+		return
+	_cancel_drag()
+	if is_instance_valid(actor):
+		actor.get_parent().remove_child(actor)
+		actor.queue_free()
+	actor = candidate
+	current_character = next_index
+	_apply_actor_state()
+	actor.action_changed.connect(_on_action_changed)
+	_play_action("idle")
+	if had_actor:
+		var new_rect := _subject_rect()
+		get_window().position = Vector2i((old_foot - Vector2(new_rect.get_center().x, new_rect.end.y)).round())
+	_constrain_window()
+	print("[stage0] CHARACTER ", JSON.stringify(characters[next_index]))
+
+func _apply_actor_state() -> void:
+	if not actor:
+		return
+	if actor.has_method("set_expression"):
+		actor.mouth_demo = options.has("mouth-demo")
+		actor.blink_override = float(options.get("blink", "-1"))
+		actor.mouth_override = float(options.get("mouth", "-1"))
+	actor.process_mode = Node.PROCESS_MODE_DISABLED if hidden else Node.PROCESS_MODE_INHERIT
+
+func _process(delta: float) -> void:
+	if quitting:
+		return
+	elapsed += delta
+	if elapsed > 2.0 and frame_samples.size() < 18000 and not hidden:
+		frame_samples.append(delta * 1000.0)
+	if bridge:
+		var tray: int = bridge.poll_tray_action()
+		_handle_tray(tray)
+		if quitting:
+			return
+	_screen_timer += delta
+	if _screen_timer >= 1.0:
+		_screen_timer = 0.0
+		_check_screen()
+	if not hidden:
+		_constrain_window()
+		_update_regions()
+		if bridge:
+			_update_input()
+		if status_label:
+			status_label.text = "Pet3D · 阶段 0\n%s · %s\n%s\n托盘：隐藏 / 恢复 / 换角色 / 退出" % [_character_name(), current_action, "拖动中" if drag.dragging else "身体可拖动，空白穿透"]
+	if options.has("capture") and elapsed > float(options.get("capture-at", "3")) and not captured_image:
+		captured_image = true
+		_capture.call_deferred()
+	if options.has("auto-exit") and elapsed >= float(options["auto-exit"]):
+		_quit()
+
+func _update_regions() -> void:
+	if actor and actor.has_method("project_hit_regions"):
+		regions = actor.project_hit_regions(camera)
+	else:
+		var px := get_window().size.y / camera.size
+		regions = [
+			{"a": camera.unproject_position(Vector3(0, 0.3, 0)), "b": camera.unproject_position(Vector3(0, 1.0, 0)), "radius": px * 0.23},
+			{"a": camera.unproject_position(Vector3(0, 1.42, 0)), "b": camera.unproject_position(Vector3(0, 1.42, 0)), "radius": px * 0.19}
+		]
+
+func _update_input() -> void:
+	var cursor: Vector2i = bridge.get_cursor_position()
+	var down: bool = bridge.is_left_button_down()
+	var work_area := DisplayServer.screen_get_usable_rect(screen)
+	var hit := ScreenMath.pointer_in_subject(cursor, get_window().position, _subject_rect(), work_area) and HitRegions.contains(Vector2(cursor - get_window().position), regions)
+	var state: Dictionary = drag.update(down, hit, cursor, get_window().position, bridge.has_capture(), true)
+	var interactive: bool = hit or drag.active
+	if interactive != previous_interactive:
+		bridge.set_interactive(interactive)
+		previous_interactive = interactive
+	if state.begin:
+		if not bridge.begin_capture():
+			drag.cancel()
+		else:
+			Engine.max_fps = 60
+			print("[stage0] DRAG begin")
+	if state.moved:
+		var work := DisplayServer.screen_get_usable_rect(screen)
+		var subject := _subject_rect()
+		get_window().position = ScreenMath.clamp_subject(state.position, subject, work)
+		_attached_edges = ScreenMath.edge_flags(get_window().position, subject, work)
+	if state.end:
+		bridge.end_capture()
+		Engine.max_fps = 30
+		print("[stage0] DRAG end click=", state.click, " position=", get_window().position)
+	if state.click:
+		_play_action("wave")
+
+func _handle_tray(action: int) -> void:
+	match action:
+		1:
+			_cancel_drag()
+			hidden = not hidden
+			# Godot cannot hide its main Window. Hide its transparent contents;
+			# native passthrough below keeps the empty HWND out of mouse input.
+			visible = not hidden
+			if status_label:
+				status_label.visible = not hidden
+			_apply_actor_state()
+			Engine.max_fps = 5 if hidden else 30
+			if bridge:
+				bridge.set_interactive(false)
+				previous_interactive = false
+				drag.update(bridge.is_left_button_down(), false, bridge.get_cursor_position(), get_window().position, false, false)
+			print("[stage0] HIDDEN ", hidden)
+		2:
+			_recover_position()
+			if hidden:
+				_handle_tray(1)
+		3:
+			_change_character(current_character + 1)
+		4:
+			_play_action("wave" if current_action == "idle" else "idle")
+		5:
+			_quit()
+
+func _play_action(action: String) -> void:
+	if actor and actor.has_method("play_action"):
+		actor.play_action(action)
+	else:
+		_on_action_changed(action)
+
+func _on_action_changed(action: String) -> void:
+	current_action = action
+	print("[stage0] ACTION ", action)
+
+func _check_screen() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if screen >= DisplayServer.get_screen_count():
+		screen = DisplayServer.get_primary_screen()
+	var work := DisplayServer.screen_get_usable_rect(screen)
+	if work != _last_work_area:
+		_cancel_drag()
+		_last_work_area = work
+		_constrain_window()
+
+func _recover_position() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	_cancel_drag()
+	var work := DisplayServer.screen_get_usable_rect(screen)
+	_last_work_area = work
+	_attached_edges = Vector2i(1, 1)
+	get_window().position = ScreenMath.pin_edges(get_window().position, _subject_rect(), work, _attached_edges)
+
+func _subject_rect() -> Rect2:
+	if camera == null or not is_instance_valid(actor):
+		return Rect2(Vector2.ZERO, Vector2(get_window().size))
+	if actor.has_method("project_visible_rect"):
+		return actor.project_visible_rect(camera)
+	var rectangle := Rect2()
+	var first := true
+	for mesh: MeshInstance3D in actor.find_children("*", "MeshInstance3D", true, false):
+		var box: AABB = mesh.global_transform * mesh.get_aabb()
+		for i in 8:
+			var point := camera.unproject_position(box.get_endpoint(i))
+			rectangle = Rect2(point, Vector2.ZERO) if first else rectangle.expand(point)
+			first = false
+	return rectangle if not first else Rect2(Vector2.ZERO, Vector2(get_window().size))
+
+func _constrain_window() -> void:
+	if DisplayServer.get_name() == "headless" or camera == null:
+		return
+	var work := DisplayServer.screen_get_usable_rect(screen)
+	var subject := _subject_rect()
+	var edges := Vector2i.ZERO if drag.active else _attached_edges
+	var desired := ScreenMath.pin_edges(get_window().position, subject, work, edges)
+	if desired != get_window().position:
+		get_window().position = desired
+
+func _cancel_drag() -> void:
+	drag.cancel()
+	if bridge:
+		bridge.end_capture()
+	Engine.max_fps = 5 if hidden else 30
+
+func _build_diagnostics() -> void:
+	var layer := CanvasLayer.new()
+	add_child(layer)
+	status_label = Label.new()
+	status_label.position = Vector2(12, 12)
+	status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	status_label.add_theme_color_override("font_color", Color.WHITE)
+	status_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	status_label.add_theme_constant_override("outline_size", 5)
+	layer.add_child(status_label)
+
+func _character_name() -> String:
+	return str(characters[current_character].get("name", "3D 角色")) if not characters.is_empty() and not _geometry else "几何窗口验证"
+
+func _status() -> Dictionary:
+	var data := {"engine": Engine.get_version_info().string, "renderer": RenderingServer.get_current_rendering_method(), "driver": RenderingServer.get_current_rendering_driver_name(), "adapter": RenderingServer.get_video_adapter_name(), "dpi_scale": dpi_scale, "window_position": [get_window().position.x, get_window().position.y], "window_size": [get_window().size.x, get_window().size.y], "native": bridge != null, "character": _character_name(), "action": current_action, "elapsed": elapsed, "pid": OS.get_process_id(), "frames_sampled": frame_samples.size()}
+	if not frame_samples.is_empty():
+		var sorted := frame_samples.duplicate()
+		sorted.sort()
+		# Includes the frame limiter's sleep; this is pacing, not render cost.
+		data["frame_interval_p95_ms"] = sorted[mini(sorted.size() - 1, int(sorted.size() * 0.95))]
+	if actor and actor.has_method("describe"):
+		data["character_details"] = actor.describe()
+	var subject := _subject_rect()
+	data["visible_rect"] = [subject.position.x, subject.position.y, subject.size.x, subject.size.y]
+	data["edge_attachment"] = [_attached_edges.x, _attached_edges.y]
+	if DisplayServer.get_name() != "headless":
+		var work := DisplayServer.screen_get_usable_rect(screen)
+		data["work_area"] = [work.position.x, work.position.y, work.size.x, work.size.y]
+		data["foot_gap_px"] = work.end.y - (get_window().position.y + subject.end.y)
+		data["right_gap_px"] = work.end.x - (get_window().position.x + subject.end.x)
+	return data
+
+func _capture() -> void:
+	await RenderingServer.frame_post_draw
+	var result := get_viewport().get_texture().get_image().save_png(str(options["capture"]))
+	print("[stage0] CAPTURE result=", result)
+	if options.has("report"):
+		_write_report()
+
+func _write_report() -> void:
+	var file := FileAccess.open(str(options["report"]), FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(_status(), "\t"))
+	else:
+		push_error("Could not write stage0 report")
+
+func _quit(code: int = 0) -> void:
+	if quitting:
+		return
+	quitting = true
+	_cancel_drag()
+	if options.has("report"):
+		_write_report()
+	if bridge:
+		bridge.shutdown()
+		bridge = null
+	print("[stage0] EXIT code=", code)
+	get_tree().quit(code)
+
+func _exit_tree() -> void:
+	if bridge:
+		bridge.shutdown()

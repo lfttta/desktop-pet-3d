@@ -1,0 +1,7 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+STAGE1_EXPORT_BINARY D:/danjigame/3D-pet-gtpdo/dist/stage-1/Pet3D.exe
+[character] loaded id=godette bones=69 springs=1
+[character] loaded id=swordsman bones=28 springs=0
+STAGE1_EXPORT_TEST failures=0
+[stage0] EXIT code=0

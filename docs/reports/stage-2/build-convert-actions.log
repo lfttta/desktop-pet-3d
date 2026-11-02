@@ -1,0 +1,34 @@
+FBX version: 7700
+INFO Draco is available, use library at D:\steam\steamapps\common\Blender\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_draco_bridge.dll
+INFO MeshOptimizer is available, use library at D:\steam\steamapps\common\Blender\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_meshopt_bridge.dll
+13:37:42 | INFO: Starting glTF 2.0 export
+13:37:43 | INFO: Finished glTF 2.0 export in 0.6747007369995117 s
+
+FBX version: 7700
+13:37:43 | INFO: Starting glTF 2.0 export
+13:37:43 | INFO: Finished glTF 2.0 export in 0.16075897216796875 s
+
+FBX version: 7700
+13:37:43 | INFO: Starting glTF 2.0 export
+13:37:43 | INFO: Finished glTF 2.0 export in 0.18416547775268555 s
+
+FBX version: 7700
+13:37:43 | INFO: Starting glTF 2.0 export
+13:37:43 | INFO: Finished glTF 2.0 export in 0.09556007385253906 s
+
+FBX version: 7700
+13:37:43 | INFO: Starting glTF 2.0 export
+13:37:44 | INFO: Finished glTF 2.0 export in 0.24136877059936523 s
+
+FBX version: 7700
+13:37:44 | INFO: Starting glTF 2.0 export
+13:37:44 | INFO: Finished glTF 2.0 export in 0.4526245594024658 s
+
+FBX version: 7700
+13:37:44 | INFO: Starting glTF 2.0 export
+13:37:44 | INFO: Finished glTF 2.0 export in 0.15255999565124512 s
+
+PET3D_STAGE2_CONVERTED {'idle': 251.0, 'walk': 32.0, 'turn': 52.0, 'wave': 17.0, 'pickup': 58.0, 'fall': 136.0, 'recover': 29.0}
+Blender 5.2.3 LTS (hash e13b728c6880 built 2026-10-22 01:37:16)
+
+Blender quit

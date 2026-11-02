@@ -1,0 +1,7 @@
+config_version=5
+
+[application]
+config/name="PetWindowBridge isolated API smoke"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"

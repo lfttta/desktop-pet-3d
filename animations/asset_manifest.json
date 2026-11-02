@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-01",
+  "source_fbx_count": 62,
+  "converted_fbx_count": 2,
+  "sources": [
+    {
+      "path": "D:\\danjigame\\模型all\\pet动作模型\\Idle.fbx",
+      "sha256": "58f6cae7923e4e6fa4d43915f82820392c71625429c9c4a667a292d40a924504",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\danjigame\\模型all\\pet动作模型\\Waving.fbx",
+      "sha256": "1aacd7344405311c165e8a4e9a15707acfe755749c323bc4025c5784cbfb8bb5",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\danjigame\\3D-pet\\work-pet\\prototypes\\azpepoze\\models\\Godette_vrm_v4.vrm",
+      "sha256": "0b008f60c808eb1c83781c650e654a70d512574932e3867f80609c62d7052c6c",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\danjigame\\模型all\\角色\\小纸人.glb",
+      "sha256": "f8e18a42b410b8861c8595299b259c3550e6057ab7c6fbdd898cb3272fc28f7b",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\danjigame\\3D-pet\\work-pet\\prototypes\\azpepoze\\models\\AvatarSample_M.vrm",
+      "sha256": "1fa11ee9d3ef98eec438df191f2278258d3fdd9f4aadc84a6ba6e10e2c467de1",
+      "unchanged": true
+    }
+  ],
+  "runtime_files": [
+    {
+      "path": "prototypes/stage0/models/godette.vrm",
+      "sha256": "0b008f60c808eb1c83781c650e654a70d512574932e3867f80609c62d7052c6c",
+      "bytes": 591288
+    },
+    {
+      "path": "prototypes/stage0/models/swordsman.glb",
+      "sha256": "f8e18a42b410b8861c8595299b259c3550e6057ab7c6fbdd898cb3272fc28f7b",
+      "bytes": 606272
+    },
+    {
+      "path": "prototypes/stage0/models/ATTRIBUTION.txt",
+      "sha256": "8e9e3c3cc5c35966742a3e2a316311f1dcf6099d9d3a7e7b5c425f7aa4a20b49",
+      "bytes": 1335
+    },
+    {
+      "path": "prototypes/stage0/motions/idle.glb",
+      "sha256": "b5f0295c2e0cda3a07c750f8d6c8e8784f0fd7de0a9900abcabd736b197dc845",
+      "bytes": 157568
+    },
+    {
+      "path": "prototypes/stage0/motions/wave.glb",
+      "sha256": "50a0498735468ff55882265b73178a9b327de67ccdf640894f94e10a88c783c7",
+      "bytes": 73792
+    },
+    {
+      "path": "prototypes/stage0/motions/cache/godette.tres",
+      "sha256": "e9f0032d2e4d3f22e66b1931b0ca42b4bb91056ef6c739023f7d909c03dffa64",
+      "bytes": 794602
+    },
+    {
+      "path": "prototypes/stage0/motions/cache/swordsman.tres",
+      "sha256": "42180e36651d92315812e3b9c82a1eab557880019790375a50895c6e0e68abb0",
+      "bytes": 338798
+    },
+    {
+      "path": "prototypes/stage0/assets_data/avatar_sample_m.local.json",
+      "sha256": "8f9fd3ea6c467d818b6cba60a8cec96cf5ad39b6bdc1402648f4bbad9cc9cf03",
+      "bytes": 246847
+    },
+    {
+      "path": "prototypes/stage0/assets_data/characters.json",
+      "sha256": "b5b6583bccc7d54800d017dcb163a32dca8341b64b1cef185e4c32e31094338f",
+      "bytes": 220
+    },
+    {
+      "path": "prototypes/stage0/assets_data/godette.json",
+      "sha256": "7112672d6799cd2576958f32b45a7c4d81547615ad9fda3ca18026e73fca42e7",
+      "bytes": 93432
+    },
+    {
+      "path": "prototypes/stage0/assets_data/swordsman.json",
+      "sha256": "44049f68a62b2881fdc6ded4fc68bd467b8ea297632947aec4896d47ad4a45b6",
+      "bytes": 49349
+    }
+  ],
+  "local_only_files": [
+    {
+      "path": "tests/assets/local_only/avatar_sample_m.tres",
+      "sha256": "e2753d72e5da05d22df98b2518f64c3c15a4543a7724f25b2abfd6888082ccf4",
+      "bytes": 906444,
+      "publishable": false
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+	"action": "idle",
+	"adapter": "",
+	"character": "Godette · VRM",
+	"character_details": {
+		"action": "idle",
+		"animation_time": 2.04270033333334,
+		"bone_count": 69,
+		"bounds_mean_usec": 1208.11764705882,
+		"bounds_samples": 17,
+		"expressions": [
+			"blink",
+			"mouth_a"
+		],
+		"id": "godette",
+		"observed_secondary_rotation_radians": 0.0275011155754328,
+		"positions": {
+			"Head": [
+				-0.0155183039605618,
+				1.04769682884216,
+				0.0424717366695404
+			],
+			"Hips": [
+				-0.00254550762474537,
+				0.687935471534729,
+				0.0498936623334885
+			],
+			"LeftFoot": [
+				0.161793753504753,
+				0.0594559945166111,
+				0.0529195740818977
+			],
+			"LeftHand": [
+				0.15608449280262,
+				0.55171799659729,
+				0.065106987953186
+			],
+			"RightFoot": [
+				-0.121014408767223,
+				0.065645694732666,
+				-0.0195138119161129
+			],
+			"RightHand": [
+				-0.159832954406738,
+				0.535050988197327,
+				0.0573782287538052
+			]
+		},
+		"spring_controllers": 1
+	},
+	"data_directory": "D:/danjigame/3D-pet-gtpdo/tests/stage1/headless-data",
+	"display_fallback": false,
+	"dpi_scale": 1.0,
+	"driver": "d3d12",
+	"edge_attachment": [
+		1,
+		1
+	],
+	"elapsed": 2.009367,
+	"engine": "4.7.2-stable (official)",
+	"frame_interval_p95_ms": 33.3333333333333,
+	"frames_sampled": 1,
+	"last_save_error": "",
+	"native": true,
+	"pid": 48384,
+	"renderer": "mobile",
+	"saved_settings": {
+		"character_id": "godette",
+		"placement": {
+			"edge_x": 1.0,
+			"edge_y": 1.0,
+			"x": 1.0,
+			"y": 1.0
+		},
+		"scale": 1.0,
+		"schema_version": 1.0,
+		"screen_id": "",
+		"user_name": "你"
+	},
+	"service_pid": 0,
+	"service_state": "stopped",
+	"stage": 1,
+	"visible_rect": [
+		23.7883224487305,
+		15.572338104248,
+		15.1107521057129,
+		36.9722671508789
+	],
+	"window_position": [
+		0,
+		0
+	],
+	"window_size": [
+		64,
+		64
+	]
+}

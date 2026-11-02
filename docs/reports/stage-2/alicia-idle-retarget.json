@@ -1,0 +1,103 @@
+{
+	"action": "idle",
+	"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+	"character": "Alicia · VRM",
+	"character_details": {
+		"action": "idle",
+		"animation_time": 1.06666666666667,
+		"bone_count": 129,
+		"bounds_mean_usec": 8486.97142857143,
+		"bounds_samples": 35,
+		"expressions": [],
+		"id": "alicia",
+		"observed_secondary_rotation_radians": 0.464768320322037,
+		"positions": {
+			"Head": [
+				-0.0129544278606772,
+				0.360331326723099,
+				0.0212463177740574
+			],
+			"Hips": [
+				0.00041504148975946,
+				-0.00338288024067879,
+				0.00459373742341995
+			],
+			"LeftFoot": [
+				-0.0773642882704735,
+				0.604240298271179,
+				0.269085228443146
+			],
+			"LeftHand": [
+				0.0220670718699694,
+				0.294568091630936,
+				-0.414603114128113
+			],
+			"RightFoot": [
+				-0.0795798599720001,
+				0.666094958782196,
+				0.104962758719921
+			],
+			"RightHand": [
+				-0.0136224906891584,
+				0.199832066893578,
+				-0.416558444499969
+			]
+		},
+		"spring_controllers": 1
+	},
+	"data_directory": "D:/danjigame/3D-pet-gtpdo/docs/reports/stage-2/visual-alicia-data",
+	"display_fallback": false,
+	"dpi_scale": 1.5,
+	"driver": "d3d12",
+	"edge_attachment": [
+		1,
+		1
+	],
+	"elapsed": 3.01729433333333,
+	"engine": "4.7.2-stable (official)",
+	"foot_gap_px": 0.98016357421875,
+	"frame_interval_p95_ms": 33.3333333333333,
+	"frames_sampled": 31,
+	"last_save_error": "",
+	"native": true,
+	"pid": 10144,
+	"renderer": "mobile",
+	"right_gap_px": 0.796142578125,
+	"saved_settings": {
+		"character_id": "alicia",
+		"placement": {
+			"edge_x": 1.0,
+			"edge_y": 1.0,
+			"x": 0.948477458953857,
+			"y": 0.999934491062664
+		},
+		"scale": 1.0,
+		"schema_version": 1.0,
+		"screen_id": "",
+		"user_name": "你"
+	},
+	"service_pid": 0,
+	"service_state": "stopped",
+	"stage": 1,
+	"visible_rect": [
+		243.346496582031,
+		473.767120361328,
+		262.857360839844,
+		284.252716064453
+	],
+	"warnings": [],
+	"window_position": [
+		2053,
+		769
+	],
+	"window_size": [
+		720,
+		840
+	],
+	"work_area": [
+		0,
+		0,
+		2560,
+		1528
+	]
+}

@@ -1,0 +1,63 @@
+{
+	"action": "wave",
+	"adapter": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+	"character": "剑士 · GLB",
+	"character_details": {
+		"action": "wave",
+		"animation_time": 0.461925733333337,
+		"bone_count": 28,
+		"expressions": [],
+		"id": "swordsman",
+		"observed_secondary_rotation_radians": 0.0,
+		"positions": {
+			"Head": [
+				-0.0235530696809292,
+				1.05468225479126,
+				0.0103417066857219
+			],
+			"Hips": [
+				0.0011928656604141,
+				0.549520254135132,
+				-0.0347431898117065
+			],
+			"LeftFoot": [
+				0.0831952393054962,
+				-0.176805630326271,
+				-0.00512993708252907
+			],
+			"LeftHand": [
+				0.315217405557632,
+				0.572533845901489,
+				0.185326054692268
+			],
+			"RightFoot": [
+				-0.0646791011095047,
+				-0.176463395357132,
+				-0.00273933657445014
+			],
+			"RightHand": [
+				-0.285663902759552,
+				1.07792711257935,
+				0.414470791816711
+			]
+		},
+		"spring_controllers": 0
+	},
+	"dpi_scale": 1.5,
+	"driver": "d3d12",
+	"elapsed": 500.395647777947,
+	"engine": "4.7.2-stable (official)",
+	"frame_p95_ms": 33.3333333333333,
+	"frames_sampled": 15172,
+	"native": true,
+	"pid": 55680,
+	"renderer": "mobile",
+	"window_position": [
+		1688,
+		537
+	],
+	"window_size": [
+		720,
+		840
+	]
+}

@@ -1,0 +1,28 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+D3D12 12_0 - Forward Mobile - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5070 Ti Laptop GPU
+ERROR: Can't create shader cache folder, no shader caching will happen: user://
+   at: RendererCompositorRD (servers/rendering/renderer_rd/renderer_compositor_rd.cpp:337)
+
+[app] service state=starting pid=0 detail=正在连接后台服务…
+[app] service state=ready pid=46448 detail=后台服务已连接
+[character] loaded id=cartoon_skeleton bones=27 springs=0
+[stage0] ACTION idle
+[stage0] CHARACTER {"config":"res://assets_data/cartoon_skeleton.json","id":"cartoon_skeleton","name":"卡通骨骼人 · GLB"}
+[stage0] ACTION idle
+[stage0] READY {"action":"idle","adapter":"NVIDIA GeForce RTX 5070 Ti Laptop GPU","character":"卡通骨骼人 · GLB","character_details":{"action":"idle","animation_time":0.0,"bone_count":27,"bounds_mean_usec":1056.0,"bounds_samples":1,"expressions":[],"id":"cartoon_skeleton","observed_secondary_rotation_radians":0.0,"positions":{"Head":[0.0745109692215919,0.0811226516962051,0.977872788906097],"Hips":[0.000335319375153631,0.00381395220756531,-0.00371143990196288],"LeftFoot":[0.0875562578439713,0.60883241891861,-0.144278943538666],"LeftHand":[1.10752201080322,0.123883977532387,0.859228432178497],"RightFoot":[-0.325264304876328,0.589315712451935,-0.166780173778534],"RightHand":[-0.93248850107193,0.280492782592773,0.871041655540466]},"spring_controllers":0},"data_directory":"D:/danjigame/3D-pet-gtpdo/docs/reports/stage-2/captures-final/data-cartoon_skeleton","display_fallback":false,"dpi_scale":1.5,"driver":"d3d12","edge_attachment":[1,1],"elapsed":0.0,"engine":"4.7.2-stable (official)","foot_gap_px":0.820556640625,"frames_sampled":0,"last_save_error":"","native":true,"pid":43240,"renderer":"mobile","right_gap_px":0.36468505859375,"saved_settings":{"character_id":"cartoon_skeleton","placement":{"edge_x":1.0,"edge_y":1.0,"x":1.0,"y":1.0},"scale":1.0,"schema_version":1.0,"screen_id":"","user_name":"你"},"service_pid":46448,"service_state":"ready","stage":1,"visible_rect":[60.577766418457,461.903778076172,650.057556152344,425.275665283203],"warnings":[],"window_position":[1849,640],"window_size":[720,840],"work_area":[0,0,2560,1528]}
+[app] service state=ready pid=46448 detail=后台服务已连接
+[app] READY service_pid=46448 data_dir=D:/danjigame/3D-pet-gtpdo/docs/reports/stage-2/captures-final/data-cartoon_skeleton
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1854, 400)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1853, 400)
+[stage0] ACTION wave
+[stage0] CAPTURE result=0
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1862, 400)
+[stage0] ACTION wave
+[app] service state=stopped pid=0 detail=后台服务已退出
+[stage0] ACTION idle
+[app] service state=stopped pid=0 detail=后台服务已退出
+[stage0] EXIT code=0

@@ -1,0 +1,271 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+D3D12 12_0 - Forward Mobile - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5070 Ti Laptop GPU
+
+[character] loaded id=godette bones=69 springs=1
+[stage0] ACTION idle
+[stage0] CHARACTER {"config":"res://assets_data/godette.json","id":"godette","name":"Godette · VRM"}
+[stage0] ACTION idle
+[stage0] READY {"action":"idle","adapter":"NVIDIA GeForce RTX 5070 Ti Laptop GPU","character":"Godette · VRM","character_details":{"action":"idle","animation_time":0.0,"bone_count":69,"bounds_mean_usec":1142.0,"bounds_samples":1,"expressions":["blink","mouth_a"],"id":"godette","observed_secondary_rotation_radians":0.0,"positions":{"Head":[-0.008271848782897,1.04785859584808,0.0370122380554676],"Hips":[0.000255142018431798,0.68795257806778,0.046830840408802],"LeftFoot":[0.16110634803772,0.0590178444981575,0.0525937043130398],"LeftHand":[0.159764230251312,0.550586819648743,0.062731072306633],"RightFoot":[-0.121738560497761,0.0663028582930565,-0.0202513840049505],"RightHand":[-0.160607874393463,0.537983000278473,0.0534323751926422]},"spring_controllers":1},"dpi_scale":1.5,"driver":"d3d12","edge_attachment":[1,1],"elapsed":0.0,"engine":"4.7.2-stable (official)","foot_gap_px":0.43048095703125,"frames_sampled":0,"native":true,"pid":37152,"renderer":"mobile","right_gap_px":0.21160888671875,"visible_rect":[267.782653808594,216.767761230469,174.005737304688,460.8017578125],"window_position":[2118,850],"window_size":[720,840],"work_area":[0,0,2560,1528]}
+[stage0] CAPTURE result=0
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1770, 766)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1770, 766)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1785, 562)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1168, -217)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1168, -217)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2117, 850)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2072, 688)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2072, 688)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] ACTION idle
+[stage0] DRAG end click=false position=(2059, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(-263, -217)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(-264, -217)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(-269, -216)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(-268, -216)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(-268, -216)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2121, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2121, 850)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2113, 850)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1903, -66)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1903, -66)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1903, -66)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1903, -66)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1903, -66)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1903, -66)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1903, -66)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] ACTION idle
+[stage0] DRAG end click=true position=(1903, -66)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1903, -66)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1903, -66)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1903, -66)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1972, -216)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2121, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2064, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2064, 850)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2064, 850)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2064, 850)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2064, 850)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2064, 850)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2064, 850)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2064, 850)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1825, 620)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1825, 615)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1825, 615)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1873, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1979, 850)
+[character] loaded id=swordsman bones=28 springs=0
+[stage0] ACTION idle
+[stage0] CHARACTER {"config":"res://assets_data/swordsman.json","id":"swordsman","name":"剑士 · GLB"}
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1985, 851)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1985, 850)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1985, 851)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[character] loaded id=godette bones=69 springs=1
+[stage0] ACTION idle
+[stage0] CHARACTER {"config":"res://assets_data/godette.json","id":"godette","name":"Godette · VRM"}
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1974, 850)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1980, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2121, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2118, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2089, -173)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1966, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2119, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2036, -216)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2036, -216)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2036, -216)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2036, -216)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1770, 616)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1770, 616)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2117, 802)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2117, 802)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2117, 802)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] ACTION idle
+[stage0] DRAG end click=false position=(2063, 576)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2063, 576)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2063, 576)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2063, 576)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2014, 54)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2121, -217)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2121, -217)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(2116, -210)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2118, -210)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2113, -210)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(2110, -209)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] ACTION idle
+[stage0] DRAG end click=false position=(1964, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1964, 850)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1964, 850)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1964, 850)
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] ACTION idle
+[stage0] DRAG end click=false position=(2127, 850)
+[stage0] DRAG begin
+[stage0] DRAG end click=false position=(1886, 803)
+[stage0] DRAG begin
+[stage0] DRAG end click=true position=(1886, 803)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] ACTION wave
+[stage0] DRAG begin
+[stage0] ACTION idle
+[stage0] DRAG end click=true position=(1886, 803)
+[stage0] ACTION wave
+[stage0] ACTION idle
+[stage0] EXIT code=0

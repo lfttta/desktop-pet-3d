@@ -1,0 +1,6 @@
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[character] loaded id=godette bones=69 springs=1
+[character] loaded id=cartoon_skeleton bones=27 springs=0
+[character] loaded id=man bones=19 springs=0
+STAGE2_CHARACTER_VIEW_TESTS checks=54 failures=0

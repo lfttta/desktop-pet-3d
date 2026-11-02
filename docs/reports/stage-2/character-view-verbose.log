@@ -1,0 +1,57 @@
+WorkerThreadPool: 32 threads, 9 max low-priority.
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+TextServer: Added interface "Dummy"
+TextServer: Added interface "ICU / HarfBuzz / Graphite (Built-in)"
+Using "default" pen tablet driver...
+
+TextServer: Primary interface set to: "ICU / HarfBuzz / Graphite (Built-in)".
+CORE API HASH: 2004498165
+EDITOR API HASH: 1696660745
+Loading resource: res://tests/test_stage2_character_view.gd remapped: res://tests/test_stage2_character_view.gd
+Completed load for: 'res://tests/test_stage2_character_view.gd' remapped 'res://tests/test_stage2_character_view.gd' at thread -1
+SceneTreeFTI: traversal method DEFAULT
+Loaded system CA certificates
+Loading resource: res://models/godette.vrm remapped: res://models/godette.vrm
+Loading resource: res://.godot/imported/godette.vrm-cb968f4b947510e987ca0ff19ab4c008.scn remapped: res://.godot/imported/godette.vrm-cb968f4b947510e987ca0ff19ab4c008.scn
+Loading resource: res://addons/vrm/core/vrm_instance.gd remapped: res://addons/vrm/core/vrm_instance.gd
+Completed load for: 'res://addons/vrm/core/vrm_instance.gd' remapped 'res://addons/vrm/core/vrm_instance.gd' at thread -1
+Loading resource: res://addons/mtoon/mtoon_outline.gdshader remapped: res://addons/mtoon/mtoon_outline.gdshader
+Loading resource: res://addons/mtoon/mtoon_common.gdshaderinc remapped: res://addons/mtoon/mtoon_common.gdshaderinc
+Completed load for: 'res://addons/mtoon/mtoon_common.gdshaderinc' remapped 'res://addons/mtoon/mtoon_common.gdshaderinc' at thread -1
+Completed load for: 'res://addons/mtoon/mtoon_outline.gdshader' remapped 'res://addons/mtoon/mtoon_outline.gdshader' at thread -1
+Loading resource: res://addons/mtoon/mtoon.gdshader remapped: res://addons/mtoon/mtoon.gdshader
+Completed load for: 'res://addons/mtoon/mtoon.gdshader' remapped 'res://addons/mtoon/mtoon.gdshader' at thread -1
+Loading resource: res://addons/vrm/runtime/vrm_spring_bone_controller.gd remapped: res://addons/vrm/runtime/vrm_spring_bone_controller.gd
+Completed load for: 'res://addons/vrm/runtime/vrm_spring_bone_controller.gd' remapped 'res://addons/vrm/runtime/vrm_spring_bone_controller.gd' at thread -1
+Completed load for: 'res://models/godette.vrm' remapped 'res://models/godette.vrm' at thread -1
+Loading resource: res://resources/animations/godette.tres remapped: res://resources/animations/godette.tres
+Completed load for: 'res://resources/animations/godette.tres' remapped 'res://resources/animations/godette.tres' at thread -1
+[character] loaded id=godette bones=69 springs=1
+Loading resource: res://models/cartoon_skeleton.glb remapped: res://models/cartoon_skeleton.glb
+Loading resource: res://.godot/imported/cartoon_skeleton.glb-f0e785cded260049f54a9b94d0fa8395.scn remapped: res://.godot/imported/cartoon_skeleton.glb-f0e785cded260049f54a9b94d0fa8395.scn
+Loading resource: res://models/cartoon_skeleton_0.jpg remapped: res://models/cartoon_skeleton_0.jpg
+Loading resource: res://.godot/imported/cartoon_skeleton_0.jpg-38030a2d4f1d2930efcd92067a55a7de.ctex remapped: res://.godot/imported/cartoon_skeleton_0.jpg-38030a2d4f1d2930efcd92067a55a7de.ctex
+Completed load for: 'res://models/cartoon_skeleton_0.jpg' remapped 'res://models/cartoon_skeleton_0.jpg' at thread -1
+Completed load for: 'res://models/cartoon_skeleton.glb' remapped 'res://models/cartoon_skeleton.glb' at thread -1
+Loading resource: res://resources/animations/cartoon_skeleton.tres remapped: res://resources/animations/cartoon_skeleton.tres
+Completed load for: 'res://resources/animations/cartoon_skeleton.tres' remapped 'res://resources/animations/cartoon_skeleton.tres' at thread -1
+[character] loaded id=cartoon_skeleton bones=27 springs=0
+Loading resource: res://models/man.glb remapped: res://models/man.glb
+Loading resource: res://.godot/imported/man.glb-03352b656d375554398fc56bb2931cb5.scn remapped: res://.godot/imported/man.glb-03352b656d375554398fc56bb2931cb5.scn
+Loading resource: res://models/man_TestYourDiffuse.png remapped: res://models/man_TestYourDiffuse.png
+Loading resource: res://.godot/imported/man_TestYourDiffuse.png-fad9c24d3e9e3e8e04315ae8d45a734e.ctex remapped: res://.godot/imported/man_TestYourDiffuse.png-fad9c24d3e9e3e8e04315ae8d45a734e.ctex
+Completed load for: 'res://models/man_TestYourDiffuse.png' remapped 'res://models/man_TestYourDiffuse.png' at thread -1
+Completed load for: 'res://models/man.glb' remapped 'res://models/man.glb' at thread -1
+Loading resource: res://resources/animations/man.tres remapped: res://resources/animations/man.tres
+Completed load for: 'res://resources/animations/man.tres' remapped 'res://resources/animations/man.tres' at thread -1
+[character] loaded id=man bones=19 springs=0
+STAGE2_CHARACTER_VIEW_TESTS checks=54 failures=0
+XR: Clearing primary interface
+XR: Removed interface "Native mobile"
+XR: Removed interface "OpenXR"
+Leaked instance: :34695284280
+Hint: Leaked instances typically happen when nodes are removed from the scene tree (with `remove_child()`) but not freed (with `free()` or `queue_free()`).
+Orphan StringName: VRMSpringBoneSimulation (static: 0, total: 1)
+StringName: 1 unclaimed string names at exit.
+WARNING: 1 ObjectDB instance was leaked at exit (run with `--verbose` for details).
+   at: cleanup (core/object/object.cpp:2536)

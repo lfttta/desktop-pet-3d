@@ -1,0 +1,10 @@
+{
+  "package": "D:\\danjigame\\3D-pet-gtpdo\\dist\\stage-1",
+  "resource_check": "pass",
+  "chinese_space_path": "pass",
+  "corrupt_config_backup": "pass",
+  "settings_restore": "pass",
+  "single_instance": "pass",
+  "service_restart_once": "pass",
+  "parent_death_service_cleanup": "pass"
+}

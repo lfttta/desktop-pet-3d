@@ -20,12 +20,13 @@
       "output": "build/stage2/motions/walk.glb"
     },
     "turn": {
-      "source_file": "Spinning.fbx",
-      "source_sha256": "2adf1db107d7820e614a33ec55e84c182d4bc2d24923d9658b0bfa183805e685",
-      "semantic_status": "candidate",
-      "fps": 30.0,
-      "frame_start": 1.0,
-      "frame_end": 52.0,
+      "source_file": "Idle.fbx",
+      "source_sha256": "58f6cae7923e4e6fa4d43915f82820392c71625429c9c4a667a292d40a924504",
+      "semantic_status": "authored",
+      "derivation": "turn_step",
+      "fps": 30,
+      "frame_start": 1,
+      "frame_end": 25,
       "output": "build/stage2/motions/turn.glb"
     },
     "wave": {
@@ -38,12 +39,13 @@
       "output": "build/stage2/motions/wave.glb"
     },
     "pickup": {
-      "source_file": "Holding_Down.fbx",
-      "source_sha256": "4bcde01dd2f08502a7b4a03f9dce204b684c552bac66246782493269feb64e85",
-      "semantic_status": "candidate",
-      "fps": 30.0,
-      "frame_start": 1.0,
-      "frame_end": 58.0,
+      "source_file": "Idle.fbx",
+      "source_sha256": "58f6cae7923e4e6fa4d43915f82820392c71625429c9c4a667a292d40a924504",
+      "semantic_status": "authored",
+      "derivation": "suspended",
+      "fps": 30,
+      "frame_start": 1,
+      "frame_end": 13,
       "output": "build/stage2/motions/pickup.glb"
     },
     "fall": {
@@ -56,12 +58,13 @@
       "output": "build/stage2/motions/fall.glb"
     },
     "recover": {
-      "source_file": "Jump.fbx",
-      "source_sha256": "21fa2c6a0c9e3756ecd67bf1660700c8dfff3294d516d7ba0344935f9646abb7",
-      "semantic_status": "candidate",
-      "fps": 30.0,
-      "frame_start": 1.0,
-      "frame_end": 29.0,
+      "source_file": "Idle.fbx",
+      "source_sha256": "58f6cae7923e4e6fa4d43915f82820392c71625429c9c4a667a292d40a924504",
+      "semantic_status": "authored",
+      "derivation": "landing_cushion",
+      "fps": 30,
+      "frame_start": 1,
+      "frame_end": 22,
       "output": "build/stage2/motions/recover.glb"
     }
   }

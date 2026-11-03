@@ -1,13 +1,18 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "id": "godette",
   "model_path": "res://models/godette.vrm",
   "format": "vrm0",
-  "animation_library": "res://motions/cache/godette.tres",
+  "animation_library": "res://resources/animations/godette.tres",
   "animation_library_name": "shared",
   "animations": [
     "idle",
-    "wave"
+    "walk",
+    "turn",
+    "wave",
+    "pickup",
+    "fall",
+    "recover"
   ],
   "animation_root": "model_instance",
   "skeleton_path": "Skeleton3D",
@@ -4155,6 +4160,47 @@
     }
   },
   "expressions": {
+    "neutral": [],
+    "happy": [
+      {
+        "mesh_path": "Skeleton3D/Face",
+        "index": 9,
+        "name": "morph_9",
+        "weight": 0.5
+      },
+      {
+        "mesh_path": "Skeleton3D/Face",
+        "index": 10,
+        "name": "morph_10",
+        "weight": 0.25
+      }
+    ],
+    "sad": [
+      {
+        "mesh_path": "Skeleton3D/Face",
+        "index": 11,
+        "name": "morph_11",
+        "weight": 0.5
+      },
+      {
+        "mesh_path": "Skeleton3D/Face",
+        "index": 2,
+        "name": "morph_2",
+        "weight": 1.0
+      },
+      {
+        "mesh_path": "Skeleton3D/Face",
+        "index": 3,
+        "name": "morph_3",
+        "weight": 0.1
+      },
+      {
+        "mesh_path": "Skeleton3D/Face",
+        "index": 4,
+        "name": "morph_4",
+        "weight": 0.1
+      }
+    ],
     "blink": [
       {
         "mesh_path": "Skeleton3D/Face",
@@ -4275,5 +4321,120 @@
   "notes": [
     "Animations sourced only from user Idle.fbx and Waving.fbx.",
     "Publishability here describes the model only; FBX motion license provenance remains unverified."
-  ]
+  ],
+  "source_format": "vrm0",
+  "skeleton_profile": "humanoid",
+  "motion_library": "humanoid_core@1",
+  "action_map": {
+    "idle": "idle",
+    "walk": "walk",
+    "turn": "turn",
+    "wave": "wave",
+    "pickup": "pickup",
+    "fall": "fall",
+    "recover": "recover"
+  },
+  "foot_anchor": [
+    0,
+    0,
+    0
+  ],
+  "default_height": 1.6,
+  "locomotion": {
+    "meters_per_cycle": 1.15,
+    "nominal_speed": 0.9
+  },
+  "action_bounds": {
+    "idle": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "walk": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "turn": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "wave": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "pickup": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "fall": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "recover": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    }
+  },
+  "capabilities": {
+    "expressions": true,
+    "blink": true,
+    "mouth": true,
+    "look": false,
+    "secondary_motion": true
+  }
 }

@@ -220,7 +220,7 @@ func _process(delta: float) -> void:
 		if bridge:
 			_update_input()
 		if status_label:
-			status_label.text = "Pet3D · 阶段 0\n%s · %s\n%s\n托盘：隐藏 / 恢复 / 换角色 / 退出" % [_character_name(), current_action, "拖动中" if drag.dragging else "身体可拖动，空白穿透"]
+			status_label.text = "Godette · %s\n%s" % [current_action, "拖动中" if drag.dragging else "待机"]
 	if options.has("capture") and elapsed > float(options.get("capture-at", "3")) and not captured_image:
 		captured_image = true
 		_capture.call_deferred()
@@ -269,6 +269,8 @@ func _handle_tray(action: int) -> void:
 	match action:
 		1:
 			_cancel_drag()
+			if is_instance_valid(actor):
+				actor.reset_performance_state()
 			hidden = not hidden
 			# Godot cannot hide its main Window. Hide its transparent contents;
 			# native passthrough below keeps the empty HWND out of mouse input.
@@ -286,8 +288,6 @@ func _handle_tray(action: int) -> void:
 			_recover_position()
 			if hidden:
 				_handle_tray(1)
-		3:
-			_change_character(current_character + 1)
 		4:
 			_play_action("wave" if current_action == "idle" else "idle")
 		5:
@@ -405,6 +405,8 @@ func _quit(code: int = 0) -> void:
 	if quitting:
 		return
 	quitting = true
+	if is_instance_valid(actor) and actor.has_method("reset_performance_state"):
+		actor.reset_performance_state()
 	_cancel_drag()
 	if options.has("report"):
 		_write_report()

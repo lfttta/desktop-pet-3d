@@ -3,6 +3,21 @@ extends Node3D
 
 signal action_changed(action: String)
 const SkinBounds = preload("res://scripts/skin_bounds.gd")
+const ActionController = preload("res://scripts/animation/action_controller.gd")
+const MouthDriver = preload("res://scripts/animation/mouth_driver.gd")
+const TestAudio = preload("res://scripts/animation/test_audio.gd")
+signal visible_bounds_changed
+
+var action_controller
+var audio_player: AudioStreamPlayer
+var mouth_driver := MouthDriver.new()
+var emotion := "neutral"
+var emotion_weight := 1.0
+var paused := false
+var _turn_active := false
+var _turn_start := 0.0
+var _turn_delta := 0.0
+var _test_audio := {}
 
 var config := {}
 var model: Node3D
@@ -33,6 +48,10 @@ func load_character(entry: Dictionary) -> bool:
 	if packed == null or library == null or not library.has_animation("idle") or not library.has_animation("wave"):
 		push_error("Character model or shared action cache is incomplete: " + path)
 		return false
+	for required_action in config.get("animations", []):
+		if not library.has_animation(required_action):
+			push_error("Missing action: " + str(required_action))
+			return false
 	model = packed.instantiate() as Node3D
 	if model == null:
 		return false
@@ -82,7 +101,18 @@ func load_character(entry: Dictionary) -> bool:
 	runtime_library.add_animation("wave", greeting)
 	player.add_animation_library("shared", runtime_library)
 	player.animation_finished.connect(_animation_finished)
-	play_action("idle")
+	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets_data/humanoid_core.json"))
+	action_controller = ActionController.new()
+	action_controller.action_changed.connect(func(next: String):
+		action = next
+		action_changed.emit(next)
+	)
+	action_controller.configure(player, manifest.actions)
+	audio_player = AudioStreamPlayer.new()
+	audio_player.name = "LocalAudio"
+	audio_player.finished.connect(stop_audio)
+	add_child(audio_player)
+	request_action("idle", "idle")
 	player.advance(0)
 	_skin_bounds.configure(meshes, skeleton)
 	_skin_bounds.sample(skeleton, true)
@@ -102,15 +132,101 @@ func _collect(root: Node) -> void:
 		_collect(child)
 
 func play_action(name_: String) -> void:
-	if player == null or not player.has_animation("shared/" + name_):
-		return
-	action = name_
-	player.play("shared/" + name_, 0.15)
-	action_changed.emit(action)
+	request_action(name_)
+
+func request_action(name_: String, source := "user", speed := 1.0, direction := 1, hold := false) -> int:
+	if action_controller == null or not is_finite(speed) or speed <= 0 or not player.has_animation("shared/" + name_):
+		return -1
+	sync_turn_heading()
+	var request: int = action_controller.request_action(name_, source, speed, 1 if name_ == "turn" else direction, hold)
+	if request < 0:
+		return request
+	_turn_active = name_ == "turn"
+	_turn_start = rotation.y
+	_turn_delta = PI * (1.0 if direction >= 0 else -1.0)
+	return request
+
+func sync_turn_heading() -> void:
+	if _turn_active and player.current_animation == "shared/turn":
+		var ratio := clampf(player.current_animation_position / player.current_animation_length, 0, 1)
+		rotation.y = _turn_start + _turn_delta * smoothstep(0, 1, ratio)
+
+func release_action(request_id: int) -> void:
+	if action_controller:
+		action_controller.release_action(request_id)
 
 func _animation_finished(name_: StringName) -> void:
-	if name_ == &"shared/wave":
-		play_action("idle")
+	if action_controller == null or name_ != StringName("shared/" + action_controller.current_action):
+		return
+	if _turn_active:
+		rotation.y = _turn_start + _turn_delta
+		_turn_active = false
+	action_controller.complete(action_controller.current_request)
+
+func set_emotion(name_: String, weight := 1.0) -> bool:
+	if name_ not in ["neutral", "happy", "sad"] or not config.get("expressions", {}).has(name_):
+		return false
+	emotion = name_
+	emotion_weight = clampf(weight, 0, 1)
+	update_face()
+	return true
+
+func play_test_audio() -> void:
+	if _test_audio.is_empty():
+		_test_audio = TestAudio.create()
+	play_audio(_test_audio.stream, _test_audio.envelope, _test_audio.duration)
+
+func play_audio(stream: AudioStream, envelope: PackedFloat32Array, duration: float) -> void:
+	stop_audio()
+	mouth_driver.set_envelope(envelope, duration)
+	audio_player.stream = stream
+	audio_player.play()
+	audio_player.stream_paused = paused
+
+func stop_audio() -> void:
+	if audio_player:
+		audio_player.stop()
+		audio_player.stream_paused = false
+		audio_player.stream = null
+	mouth_driver.stop()
+	mouth_demo = false
+	mouth_override = -1.0
+	update_face()
+
+func pause_performance(value: bool) -> void:
+	paused = value
+	if player:
+		player.active = not value
+	if audio_player:
+		audio_player.stream_paused = value
+	update_face()
+
+func reset_performance_state() -> void:
+	sync_turn_heading()
+	_turn_active = false
+	pause_performance(false)
+	if action_controller:
+		action_controller.reset()
+		request_action("idle", "idle")
+	emotion = "neutral"
+	emotion_weight = 1.0
+	blink_override = -1.0
+	stop_audio()
+
+func action_safe_bounds(name_ := action) -> AABB:
+	var bounds: Dictionary = config.get("action_bounds", {}).get(name_, {})
+	var low: Array = bounds.get("min", [-1.4, -0.3, -1.4])
+	var high: Array = bounds.get("max", [1.4, 2.1, 1.4])
+	var minimum := Vector3(low[0], low[1], low[2])
+	return global_transform * AABB(minimum, Vector3(high[0], high[1], high[2]) - minimum)
+
+func foot_anchor() -> Vector3:
+	return global_position
+
+func _exit_tree() -> void:
+	if is_instance_valid(audio_player):
+		audio_player.stop()
+		audio_player.stream = null
 
 func set_expression(name_: String, weight: float) -> void:
 	for binding in config.get("expressions", {}).get(name_, []):
@@ -119,17 +235,51 @@ func set_expression(name_: String, weight: float) -> void:
 			mesh.set_blend_shape_value(int(binding.index), clampf(weight * float(binding.get("weight", 1)), 0, 1))
 
 func _process(delta: float) -> void:
-	face_clock += delta
+	if not paused:
+		face_clock += delta
+		sync_turn_heading()
+	update_face()
+
+func update_face() -> void:
+	if not is_instance_valid(model):
+		return
 	var phase := fmod(face_clock, 4.5)
 	var blink := maxf(0, 1.0 - absf(phase - 0.13) / 0.13) if phase < 0.26 else 0.0
-	set_expression("blink", blink if blink_override < 0 else blink_override)
+	blink = blink if blink_override < 0 else blink_override
 	var mouth := (0.5 + 0.5 * sin(face_clock * 12.0)) * 0.8 if mouth_demo else 0.0
-	set_expression("mouth_a", mouth if mouth_override < 0 else mouth_override)
+	var speaking := audio_player != null and audio_player.playing
+	if speaking:
+		var time := maxf(0, audio_player.get_playback_position() + AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency())
+		mouth = mouth_driver.sample(time, not paused and not audio_player.stream_paused)
+	if mouth_override >= 0:
+		mouth = mouth_override
+	if paused:
+		mouth = 0.0
+	# Rebuild weights each frame so switching emotions cannot leave old morphs.
+	var weights := {}
+	var expressions: Dictionary = config.get("expressions", {})
+	for bindings in expressions.values():
+		for binding in bindings:
+			weights[str(binding.mesh_path) + ":" + str(binding.index)] = {"binding": binding, "value": 0.0}
+	for binding in expressions.get(emotion, []):
+		var key := str(binding.mesh_path) + ":" + str(binding.index)
+		# Vowel morphs belong to the mouth channel while audio is active.
+		var vowel := int(binding.index) in [5, 6, 7, 8, 9]
+		weights[key].value = float(binding.weight) * emotion_weight * (0.0 if vowel and (speaking or paused or mouth_override >= 0) else 1.0)
+	for channel in ["blink", "mouth_a"]:
+		for binding in expressions.get(channel, []):
+			var key := str(binding.mesh_path) + ":" + str(binding.index)
+			var value := (blink if channel == "blink" else mouth) * float(binding.weight)
+			weights[key].value = maxf(weights[key].value, value)
+	for item in weights.values():
+		var mesh := model.get_node_or_null(str(item.binding.mesh_path)) as MeshInstance3D
+		if mesh:
+			mesh.set_blend_shape_value(int(item.binding.index), clampf(item.value, 0, 1))
 
 func _observe_secondary_motion() -> void:
 	# Observe the final post-modifier pose; the plugin owns the simulation.
 	if skeleton:
-		_skin_bounds.sample(skeleton, false, 33333 if action == "wave" else 100000)
+		_skin_bounds.sample(skeleton, action != "idle", 100000)
 		for i in skeleton.get_bone_count():
 			var name_ := skeleton.get_bone_name(i)
 			if "hair" in name_.to_lower() or "skirt" in name_.to_lower():
@@ -137,6 +287,7 @@ func _observe_secondary_motion() -> void:
 				if _last_spring_pose.has(i):
 					spring_motion_max = maxf(spring_motion_max, pose.angle_to(_last_spring_pose[i]))
 				_last_spring_pose[i] = pose
+		visible_bounds_changed.emit()
 
 func project_visible_rect(camera: Camera3D, refresh := false) -> Rect2:
 	# Normal frames read the last post-modifier sample; only explicit probes

@@ -11,11 +11,12 @@ func set_envelope(samples: PackedFloat32Array, duration: float) -> void:
 
 
 func sample(playback_position: float, playing: bool) -> float:
-	if not playing or _samples.is_empty() or _duration <= 0.0:
+	if not playing or _samples.is_empty() or _duration <= 0.0 or playback_position < 0 or playback_position >= _duration:
 		return 0.0
 	var normalized := clampf(playback_position / _duration, 0.0, 1.0)
-	var index := mini(_samples.size() - 1, floori(normalized * float(_samples.size() - 1) + 0.5))
-	return clampf(_samples[index], 0.0, 1.0)
+	var position := normalized * float(_samples.size() - 1)
+	var index := floori(position)
+	return clampf(lerpf(_samples[index], _samples[mini(index + 1, _samples.size() - 1)], position - index), 0.0, 1.0)
 
 
 func stop() -> void:

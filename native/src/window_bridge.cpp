@@ -295,7 +295,6 @@ void WindowState::show_menu() {
     if (!menu) { warn("unable to create tray menu; use Ctrl+Alt+Q"); return; }
     AppendMenuW(menu, MF_STRING, 1, L"显示 / 隐藏  |  Show / Hide (&S)");
     AppendMenuW(menu, MF_STRING, 2, L"恢复位置  |  Recover position (&R)");
-    AppendMenuW(menu, MF_STRING, 3, L"下个角色  |  Next character (&N)");
     AppendMenuW(menu, MF_STRING, 4, L"待机 / 挥手  |  Idle / Wave (&W)");
     AppendMenuW(menu, MF_STRING, 6, L"设置  |  Settings (&T)");
     AppendMenuW(menu, MF_STRING, 7, L"聊天  |  Chat (&C)");

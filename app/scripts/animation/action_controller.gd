@@ -28,6 +28,8 @@ func configure(player, actions: Dictionary, prefix := "shared/") -> void:
 func request_action(name: String, source := "user", speed := 1.0, direction := 1, hold := false) -> int:
 	if not _actions.has(name):
 		return -1
+	if not is_finite(float(speed)) or float(speed) <= 0 or (_player and not _player.has_animation(_prefix + name)):
+		return -1
 	var priority := int(SOURCE_PRIORITY.get(source, SOURCE_PRIORITY.user))
 	if current_action != "idle" and priority < _current_priority:
 		return -1
@@ -40,7 +42,7 @@ func request_action(name: String, source := "user", speed := 1.0, direction := 1
 		var animation_name := _prefix + name
 		if _player.has_animation(animation_name):
 			var blend := float(_actions[name].get("blend_seconds", 0.15))
-			_player.play(animation_name, blend, float(speed) * (1.0 if int(direction) >= 0 else -1.0))
+			_player.play(animation_name, blend, float(speed) * (1.0 if int(direction) >= 0 else -1.0), int(direction) < 0)
 	action_changed.emit(current_action)
 	return current_request
 

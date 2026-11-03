@@ -17,7 +17,6 @@ var _applying := false
 var _display_fallback := false
 var _save_due := 0
 var _saving := {}
-var _character_rollbacks := {}
 var _last_display_state := ""
 var _warnings: Array = []
 var _last_save_error := ""
@@ -26,6 +25,10 @@ func _ready() -> void:
 	_parse_options()
 	if options.has("verify-package"):
 		super._ready()
+		return
+	if options.has("review"):
+		set_process(false)
+		add_child(load("res://scripts/ui/action_preview.gd").new())
 		return
 	data_directory = str(options.get("data-dir", OS.get_environment("LOCALAPPDATA").path_join("Pet3D"))).simplify_path().trim_suffix("/")
 	if not data_directory.is_absolute_path():
@@ -84,7 +87,7 @@ func _service_command() -> Dictionary:
 	if OS.has_feature("editor"):
 		var python := str(options.get("python", OS.get_environment("PET3D_PYTHON")))
 		if python.is_empty():
-			python = "D:/phthon lang/python.exe"
+			python = ProjectSettings.globalize_path("res://../.venv/Scripts/python.exe").simplify_path()
 		return {"executable": python, "arguments": PackedStringArray(["-u", ProjectSettings.globalize_path("res://../service/main.py").simplify_path(), "--data-dir", data_directory])}
 	return {"executable": bundled, "arguments": PackedStringArray(["--data-dir", data_directory])}
 
@@ -106,17 +109,12 @@ func _build_world() -> void:
 
 func _load_characters() -> void:
 	super._load_characters()
-	for i in characters.size():
-		if characters[i].id == saved_settings.character_id:
-			options["character"] = str(i)
+	options["character"] = "0"
 
 func _change_character(index: int) -> void:
-	var previous_index := current_character
-	super._change_character(index)
-	if _app_ready and not _applying and current_character != previous_index and client and client.state == "ready":
-		var request_id := _save_patch({"character_id": characters[current_character].id}, false)
-		if not request_id.is_empty():
-			_character_rollbacks[request_id] = previous_index
+	super._change_character(0)
+	if is_instance_valid(actor) and not actor.is_connected("visible_bounds_changed", _constrain_window):
+		actor.connect("visible_bounds_changed", _constrain_window)
 
 func _resize_role() -> void:
 	if DisplayServer.get_name() != "headless":
@@ -214,7 +212,6 @@ func _create_windows() -> void:
 	settings_window = SettingsWindow.new()
 	settings_window.visible = false
 	add_child(settings_window)
-	settings_window.configure_characters(characters)
 	settings_window.size = Vector2i(Vector2(560, 440) * dpi_scale)
 	settings_window.save_requested.connect(_on_save_requested)
 	settings_window.recover_requested.connect(func(): _handle_tray(2))
@@ -283,10 +280,6 @@ func _on_settings_received(settings: Dictionary) -> void:
 	if not _app_ready:
 		return
 	_applying = true
-	if not characters.is_empty() and characters[current_character].id != saved_settings.character_id:
-		for i in characters.size():
-			if characters[i].id == saved_settings.character_id:
-				_change_character(i)
 	if previous.get("scale") != saved_settings.scale:
 		_resize_role()
 	if previous.get("scale") != saved_settings.scale or previous.get("screen_id") != saved_settings.screen_id:
@@ -299,17 +292,10 @@ func _on_request_finished(id: String, type: String, payload: Dictionary) -> void
 	var user_initiated: bool = _saving[id]
 	_saving.erase(id)
 	if type == "result":
-		_character_rollbacks.erase(id)
 		_last_save_error = ""
 		if settings_window:
 			settings_window.show_message("设置已保存" if user_initiated else "位置已保存")
 	else:
-		if _character_rollbacks.has(id):
-			var rollback_index := int(_character_rollbacks[id])
-			_character_rollbacks.erase(id)
-			_applying = true
-			super._change_character(rollback_index)
-			_applying = false
 		_last_save_error = "保存失败：" + str(payload.get("message", "后台服务不可用"))
 		if settings_window:
 			settings_window.show_message(_last_save_error, true)
@@ -335,7 +321,7 @@ func _show_notice(title_: String, text: String) -> void:
 
 func _status() -> Dictionary:
 	var data := super._status()
-	data["stage"] = 1
+	data["stage"] = 2
 	data["data_directory"] = data_directory
 	data["service_pid"] = client.process_pid if client else 0
 	data["service_state"] = client.state if client else "stopped"
@@ -349,6 +335,8 @@ func _quit(code: int = 0) -> void:
 	if _closing:
 		return
 	_closing = true
+	if is_instance_valid(actor):
+		actor.reset_performance_state()
 	_save_due = 0
 	_cancel_drag()
 	if client:

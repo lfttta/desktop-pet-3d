@@ -1,5 +1,7 @@
 # 第三方来源与本地验证范围
 
+2026-11-03 单角色版本仅装配 Godette；下列其他角色条目保留为历史来源记录，不代表本包包含这些模型。`app/scripts/animation/test_audio.gd` 运行时生成本项目原创的三秒测试音及振幅包络，不使用录音、下载音频或新增音频二进制文件。
+
 - Godot Engine 4.7.2，MIT，https://godotengine.org/license/ 。导出模板使用本机已有安装。
 - AzPepoze/godot-vrm v2.6.1：VRM 导入、MToon 与弹簧骨，https://github.com/AzPepoze/godot-vrm/tree/v2.6.1 。保留 addons 下许可证。插件从旧验证工程复制，原生 DLL 保持原版本。三个图标从同标签 Git LFS 媒体地址恢复，并逐一核对原指针内 SHA-256。
 - MToon shader：V-Sekai/Godot-MToon-Shader，许可证保留于 `addons/mtoon/LICENSE`。

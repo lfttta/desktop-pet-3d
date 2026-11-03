@@ -42,7 +42,10 @@ func request_action(name: String, source := "user", speed := 1.0, direction := 1
 		var animation_name := _prefix + name
 		if _player.has_animation(animation_name):
 			var blend := float(_actions[name].get("blend_seconds", 0.15))
+			var restarting := _player.current_animation == animation_name
 			_player.play(animation_name, blend, float(speed) * (1.0 if int(direction) >= 0 else -1.0), int(direction) < 0)
+			if restarting:
+				_player.seek(_player.get_animation(animation_name).length if int(direction) < 0 else 0.0, true)
 	action_changed.emit(current_action)
 	return current_request
 

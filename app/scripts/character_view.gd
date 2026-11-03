@@ -18,6 +18,7 @@ var _turn_active := false
 var _turn_start := 0.0
 var _turn_delta := 0.0
 var _test_audio := {}
+var _mouth_controls_vowels := false
 
 var config := {}
 var model: Node3D
@@ -184,6 +185,7 @@ func play_audio(stream: AudioStream, envelope: PackedFloat32Array, duration: flo
 	audio_player.stream_paused = paused
 
 func stop_audio() -> void:
+	_mouth_controls_vowels = true
 	if audio_player:
 		audio_player.stop()
 		audio_player.stream_paused = false
@@ -263,9 +265,9 @@ func update_face() -> void:
 			weights[str(binding.mesh_path) + ":" + str(binding.index)] = {"binding": binding, "value": 0.0}
 	for binding in expressions.get(emotion, []):
 		var key := str(binding.mesh_path) + ":" + str(binding.index)
-		# Vowel morphs belong to the mouth channel while audio is active.
+		# Once audio owns the mouth, stopping must keep every vowel closed.
 		var vowel := int(binding.index) in [5, 6, 7, 8, 9]
-		weights[key].value = float(binding.weight) * emotion_weight * (0.0 if vowel and (speaking or paused or mouth_override >= 0) else 1.0)
+		weights[key].value = float(binding.weight) * emotion_weight * (0.0 if vowel and (_mouth_controls_vowels or speaking or paused or mouth_override >= 0) else 1.0)
 	for channel in ["blink", "mouth_a"]:
 		for binding in expressions.get(channel, []):
 			var key := str(binding.mesh_path) + ":" + str(binding.index)

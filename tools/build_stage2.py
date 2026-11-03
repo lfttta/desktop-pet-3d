@@ -81,6 +81,7 @@ def main() -> None:
         if 'failures=0' not in (REPORT / (name + '.log')).read_text('utf-8'):
             raise RuntimeError(name + ' did not confirm zero failures')
     godot('preview', 'res://tests/test_godette_preview.gd', 'GODETTE_PREVIEW failures=0', render=True)
+    godot('review-regressions', 'res://tests/test_godette_review_regressions.gd', 'GODETTE_REVIEW_REGRESSIONS failures=0')
     godot('poses', str(ROOT / 'tools/assets/render_recovery.gd'), 'GODETTE_RENDER frames=70 framing_failures=0', render=True)
     candidate = ROOT / ('build/stage2/package-' + time.strftime('%Y%m%d-%H%M%S'))
     candidate.mkdir(parents=True, exist_ok=False)

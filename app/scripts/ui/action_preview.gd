@@ -136,7 +136,8 @@ func _play() -> void:
 	pause.set_pressed_no_signal(false)
 	actor.pause_performance(false)
 	actor.action_controller.reset()
-	actor.request_action(ACTIONS[action_choice.selected], "user", speed.value, -1 if direction.button_pressed else 1)
+	var selected_action: String = ACTIONS[action_choice.selected]
+	actor.request_action(selected_action, "user", speed.value, -1 if selected_action == "turn" and direction.button_pressed else 1)
 
 func _process(delta: float) -> void:
 	elapsed += delta

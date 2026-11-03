@@ -1,6 +1,6 @@
 extends SceneTree
 
-const IDS := ["godette", "alicia", "soldier"]
+const IDS := ["godette"]
 const ACTIONS := ["idle", "walk", "turn", "wave", "pickup", "fall", "recover"]
 const CharacterView = preload("res://scripts/character_view.gd")
 
@@ -45,6 +45,7 @@ func run() -> void:
 		root.add_child(view)
 		await process_frame
 		check(view.load_character({"config": "res://assets_data/%s.json" % character_id}), character_id + " loads")
+		await process_frame
 		for action in ACTIONS:
 			var request: int = view.request_action(action, "user")
 			check(request > 0, character_id + " requests " + action)

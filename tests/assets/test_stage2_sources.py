@@ -3,7 +3,7 @@ import struct
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2] / "experiments/stage2-recovery"
+ROOT = Path(__file__).resolve().parents[2]
 ACTIONS = {"idle", "walk", "turn", "wave", "pickup", "fall", "recover"}
 
 
@@ -25,7 +25,7 @@ def test_stage2_source_manifest_has_seven_real_inputs():
 
 def test_normalized_stage2_clips_are_meter_y_up_and_named():
     for name in ACTIONS:
-        doc = read_glb_json(ROOT / f"build/stage2/motions/{name}.glb")
+        doc = read_glb_json(ROOT / f"app/resources/animations/source/{name}.glb")
         rig = next(node for node in doc["nodes"] if node.get("name") == "SourceRig")
         assert rig.get("scale", [1, 1, 1]) == [1, 1, 1]
         assert rig.get("rotation", [0, 0, 0, 1]) == [0, 0, 0, 1]

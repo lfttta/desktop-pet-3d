@@ -5,7 +5,6 @@ signal recover_requested
 signal retry_requested
 
 var name_input: LineEdit
-var character_choice: OptionButton
 var display_choice: OptionButton
 var size_slider: HSlider
 var size_value: Label
@@ -14,7 +13,6 @@ var message: Label
 var save_button: Button
 var retry_button: Button
 var _display_ids: Array[String] = []
-var _character_ids: Array[String] = []
 
 func _ready() -> void:
 	title = "Pet3D 设置"
@@ -46,8 +44,6 @@ func _ready() -> void:
 	name_input = LineEdit.new()
 	name_input.max_length = 80
 	_row(column, "称呼", name_input)
-	character_choice = OptionButton.new()
-	_row(column, "角色", character_choice)
 	display_choice = OptionButton.new()
 	_row(column, "显示器", display_choice)
 	var slider_row := HBoxContainer.new()
@@ -100,8 +96,6 @@ func _row(column: VBoxContainer, text: String, control: Control) -> void:
 
 func populate(settings: Dictionary, displays: Array) -> void:
 	name_input.text = str(settings.get("user_name", "你"))
-	var character_id := str(settings.get("character_id", "godette"))
-	character_choice.select(maxi(0, _character_ids.find(character_id)))
 	size_slider.value = float(settings.get("scale", 1))
 	size_value.text = "%d%%" % roundi(size_slider.value * 100)
 	display_choice.clear()
@@ -122,22 +116,7 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	display_choice.select(selected)
 
 func _save() -> void:
-	var character_id := selected_character_id()
-	save_requested.emit({"user_name": name_input.text, "character_id": character_id, "scale": size_slider.value, "screen_id": _display_ids[display_choice.selected]})
-
-
-func configure_characters(catalog: Array) -> void:
-	character_choice.clear()
-	_character_ids.clear()
-	for entry: Dictionary in catalog:
-		character_choice.add_item(str(entry.get("name", entry.get("id", ""))))
-		_character_ids.append(str(entry.get("id", "")))
-
-
-func selected_character_id() -> String:
-	if character_choice.selected >= 0 and character_choice.selected < _character_ids.size():
-		return _character_ids[character_choice.selected]
-	return "godette"
+	save_requested.emit({"user_name": name_input.text, "scale": size_slider.value, "screen_id": _display_ids[display_choice.selected]})
 
 func show_status(state: String, detail: String) -> void:
 	status.text = detail

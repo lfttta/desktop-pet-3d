@@ -11,14 +11,13 @@ from PIL import Image, ImageChops
 from verify_stage1_package import assert_clean_log, service_exchange, wait_pid_gone, wait_report
 
 ROOT = Path(__file__).resolve().parents[1]
-WORKSPACE = ROOT / "experiments/stage2-recovery"
+WORKSPACE = ROOT / "build/stage2"
 
 
 def verify(package: Path, report: Path) -> None:
     report.mkdir(parents=True, exist_ok=True)
-    cases = [(id_, scale, "idle", edge) for id_ in ("godette", "alicia", "soldier")
-             for scale, edge in ((0.5, -1), (1.0, 1), (1.5, -1), (2.0, 1))]
-    cases += [(id_, 1.0, "fall", 1) for id_ in ("godette", "alicia", "soldier")]
+    cases = [("godette", scale, "idle", edge) for scale in (0.5, 1.0, 1.5, 2.0) for edge in (-1, 1)]
+    cases += [("godette", 1.0, "fall", 1)]
     results = []
     with tempfile.TemporaryDirectory(prefix="Pet3D-visual-") as temporary:
         for index, (id_, scale, action, edge) in enumerate(cases):
@@ -29,7 +28,7 @@ def verify(package: Path, report: Path) -> None:
                     "placement": {"x": 0 if edge < 0 else 1, "y": 1, "edge_x": edge, "edge_y": 1}}},
                 {"version": 1, "id": "stop", "type": "shutdown", "payload": {}},
             ])
-            stem = f"{id_}-{action}-{scale}"
+            stem = f"{id_}-{action}-{scale}-{edge}"
             screenshot = report / (stem + ".png")
             status = report / (stem + ".json")
             log = report / (stem + ".log")
@@ -69,8 +68,8 @@ def verify(package: Path, report: Path) -> None:
             print("PASS visual " + stem, flush=True)
     # The deterministic 210-frame review must contain actual geometry below its labels.
     pose_images = sorted((WORKSPACE / "reports/poses").glob("*-front-*.png")) + sorted((WORKSPACE / "reports/poses").glob("*-side-*.png"))
-    if len(pose_images) != 210:
-        raise AssertionError("Expected 210 pose images")
+    if len(pose_images) != 70:
+        raise AssertionError("Expected 70 Godette pose images")
     for path in pose_images:
         image = Image.open(path).convert("RGB")
         body = image.crop((0, 50, image.width, image.height))
@@ -78,8 +77,8 @@ def verify(package: Path, report: Path) -> None:
         if ImageChops.difference(body, background).getbbox() is None:
             raise AssertionError("Blank model: " + path.name)
     (report / "verification.json").write_text(json.dumps({"cases": results, "nonblank_pose_frames": len(pose_images)}, indent=2), "utf-8")
-    print("PACKAGE_VISUALS_OK cases=15 pose_frames=210", flush=True)
+    print("PACKAGE_VISUALS_OK cases=9 pose_frames=70", flush=True)
 
 
 if __name__ == "__main__":
-    verify(WORKSPACE / "package", WORKSPACE / "reports/packaged-visuals")
+    verify(ROOT / "dist/stage-2-godette", WORKSPACE / "reports/packaged-visuals")

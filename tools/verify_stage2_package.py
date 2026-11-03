@@ -15,6 +15,10 @@ from verify_stage1_package import (
     wait_app,
     wait_pid_gone,
     wait_report,
+    verify_single_instance,
+    verify_service_restart,
+    verify_parent_death,
+    verify_corrupt_recovery,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,7 +46,7 @@ def run_runtime_smoke(package: Path, report: Path, root: Path) -> None:
     replies = service_exchange(package, data_dir, [
         {"version": 1, "id": "hello", "type": "hello", "payload": {"protocol_version": 1}},
         {"version": 1, "id": "save", "type": "settings.update", "payload": {
-            "user_name": "阶段二 中文", "character_id": "soldier", "scale": 1.1,
+            "user_name": "阶段二 中文", "character_id": "godette", "scale": 1.1,
         }},
         {"version": 1, "id": "stop", "type": "shutdown", "payload": {}},
     ])
@@ -54,8 +58,8 @@ def run_runtime_smoke(package: Path, report: Path, root: Path) -> None:
     ready = wait_report(status_path, lambda value: value.get("service_state") == "ready")
     settings = ready.get("saved_settings", {})
     details = ready.get("character_details", {})
-    if settings.get("character_id") != "soldier" or details.get("id") != "soldier":
-        raise AssertionError(f"Packaged runtime did not restore the soldier character: settings={settings}, details={details}")
+    if settings.get("character_id") != "godette" or details.get("id") != "godette" or settings.get("user_name") != "阶段二 中文":
+        raise AssertionError(f"Packaged runtime did not restore Godette: settings={settings}, details={details}")
     child = int(ready.get("service_pid", 0))
     if child <= 0 or not process_is_running(child):
         raise AssertionError("Packaged runtime did not start its service process")
@@ -77,15 +81,22 @@ def verify_package(package: Path, report: Path) -> None:
         shutil.copytree(package, copied)
         run_export_check(copied, report, "stage2-export-chinese-path")
         run_runtime_smoke(copied, report, Path(temporary))
+        verify_single_instance(copied, Path(temporary), report)
+        verify_service_restart(copied, Path(temporary), report)
+        verify_parent_death(copied, Path(temporary), report)
+        verify_corrupt_recovery(copied, Path(temporary), report)
     (report / "package-verification.json").write_text(json.dumps({
         "package": str(package.resolve()),
         "resource_check": "pass",
-        "character_count": 3,
+        "character_count": 1,
         "excluded_character": "swordsman",
         "chinese_space_path": "pass",
-        "saved_character_restore": "soldier",
+        "saved_character_restore": "godette",
+        "single_instance": "pass",
+        "service_restart": "pass",
+        "parent_death_cleanup": "pass",
         "service_cleanup": "pass",
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
 if __name__ == "__main__":
-    verify_package(ROOT / "dist/stage-2", ROOT / "docs/reports/stage-2")
+    verify_package(ROOT / "dist/stage-2-godette", ROOT / "build/stage2/reports")

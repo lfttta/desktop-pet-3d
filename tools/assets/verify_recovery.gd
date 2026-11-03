@@ -20,7 +20,7 @@ func fixture(library_path: String) -> Dictionary:
 
 func run() -> void:
 	var baseline := fixture("res://motions/cache/godette.tres")
-	var candidate := fixture("res://resources/animations/godette.tres")
+	var candidate := fixture("res://../build/stage2/godette.tres" if "--staged" in OS.get_cmdline_user_args() else "res://resources/animations/godette.tres")
 	await process_frame
 	for item in [baseline, candidate]:
 		for controller in item.model.find_children("*", "Node3D", true, false):
@@ -65,7 +65,7 @@ func run() -> void:
 		report[action] = {"frames": frames, "bones": baseline.skeleton.get_bone_count(), "worst_bone": worst_bone, "max_position_error_m": max_position, "max_rotation_rad": max_rotation, "max_hip_height_error_m": max_hip_height, "pass": passed}
 	baseline.model.free()
 	candidate.model.free()
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://../reports"))
-	FileAccess.open("res://../reports/godette-regression.json", FileAccess.WRITE).store_string(JSON.stringify(report, "\t"))
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://../build/stage2/reports"))
+	FileAccess.open("res://../build/stage2/reports/godette-regression.json", FileAccess.WRITE).store_string(JSON.stringify(report, "\t"))
 	print("GODETTE_REGRESSION failures=", failures, " ", JSON.stringify(report))
 	quit(0 if failures == 0 else 1)

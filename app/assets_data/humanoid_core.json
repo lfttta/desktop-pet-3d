@@ -7,7 +7,7 @@
       "mode": "loop",
       "source": "Idle.fbx",
       "blend_seconds": 0.15,
-      "root_motion": "vertical_only"
+      "root_motion": "preserve"
     },
     "walk": {
       "mode": "loop",
@@ -17,23 +17,24 @@
     },
     "turn": {
       "mode": "once",
-      "source": "Spinning.fbx",
+      "source": "Idle.fbx",
       "blend_seconds": 0.12,
       "root_motion": "none",
-      "semantic_status": "candidate"
+      "derived": "turn_step",
+      "heading_degrees": 180
     },
     "wave": {
       "mode": "once",
       "source": "Waving.fbx",
       "blend_seconds": 0.15,
-      "root_motion": "vertical_only"
+      "root_motion": "preserve"
     },
     "pickup": {
       "mode": "hold",
-      "source": "Holding_Down.fbx",
+      "source": "Idle.fbx",
       "blend_seconds": 0.12,
       "root_motion": "none",
-      "semantic_status": "candidate"
+      "derived": "suspended"
     },
     "fall": {
       "mode": "hold",
@@ -43,10 +44,10 @@
     },
     "recover": {
       "mode": "once",
-      "source": "Jump.fbx",
+      "source": "Idle.fbx",
       "blend_seconds": 0.12,
-      "root_motion": "none",
-      "semantic_status": "candidate"
+      "root_motion": "vertical_only",
+      "derived": "landing_cushion"
     }
   }
 }

@@ -19,6 +19,7 @@ DEFAULTS = {
 }
 PATCH_KEYS = DEFAULTS.keys() - {'schema_version'}
 REPLACE_ATTEMPTS = 4
+LEGACY_CHARACTERS = {'swordsman', 'alicia', 'soldier', 'cartoon_skeleton', 'man'}
 
 
 class ValidationError(ValueError):
@@ -116,16 +117,26 @@ class SettingsStore:
             self._settings = deepcopy(DEFAULTS)
             atomic_write(self.path, dumps(self._settings) + b'\n')
             return
+        migrated = False
         try:
             if len(raw) > MAX_FRAME_BYTES:
                 raise ValidationError('config too large')
-            self._settings = validate_document(loads(raw))
+            document = loads(raw)
+            if (type(document) is dict and type(document.get('character_id')) is str
+                    and document['character_id'] in LEGACY_CHARACTERS):
+                document = {**document, 'character_id': 'godette'}
+                migrated = True
+            self._settings = validate_document(document)
         except (ValueError, UnicodeError, RecursionError):
             backup = self._backup()
             defaults = deepcopy(DEFAULTS)
             atomic_write(self.path, dumps(defaults) + b'\n')
             self._settings = defaults
             self.warnings.append('Invalid settings backed up to ' + backup.name + '; defaults restored.')
+            return
+        if migrated:
+            atomic_write(self.path, dumps(self._settings) + b'\n')
+            self.warnings.append('Character changed to Godette; all other settings preserved.')
 
     def _backup(self):
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')

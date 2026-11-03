@@ -95,30 +95,9 @@ func run() -> void:
 		view.free()
 		await process_frame
 		report[entry.id] = character
-	var baseline_nodes := int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT))
-	var warmed_memory := 0.0
-	var checkpoints := []
-	for iteration in 30:
-		var view: Node3D = load("res://scripts/character_view.gd").new()
-		root.add_child(view)
-		check(view.load_character(ids[iteration % ids.size()]), "switch loads")
-		await process_frame
-		view.request_action("wave")
-		await process_frame
-		view.reset_performance_state()
-		view.free()
-		await process_frame
-		await process_frame
-		check(int(Performance.get_monitor(Performance.OBJECT_NODE_COUNT)) == baseline_nodes, "switch releases all scene nodes")
-		if iteration == 9:
-			warmed_memory = Performance.get_monitor(Performance.MEMORY_STATIC)
-		if iteration in [9, 19, 29]:
-			checkpoints.append({"switches": iteration + 1, "nodes": Performance.get_monitor(Performance.OBJECT_NODE_COUNT), "static_bytes": Performance.get_monitor(Performance.MEMORY_STATIC)})
-	var growth := Performance.get_monitor(Performance.MEMORY_STATIC) - warmed_memory
-	check(growth < 262144, "30 switches grow less than 256 KiB after warmup")
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://../reports"))
-	FileAccess.open("res://../reports/runtime-validation.json", FileAccess.WRITE).store_string(JSON.stringify({"checks": checks, "failures": failures, "characters": report, "switching": checkpoints, "growth_bytes": growth}, "\t"))
-	print("RECOVERY_RUNTIME checks=", checks, " failures=", failures.size())
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://../build/stage2/reports"))
+	FileAccess.open("res://../build/stage2/reports/runtime-validation.json", FileAccess.WRITE).store_string(JSON.stringify({"checks": checks, "failures": failures, "characters": report}, "\t"))
+	print("GODETTE_RUNTIME checks=", checks, " failures=", failures.size())
 	for failure in failures.slice(0, 20):
 		push_error(failure)
 	quit(0 if failures.is_empty() else 1)

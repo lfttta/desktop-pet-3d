@@ -1,6 +1,6 @@
 extends SceneTree
 
-const IDS := ["godette", "alicia", "soldier"]
+const IDS := ["godette"]
 const ACTIONS := ["idle", "walk", "turn", "wave", "pickup", "fall", "recover"]
 var failures: Array[String] = []
 
@@ -35,9 +35,9 @@ func run() -> void:
 	title.position = Vector2(12, 12)
 	title.add_theme_font_size_override("font_size", 20)
 	root.add_child(title)
-	var directory := ProjectSettings.globalize_path("res://../reports/poses")
+	var directory := ProjectSettings.globalize_path("res://../build/stage2/reports/poses")
 	DirAccess.make_dir_recursive_absolute(directory)
-	var sheet := Image.create(1680, 900, false, Image.FORMAT_RGBA8)
+	var sheet := Image.create(1680, 300, false, Image.FORMAT_RGBA8)
 	sheet.fill(Color(0.16, 0.18, 0.18))
 	var report := {}
 	for row in IDS.size():
@@ -88,7 +88,7 @@ func run() -> void:
 		await process_frame
 	sheet.save_png(directory.path_join("matrix.png"))
 	FileAccess.open(directory.path_join("review.json"), FileAccess.WRITE).store_string(JSON.stringify({"poses": report, "framing_failures": failures}, "\t"))
-	print("RECOVERY_RENDER frames=210 framing_failures=", failures.size())
+	print("GODETTE_RENDER frames=70 framing_failures=", failures.size())
 	for failure in failures:
 		print(failure)
 	quit(0 if failures.is_empty() else 1)

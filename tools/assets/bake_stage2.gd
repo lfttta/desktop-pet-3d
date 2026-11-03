@@ -1,7 +1,7 @@
 extends SceneTree
 
 const ACTIONS := ["idle", "walk", "turn", "wave", "pickup", "fall", "recover"]
-const IDS := ["godette", "alicia", "soldier"]
+const IDS := ["godette"]
 
 
 func _initialize() -> void:
@@ -56,16 +56,10 @@ func solve_world_rotation(skeleton: Skeleton3D, index: int, desired: Dictionary,
 
 
 func run() -> void:
-	if not FileAccess.file_exists("res://../.recovery-workspace.json"):
-		push_error("Baking is restricted to the isolated recovery workspace")
-		quit(6)
-		return
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://../build/stage2"))
 	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://../animations/humanoid_core/manifest.json"))
 	var report := {}
-	var selected_ids: Array = IDS
-	if "--godette-only" in OS.get_cmdline_user_args():
-		selected_ids = ["godette"]
-	for character_id in selected_ids:
+	for character_id in IDS:
 		var config: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets_data/%s.json" % character_id))
 		var packed := load(str(config.model_path)) as PackedScene
 		if packed == null:
@@ -180,7 +174,7 @@ func run() -> void:
 			library.add_animation(action, animation)
 			character_report[action] = {"length": animation.length, "frames": frame_count, "tracks": animation.get_track_count()}
 			source_model.free()
-		var output := "res://resources/animations/%s.tres" % character_id
+		var output := "res://../build/stage2/%s.tres" % character_id
 		if ResourceSaver.save(library, output) != OK:
 			push_error("Could not save " + output)
 			quit(5)

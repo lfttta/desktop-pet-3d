@@ -1,6 +1,6 @@
 extends SceneTree
 
-const IDS := ["godette", "alicia", "soldier"]
+const IDS := ["godette"]
 const ACTIONS := ["idle", "walk", "turn", "wave", "pickup", "fall", "recover"]
 
 var checks := 0

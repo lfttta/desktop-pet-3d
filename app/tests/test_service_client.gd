@@ -18,8 +18,8 @@ func _wait_until(test: Callable, timeout := 5.0) -> bool:
 func _run() -> void:
 	var client := Client.new()
 	root.add_child(client)
-	var data := "D:/danjigame/3D-pet-gtpdo/tests/stage1/client-data-%d" % OS.get_process_id()
-	client.configure("D:/phthon lang/python.exe", PackedStringArray(["-u", "D:/danjigame/3D-pet-gtpdo/service/main.py", "--data-dir", data]))
+	var data := ProjectSettings.globalize_path("res://../build/test-service-client-%d" % OS.get_process_id())
+	client.configure(ProjectSettings.globalize_path("res://../.venv/Scripts/python.exe"), PackedStringArray(["-u", ProjectSettings.globalize_path("res://../service/main.py"), "--data-dir", data]))
 	client.connected.connect(func(_settings, _warnings): connected_count += 1)
 	check(client.start(), "real child starts through nonblocking Godot pipes")
 	check(await _wait_until(func(): return client.state == "ready"), "real ready handshake arrives")

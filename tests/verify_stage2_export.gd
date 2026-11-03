@@ -1,6 +1,6 @@
 extends SceneTree
 
-const IDS := ["godette", "alicia", "soldier"]
+const IDS := ["godette"]
 const ACTIONS := ["idle", "walk", "turn", "wave", "pickup", "fall", "recover"]
 
 func _initialize() -> void:
@@ -15,13 +15,13 @@ static func packaged_path_exists(path: String) -> bool:
 static func verify_package(tree: SceneTree) -> int:
 	var failures: Array[String] = []
 	var catalog: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets_data/characters.json"))
-	if not catalog is Array or catalog.size() != 3:
-		failures.append("Expected three Stage 2 characters")
+	if not catalog is Array or catalog.size() != 1:
+		failures.append("Expected only Godette")
 	else:
 		var ids: Array = catalog.map(func(entry): return entry.id)
 		if ids != IDS:
 			failures.append("Stage 2 catalog IDs are wrong")
-	for forbidden in ["res://assets_data/swordsman.json", "res://models/swordsman.glb", "res://models/cartoon_skeleton.glb", "res://models/man.glb", "res://models/candidate_avatar_sample_m.vrm"]:
+	for forbidden in ["res://assets_data/swordsman.json", "res://models/swordsman.glb", "res://models/cartoon_skeleton.glb", "res://models/man.glb", "res://models/candidate_avatar_sample_m.vrm", "res://models/alicia.vrm", "res://models/soldier.glb", "res://resources/animations/alicia.tres", "res://resources/animations/soldier.tres"]:
 		if packaged_path_exists(forbidden):
 			failures.append("Excluded swordsman asset is packaged: " + forbidden)
 	var script: Script = load("res://scripts/character_view.gd")

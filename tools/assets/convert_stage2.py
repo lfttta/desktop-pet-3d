@@ -12,9 +12,8 @@ import bpy
 from mathutils import Matrix, Quaternion, Vector
 
 
-ROOT = Path(__file__).resolve().parents[2] / "experiments/stage2-recovery"
+ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = Path(r"D:\danjigame\模型all\pet动作模型")
-SOLDIER_SOURCE = Path(r"D:\danjigame\3D-pet\work-pet\prototypes\azpepoze\models\soldier.glb")
 OUTPUT = ROOT / "build/stage2/motions"
 
 
@@ -140,35 +139,6 @@ def convert(clip: str, source: Path, root_motion: str) -> dict:
     return {"source_file": source.name, "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(), "semantic_status": "verified" if clip in {"idle", "walk", "wave", "fall"} else "candidate", "fps": fps, "frame_start": start, "frame_end": end, "output": destination.relative_to(ROOT).as_posix()}
 
 
-def normalize_soldier() -> None:
-    """Bake the source armature's centimeter-scale root into a Godot-safe skin."""
-    bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.gltf(filepath=str(SOLDIER_SOURCE))
-    armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
-    if len(armatures) != 1:
-        raise ValueError("soldier.glb: expected one armature")
-    armature = armatures[0]
-    skinned_meshes = [
-        obj for obj in bpy.data.objects
-        if obj.type == "MESH" and any(modifier.type == "ARMATURE" and modifier.object == armature for modifier in obj.modifiers)
-    ]
-    if len(skinned_meshes) != 1:
-        raise ValueError("soldier.glb: expected one skinned mesh")
-    bpy.ops.object.select_all(action="DESELECT")
-    armature.select_set(True)
-    bpy.context.view_layer.objects.active = armature
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    for obj in list(bpy.data.objects):
-        if obj.type == "MESH" and obj not in skinned_meshes:
-            bpy.data.objects.remove(obj, do_unlink=True)
-    destination = ROOT / "app/models/soldier.glb"
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    bpy.ops.export_scene.gltf(
-        filepath=str(destination), export_format="GLB", export_apply=True,
-        export_yup=True, export_skins=True, export_animations=False,
-    )
-
-
 def author_action(clip: str, rule: dict) -> dict:
     """Author short semantic actions once on the common source rig."""
     source = SOURCE_ROOT / rule["source"]
@@ -256,8 +226,6 @@ def author_action(clip: str, rule: dict) -> dict:
 
 
 def main() -> None:
-    if not (ROOT / ".recovery-workspace.json").is_file():
-        raise RuntimeError("Run tools/prepare_recovery_workspace.py first")
     manifest = json.loads((ROOT / "animations/humanoid_core/manifest.json").read_text("utf-8"))
     clips = {}
     for clip, rule in manifest["actions"].items():
@@ -266,10 +234,9 @@ def main() -> None:
     runtime_source.mkdir(parents=True, exist_ok=True)
     for clip in clips:
         shutil.copy2(OUTPUT / f"{clip}.glb", runtime_source / f"{clip}.glb")
-    normalize_soldier()
     path = ROOT / "animations/humanoid_core/source_manifest.json"
     path.write_text(json.dumps({"schema_version": 1, "clips": clips}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print("PET3D_STAGE2_CONVERTED", {name: value["frame_end"] for name, value in clips.items()}, "soldier=normalized")
+    print("PET3D_STAGE2_CONVERTED", {name: value["frame_end"] for name, value in clips.items()})
 
 
 if __name__ == "__main__":

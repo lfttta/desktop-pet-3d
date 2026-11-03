@@ -11,9 +11,17 @@ import uuid
 
 from service.jsonutil import MAX_FRAME_BYTES, dumps, loads
 from service.character_catalog import ALLOWED_CHARACTER_IDS
+from service.persona import ALLOWED_PERSONA_IDS, DEFAULT_PERSONA_ID
 
-DEFAULTS = {
+SCHEMA_VERSION = 2
+DEFAULTS_V1 = {
     'schema_version': 1, 'character_id': 'godette', 'scale': 1.0,
+    'screen_id': '', 'user_name': '你',
+    'placement': {'x': 1.0, 'y': 1.0, 'edge_x': 1, 'edge_y': 1},
+}
+DEFAULTS = {
+    'schema_version': SCHEMA_VERSION, 'character_id': 'godette',
+    'persona_id': DEFAULT_PERSONA_ID, 'scale': 1.0,
     'screen_id': '', 'user_name': '你',
     'placement': {'x': 1.0, 'y': 1.0, 'edge_x': 1, 'edge_y': 1},
 }
@@ -50,6 +58,9 @@ def validate_patch(patch):
         if key == 'character_id':
             if type(value) is not str or value not in ALLOWED_CHARACTER_IDS:
                 raise ValidationError('unknown character_id')
+        elif key == 'persona_id':
+            if type(value) is not str or value not in ALLOWED_PERSONA_IDS:
+                raise ValidationError('unknown persona_id')
         elif key == 'scale':
             result[key] = _number(value, 0.5, 2.0)
         elif key in ('screen_id', 'user_name'):
@@ -70,14 +81,25 @@ def validate_patch(patch):
 def validate_document(document):
     if (type(document) is not dict or document.keys() != DEFAULTS.keys()
             or type(document.get('schema_version')) is not int
-            or document['schema_version'] != 1):
+            or document['schema_version'] != SCHEMA_VERSION):
         raise ValidationError('unsupported or incomplete settings schema')
     patch = {key: value for key, value in document.items() if key != 'schema_version'}
-    normalized = {'schema_version': 1, **validate_patch(patch)}
+    normalized = {'schema_version': SCHEMA_VERSION, **validate_patch(patch)}
     # Leave room for the ready/result envelope, request ID and recovery warnings.
     if len(dumps(normalized)) > MAX_FRAME_BYTES - 8192:
         raise ValidationError('settings exceed the protocol response budget')
     return normalized
+
+
+def migrate_document(document):
+    """Upgrade a recognized older schema; return (document, migrated)."""
+    if (type(document) is dict and document.get('schema_version') == 1
+            and document.keys() == DEFAULTS_V1.keys()):
+        migrated = deepcopy(document)
+        migrated['persona_id'] = DEFAULT_PERSONA_ID
+        migrated['schema_version'] = SCHEMA_VERSION
+        return migrated, True
+    return document, False
 
 
 def atomic_write(path, content):
@@ -117,7 +139,8 @@ class SettingsStore:
             self._settings = deepcopy(DEFAULTS)
             atomic_write(self.path, dumps(self._settings) + b'\n')
             return
-        migrated = False
+        migrated_character = False
+        migrated_schema = False
         try:
             if len(raw) > MAX_FRAME_BYTES:
                 raise ValidationError('config too large')
@@ -125,7 +148,8 @@ class SettingsStore:
             if (type(document) is dict and type(document.get('character_id')) is str
                     and document['character_id'] in LEGACY_CHARACTERS):
                 document = {**document, 'character_id': 'godette'}
-                migrated = True
+                migrated_character = True
+            document, migrated_schema = migrate_document(document)
             self._settings = validate_document(document)
         except (ValueError, UnicodeError, RecursionError):
             backup = self._backup()
@@ -134,9 +158,12 @@ class SettingsStore:
             self._settings = defaults
             self.warnings.append('Invalid settings backed up to ' + backup.name + '; defaults restored.')
             return
-        if migrated:
+        if migrated_character or migrated_schema:
             atomic_write(self.path, dumps(self._settings) + b'\n')
+        if migrated_character:
             self.warnings.append('Character changed to Godette; all other settings preserved.')
+        if migrated_schema:
+            self.warnings.append('Settings migrated to schema version 2; persona defaults added.')
 
     def _backup(self):
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')

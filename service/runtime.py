@@ -3,11 +3,11 @@
 from contextlib import ExitStack
 import sqlite3
 
-from service import PROTOCOL_VERSION, SERVICE_VERSION
+from service.commands import dispatch
 from service.database import Database
 from service.locking import AlreadyRunning, DataDirectoryLock
 from service.protocol import ProtocolError, decode, emit, emit_error, frames
-from service.settings import SettingsStore, ValidationError
+from service.settings import SettingsStore
 
 
 class BoundedLog:
@@ -25,35 +25,6 @@ class BoundedLog:
             self.stream.flush()
         except OSError:
             pass
-
-
-def dispatch(request, store):
-    command, payload, request_id = request['type'], request['payload'], request['id']
-    if command == 'hello':
-        if type(payload.get('protocol_version')) is not int:
-            raise ProtocolError('invalid_request', 'hello requires integer protocol_version.', request_id)
-        if payload['protocol_version'] != PROTOCOL_VERSION:
-            raise ProtocolError('unsupported_version', 'Only protocol version 1 is supported.', request_id)
-        return 'ready', {'protocol_version': PROTOCOL_VERSION, 'service_version': SERVICE_VERSION,
-                         'settings': store.settings, 'warnings': store.warnings}
-    if command == 'settings.get':
-        return 'result', {'settings': store.settings}
-    if command == 'settings.update':
-        try:
-            saved = store.update(payload)
-        except ValidationError as exc:
-            raise ProtocolError('invalid_settings', str(exc), request_id) from None
-        except OSError:
-            raise ProtocolError('save_failed', 'Settings were not saved; last successful values retained.',
-                                request_id) from None
-        return 'result', {'settings': saved}
-    if command in ('chat.cancel', 'tts.cancel'):
-        return 'cancelled', {}
-    if command == 'shutdown':
-        return 'result', {}
-    if command in ('chat.send', 'tts.synthesize') or command == 'memory' or command.startswith('memory.'):
-        raise ProtocolError('not_available', 'This feature is not available in stage 1.', request_id)
-    raise ProtocolError('unknown_command', 'Unknown command.', request_id)
 
 
 def serve(directory, input_stream, output_stream, error_stream):

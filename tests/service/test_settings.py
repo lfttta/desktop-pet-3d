@@ -8,8 +8,8 @@ def test_defaults_persist_and_returned_values_are_detached(tmp_path):
     from service.settings import SettingsStore
     store = SettingsStore(tmp_path)
     assert store.settings == {
-        'schema_version': 1, 'character_id': 'godette', 'scale': 1.0,
-        'screen_id': '', 'user_name': '你',
+        'schema_version': 2, 'character_id': 'godette', 'persona_id': 'godette',
+        'scale': 1.0, 'screen_id': '', 'user_name': '你',
         'placement': {'x': 1.0, 'y': 1.0, 'edge_x': 1, 'edge_y': 1},
     }
     snapshot = store.settings

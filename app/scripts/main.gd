@@ -219,8 +219,9 @@ func _create_windows() -> void:
 	chat_window = ChatWindow.new()
 	chat_window.visible = false
 	add_child(chat_window)
-	chat_window.size = Vector2i(Vector2(520, 360) * dpi_scale)
+	chat_window.size = Vector2i(Vector2(520, 400) * dpi_scale)
 	chat_window.retry_requested.connect(client.retry)
+	chat_window.configure_chat(client, saved_settings)
 	notice = AcceptDialog.new()
 	notice.title = "Pet3D"
 	add_child(notice)
@@ -285,6 +286,8 @@ func _on_settings_received(settings: Dictionary) -> void:
 	if previous.get("scale") != saved_settings.scale or previous.get("screen_id") != saved_settings.screen_id:
 		_restore_placement()
 	_applying = false
+	if chat_window:
+		chat_window.update_settings(saved_settings)
 
 func _on_request_finished(id: String, type: String, payload: Dictionary) -> void:
 	if not _saving.has(id):

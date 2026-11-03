@@ -5,12 +5,15 @@ signal connected(settings: Dictionary, warnings: Array)
 signal settings_received(settings: Dictionary)
 signal status_changed(state: String, detail: String)
 signal request_finished(id: String, type: String, payload: Dictionary)
+signal capabilities_received(features: Dictionary, personas: Array)
 
 const Decoder = preload("res://scripts/protocol_decoder.gd")
 var state := "stopped"
 var detail := "后台服务尚未启动"
 var process_pid := 0
 var settings := {}
+var features := {}
+var personas: Array = []
 var last_warnings: Array = []
 var pending := {}
 var _pipe := {}
@@ -137,9 +140,12 @@ func _dispatch(message: Dictionary) -> void:
 			_failure("后台服务握手版本不兼容")
 			return
 		settings = payload.settings
+		features = payload.get("features", {}) if payload.get("features") is Dictionary else {}
+		personas = payload.get("personas", []) if payload.get("personas") is Array else []
 		last_warnings = payload.get("warnings", []) if payload.get("warnings", []) is Array else []
 		_set_status("ready", "后台服务已连接")
 		connected.emit(settings, last_warnings)
+		capabilities_received.emit(features, personas)
 	elif message.type == "result" and command in ["settings.get", "settings.update"]:
 		if not payload.get("settings") is Dictionary:
 			_failure("后台服务返回的设置无效")

@@ -28,6 +28,8 @@ func _run() -> void:
 		client.free()
 		quit(1)
 		return
+	check(client.features.get("chat", {}).get("available", true) == false, "chat capability is advertised as unavailable")
+	check(client.personas.size() == 1 and client.personas[0].get("id") == "godette", "persona catalog arrives with the handshake")
 	var id := client.update_settings({"user_name": "中文测试 🐾", "scale": 1.25})
 	check(not id.is_empty(), "save request is accepted")
 	check(await _wait_until(func(): return client.settings.get("user_name") == "中文测试 🐾"), "UTF8 settings return through real pipe")

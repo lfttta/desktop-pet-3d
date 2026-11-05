@@ -1,28 +1,37 @@
 extends Window
-## Chat window skeleton. Controls stay visible but disabled until the service
-## advertises the chat capability and a generator is implemented.
+## Chat window. Controls stay disabled until the service advertises history and
+## a generator, but streaming frames render as they arrive.
 
 signal retry_requested
 
 const ChatSession = preload("res://scripts/chat/chat_session.gd")
-const UNAVAILABLE_TEXT := "聊天功能尚未接入（框架占位）。"
+const UNAVAILABLE_TEXT := "聊天功能尚未接入。"
+const HISTORY_LIMIT := 50
 
 var status: Label
 var persona_label: Label
 var messages: VBoxContainer
+var scroll: ScrollContainer
 var empty_state: Label
 var input: LineEdit
 var send_button: Button
+var stop_button: Button
+var retry_message_button: Button
 var _service
 var _session
 var _settings: Dictionary = {}
 var _persona_display := "Godette"
+var _active_assistant: Label
+var _last_user_text := ""
+var _streaming := false
+var _last_retryable := false
+var _chat_blocked := false
 
 func _ready() -> void:
 	title = "Pet3D 聊天"
 	size = Vector2i(520, 400)
 	min_size = size
-	content_scale_size = size
+	content_scale_size = Vector2i(520, 400)
 	content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
 	unfocusable = false
 	transparent = false
@@ -53,9 +62,9 @@ func _ready() -> void:
 	persona_label = Label.new()
 	persona_label.text = "人格：Godette（未接入）"
 	header.add_child(persona_label)
-	var scroll := ScrollContainer.new()
+	scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.custom_minimum_size = Vector2(0, 150)
+	scroll.custom_minimum_size = Vector2(0, 170)
 	column.add_child(scroll)
 	messages = VBoxContainer.new()
 	messages.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -80,8 +89,18 @@ func _ready() -> void:
 	send_button.disabled = true
 	send_button.pressed.connect(_send)
 	input_row.add_child(send_button)
+	stop_button = Button.new()
+	stop_button.text = "停止"
+	stop_button.disabled = true
+	stop_button.pressed.connect(_stop)
+	input_row.add_child(stop_button)
 	var actions := HBoxContainer.new()
 	column.add_child(actions)
+	retry_message_button = Button.new()
+	retry_message_button.text = "重试上一条"
+	retry_message_button.visible = false
+	retry_message_button.pressed.connect(_retry_message)
+	actions.add_child(retry_message_button)
 	var retry := Button.new()
 	retry.text = "重新连接后台服务"
 	retry.pressed.connect(func(): retry_requested.emit())
@@ -98,10 +117,18 @@ func configure_chat(service, settings: Dictionary) -> void:
 		_session = ChatSession.new()
 		_session.user_message.connect(_on_user_message)
 		_session.assistant_message.connect(_on_assistant_message)
+		_session.delta_received.connect(_on_delta)
+		_session.accepted.connect(_on_accepted)
+		_session.completed.connect(_on_completed)
+		_session.error_received.connect(_on_error)
+		_session.cancelled.connect(_on_cancelled)
 		_session.unavailable.connect(_on_unavailable)
 		_session.failed.connect(_on_failed)
+		_session.history_loaded.connect(_on_history_loaded)
+		_session.history_unavailable.connect(_on_history_unavailable)
+		_session.bubble_received.connect(_on_bubble)
 	_session.configure(service)
-	if service and not service.capabilities_received.is_connected(_on_capabilities):
+	if service and service.has_signal("capabilities_received") and not service.capabilities_received.is_connected(_on_capabilities):
 		service.capabilities_received.connect(_on_capabilities)
 	_update_persona(service.personas if service else [])
 	_refresh_availability()
@@ -109,6 +136,7 @@ func configure_chat(service, settings: Dictionary) -> void:
 func update_settings(settings: Dictionary) -> void:
 	_settings = settings.duplicate(true)
 	_update_persona(_service.personas if _service else [])
+	_refresh_availability()
 
 func show_status(detail: String) -> void:
 	status.text = detail
@@ -118,8 +146,11 @@ func open() -> void:
 	show()
 	grab_focus()
 	_refresh_availability()
+	_load_history()
 
-func _on_capabilities(_features: Dictionary, personas: Array) -> void:
+func _on_capabilities(features: Dictionary, personas: Array) -> void:
+	var chat: Variant = features.get("chat", {})
+	_chat_blocked = not (chat is Dictionary and bool(chat.get("available", false)))
 	_update_persona(personas)
 	_refresh_availability()
 
@@ -130,41 +161,183 @@ func _update_persona(personas: Array) -> void:
 		if item is Dictionary and str(item.get("id", "")) == persona_id:
 			_persona_display = str(item.get("display_name", persona_id))
 			break
-	persona_label.text = "人格：%s（未接入）" % _persona_display
+	var suffix := "" if _chat_available() else "（未接入）"
+	persona_label.text = "人格：%s%s" % [_persona_display, suffix]
+
+func _chat_available() -> bool:
+	return _service != null and _service.state == "ready" and _session != null and _session.is_available() and not _chat_blocked
 
 func _refresh_availability() -> void:
-	var ready: bool = _service != null and _service.state == "ready"
-	var available: bool = ready and _session != null and _session.is_available()
-	input.editable = available
-	send_button.disabled = not available
+	var available := _chat_available()
+	input.editable = available and not _streaming
+	send_button.disabled = not available or _streaming
+	stop_button.disabled = not _streaming
 	input.placeholder_text = "输入消息…" if available else UNAVAILABLE_TEXT
-	if not available and empty_state:
-		empty_state.text = "尚无对话。聊天功能尚未接入。"
+	retry_message_button.visible = _last_retryable and not _last_user_text.is_empty()
+	if empty_state and empty_state.visible:
+		if available:
+			empty_state.text = "尚无对话。"
+		else:
+			empty_state.text = "尚无对话。聊天功能尚未接入。"
+	_update_persona(_service.personas if _service else [])
 
 func _send() -> void:
-	if _session == null or not _session.is_available():
+	if _session == null or not _chat_available() or _streaming:
 		return
-	_session.send(input.text)
+	var text := input.text.strip_edges()
+	if text.is_empty():
+		return
+	var id: String = _session.send(input.text)
+	if id.is_empty():
+		return
+	_last_user_text = text
+	_last_retryable = false
+	_streaming = true
+	_active_assistant = null
+	status.text = "正在回复…"
 	input.clear()
+	_refresh_availability()
+
+func _stop() -> void:
+	if _session == null or not _streaming:
+		return
+	status.text = "正在停止…"
+	_session.cancel()
+
+func _retry_message() -> void:
+	if _last_user_text.is_empty():
+		return
+	_retry_message_button_hide()
+	input.text = _last_user_text
+	_send()
+
+func _retry_message_button_hide() -> void:
+	_last_retryable = false
+	retry_message_button.visible = false
+
+func _load_history() -> void:
+	if _session == null or _service == null or _service.state != "ready" or _streaming:
+		return
+	_session.load_history(HISTORY_LIMIT)
 
 func _on_user_message(text: String) -> void:
-	if _session and _session.is_available():
-		_add_message("你：", text)
+	_add_message("你：", text)
+	_scroll_to_bottom()
+
+func _on_delta(text: String) -> void:
+	if _active_assistant == null:
+		_active_assistant = _add_message(_persona_display + "：", "")
+	_active_assistant.text += text
+	_scroll_to_bottom()
 
 func _on_assistant_message(text: String) -> void:
+	if _active_assistant != null:
+		_active_assistant.text = _persona_display + "：" + text
+		_active_assistant = null
+	else:
+		_add_message(_persona_display + "：", text)
+	_scroll_to_bottom()
+	_streaming = false
+	_refresh_availability()
+
+func _on_bubble(text: String) -> void:
+	if text.strip_edges().is_empty():
+		return
 	_add_message(_persona_display + "：", text)
+	_scroll_to_bottom()
+	status.text = "主动消息"
+
+func _on_accepted(_id: String, _request_id: String) -> void:
+	status.text = "正在回复…"
+
+func _on_completed(_message: String, usage: Dictionary, memory_ops: Array, state_delta: Dictionary) -> void:
+	_streaming = false
+	_active_assistant = null
+	var total := int(usage.get("total_tokens", 0))
+	status.text = "回复完成" if total <= 0 else "回复完成（%d tokens）" % total
+	var notes: Array[String] = []
+	if not memory_ops.is_empty():
+		notes.append("记忆 %d 条" % memory_ops.size())
+	if bool(state_delta.get("applied", false)):
+		notes.append("状态已更新")
+	if not notes.is_empty():
+		status.text += "，" + "，".join(PackedStringArray(notes))
+	_refresh_availability()
+
+func _on_error(_code: String, message: String, retryable: bool) -> void:
+	_last_retryable = retryable
+	status.text = message + "（可重试）" if retryable else message
+	_streaming = false
+	_active_assistant = null
+	_refresh_availability()
+
+func _on_cancelled() -> void:
+	_streaming = false
+	_active_assistant = null
+	status.text = "已停止生成。"
+	_refresh_availability()
 
 func _on_unavailable(_message: String) -> void:
+	_chat_blocked = true
+	_streaming = false
+	_active_assistant = null
 	status.text = UNAVAILABLE_TEXT
 	_refresh_availability()
 
 func _on_failed(message: String) -> void:
 	status.text = message
+	_streaming = false
+	_active_assistant = null
+	_refresh_availability()
 
-func _add_message(prefix: String, text: String) -> void:
+func _on_history_loaded(items: Array) -> void:
+	if _streaming:
+		return
+	_clear_messages()
+	if items.is_empty():
+		empty_state.text = "尚无对话。"
+		empty_state.visible = true
+		return
+	for item in items:
+		if not item is Dictionary:
+			continue
+		var text := str(item.get("text", ""))
+		if text.is_empty():
+			continue
+		var role := str(item.get("role", ""))
+		var prefix := ""
+		if role == "user":
+			prefix = "你："
+		elif role == "assistant":
+			prefix = _persona_display + "："
+		_add_message(prefix, text)
+	_scroll_to_bottom()
+
+func _on_history_unavailable(message: String) -> void:
+	if message.is_empty():
+		status.text = "历史记录未接入。"
+	else:
+		status.text = "历史记录未接入：%s" % message
+
+func _clear_messages() -> void:
+	for child in messages.get_children():
+		if child == empty_state:
+			continue
+		messages.remove_child(child)
+		child.queue_free()
+	empty_state.visible = true
+
+func _add_message(prefix: String, text: String) -> Label:
 	if empty_state:
 		empty_state.visible = false
 	var label := Label.new()
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.text = prefix + text
 	messages.add_child(label)
+	return label
+
+func _scroll_to_bottom() -> void:
+	if scroll == null:
+		return
+	await get_tree().process_frame
+	scroll.scroll_vertical = int(scroll.get_v_scroll_bar().max_value)

@@ -21,6 +21,29 @@ REPORT = ROOT / 'build/stage2/reports'
 OUTPUT = ROOT / 'dist/stage-2-godette'
 ENGINE = Path(r'D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe')
 BLENDER = Path(r'D:\steam\steamapps\common\Blender\blender.exe')
+# The delivered package ships exactly these characters; everything else is an
+# asset-line contract that must still bake and verify.
+PACKAGE_CHARACTER_IDS = ['godette']
+
+
+def humanoid_contracts() -> dict[str, dict]:
+    """Every schema v2 contract bound to humanoid_core, keyed by character id."""
+    contracts = {}
+    for path in sorted((ROOT / 'characters').glob('*.json')):
+        if path.name.endswith('.local.json'):
+            continue
+        config = json.loads(path.read_text('utf-8'))
+        if not isinstance(config, dict) or config.get('schema_version', 0) < 2:
+            continue
+        if not str(config.get('motion_library', '')).startswith('humanoid_core'):
+            continue
+        contracts[str(config['id'])] = config
+    return contracts
+
+
+def manifest_actions() -> int:
+    manifest = json.loads((ROOT / 'animations/humanoid_core/manifest.json').read_text('utf-8'))
+    return len(manifest['actions'])
 
 
 def run(name: str, command: list[str], marker: str = '', timeout: int = 300) -> str:
@@ -64,15 +87,33 @@ def main() -> None:
     for name, marker in [('window_bridge_test', 'hidden-HWND native assertions'), ('lifetime_test', 'lifetime/hotkey assertions, 0 failures'), ('stage1_test', 'stage1 subprocess/resource assertions')]:
         run(name, [str(ROOT / f'native/build/{name}.exe')], marker)
     run('import', [str(ENGINE), '--headless', '--path', str(APP), '--editor', '--import', '--quit'])
+    # Failures of contracts outside PACKAGE_CHARACTER_IDS are recorded and
+    # reported, but never stop the packaged character's library from being
+    # produced, tested, and published.
+    non_package_failures: list[str] = []
     if args.rebuild_assets:
-        godot('bake', str(ROOT / 'tools/assets/bake_stage2.gd'), 'STAGE2_BAKED')
+        # Never let a stale staged library stand in for a character whose bake
+        # just failed.
+        for stale in (ROOT / 'build/stage2').glob('*.tres'):
+            stale.unlink()
+        try:
+            godot('bake', str(ROOT / 'tools/assets/bake_stage2.gd'), 'STAGE2_BAKED')
+        except RuntimeError as error:
+            non_package_failures.append('bake: ' + str(error).splitlines()[0])
+            print('WARN bake reported contract failures; checking the packaged library', flush=True)
+        if not (ROOT / 'build/stage2/godette.tres').is_file():
+            raise RuntimeError('bake did not produce build/stage2/godette.tres')
         godot('staged-baseline', str(ROOT / 'tools/assets/verify_recovery.gd'), 'GODETTE_REGRESSION failures=0', arguments=['--staged'])
-        staged = ROOT / 'build/stage2/godette.tres'
-        # os.replace publishes only the tested cache; baseline stays untouched.
-        destination = APP / 'resources/animations/godette.tres'
-        temporary = destination.with_suffix('.tres.new')
-        shutil.copy2(staged, temporary)
-        os.replace(temporary, destination)
+        # Every baked contract, not only the packaged one, must be reachable from
+        # its runtime animation_library. Non-package libraries stay out of the
+        # delivery through export_presets.cfg's exclude_filter.
+        destinations = APP / 'resources/animations'
+        for staged in sorted((ROOT / 'build/stage2').glob('*.tres')):
+            destination = destinations / staged.name
+            # os.replace publishes only the tested cache; baseline stays untouched.
+            temporary = destination.with_suffix('.tres.new')
+            shutil.copy2(staged, temporary)
+            os.replace(temporary, destination)
     run('python-tests', [sys.executable, '-B', '-m', 'pytest', 'tests/service', 'tests/assets', '-q', '-p', 'no:cacheprovider', '--basetemp', str(ROOT / 'build/stage2/test-python')])
     godot('baseline', str(ROOT / 'tools/assets/verify_recovery.gd'), 'GODETTE_REGRESSION failures=0')
     godot('runtime', str(ROOT / 'tools/assets/verify_recovery_runtime.gd'), 'failures=0')
@@ -82,7 +123,30 @@ def main() -> None:
             raise RuntimeError(name + ' did not confirm zero failures')
     godot('preview', 'res://tests/test_godette_preview.gd', 'GODETTE_PREVIEW failures=0', render=True)
     godot('review-regressions', 'res://tests/test_godette_review_regressions.gd', 'GODETTE_REVIEW_REGRESSIONS failures=0')
-    godot('poses', str(ROOT / 'tools/assets/render_recovery.gd'), 'GODETTE_RENDER frames=70 framing_failures=0', render=True)
+    # Frame counts follow the manifest and the packaged contracts, not a constant.
+    package_contracts = [cid for cid in humanoid_contracts() if cid in PACKAGE_CHARACTER_IDS]
+    frames = len(package_contracts) * manifest_actions() * 10
+    godot('poses', str(ROOT / 'tools/assets/render_recovery.gd'), f'GODETTE_RENDER frames={frames} framing_failures=0', render=True)
+    # Non-package characters never ship, but their staged bakes must pass the
+    # same asset-line gate: every baked contract outside the package catalog.
+    contracts = humanoid_contracts()
+    for staged in sorted((ROOT / 'build/stage2').glob('*.tres')):
+        character_id = staged.stem
+        if character_id in PACKAGE_CHARACTER_IDS:
+            continue
+        if character_id not in contracts:
+            raise RuntimeError(f'{staged.name} has no humanoid_core contract')
+        try:
+            godot('character-assets-' + character_id, str(ROOT / 'tools/assets/verify_character_assets.gd'),
+                  f'CHARACTER_ASSETS character={character_id} frames={manifest_actions() * 10} failures=0',
+                  render=True, arguments=[f'--character={character_id}'])
+        except RuntimeError as error:
+            non_package_failures.append(character_id + ': ' + str(error).splitlines()[0])
+            print(f'WARN non-package contract {character_id} failed its asset gate', flush=True)
+    if non_package_failures:
+        REPORT.mkdir(parents=True, exist_ok=True)
+        (REPORT / 'non-package-failures.json').write_text(json.dumps(non_package_failures, indent=2), 'utf-8')
+        print('WARN non-package contracts reported failures: ' + '; '.join(non_package_failures), flush=True)
     candidate = ROOT / ('build/stage2/package-' + time.strftime('%Y%m%d-%H%M%S'))
     candidate.mkdir(parents=True, exist_ok=False)
     run('service-build', [sys.executable, '-B', 'tools/build_service.py', '--output', str(candidate / 'service')])

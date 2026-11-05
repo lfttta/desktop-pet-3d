@@ -1,7 +1,6 @@
 extends SceneTree
 
 const IDS := ["godette"]
-const ACTIONS := ["idle", "walk", "turn", "wave", "pickup", "fall", "recover"]
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -24,6 +23,13 @@ static func verify_package(tree: SceneTree) -> int:
 	for forbidden in ["res://assets_data/swordsman.json", "res://models/swordsman.glb", "res://models/cartoon_skeleton.glb", "res://models/man.glb", "res://models/candidate_avatar_sample_m.vrm", "res://models/alicia.vrm", "res://models/soldier.glb", "res://resources/animations/alicia.tres", "res://resources/animations/soldier.tres"]:
 		if packaged_path_exists(forbidden):
 			failures.append("Excluded swordsman asset is packaged: " + forbidden)
+	# The shipped motion library is the manifest, not a fixed seven-action list.
+	var actions: Array = []
+	var library: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets_data/humanoid_core.json"))
+	if not library is Dictionary or not library.get("actions") is Dictionary or library.actions.is_empty():
+		failures.append("Packaged humanoid_core.json has no actions")
+	else:
+		actions = library.actions.keys()
 	var script: Script = load("res://scripts/character_view.gd")
 	for character_id in IDS:
 		var view: Node3D = script.new()
@@ -32,9 +38,9 @@ static func verify_package(tree: SceneTree) -> int:
 			failures.append("Character failed package load: " + character_id)
 		else:
 			await tree.process_frame
-			for action in ACTIONS:
-				if view.request_action(action, "user") < 0:
-					failures.append(character_id + " cannot play " + action)
+			for action in actions:
+				if view.request_action(str(action), "user") < 0:
+					failures.append(character_id + " cannot play " + str(action))
 		view.free()
 		await tree.process_frame
 	for failure in failures:

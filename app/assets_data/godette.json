@@ -12,7 +12,65 @@
     "wave",
     "pickup",
     "fall",
-    "recover"
+    "recover",
+    "agreeing",
+    "angry",
+    "bashful",
+    "bored",
+    "box_idle",
+    "box_walk_arc",
+    "breakdance_swipes",
+    "carrying",
+    "cheering",
+    "clapping",
+    "climbing",
+    "climbing_down_wall",
+    "climbing_ladder",
+    "climbing_up_wall",
+    "crying",
+    "dancing",
+    "dancing_twerk",
+    "dizzy_idle",
+    "drinking",
+    "excited",
+    "gangnam_style",
+    "happy",
+    "hip_hop_dancing",
+    "holding_down",
+    "holding_walk",
+    "jump",
+    "kiss",
+    "laughing",
+    "laying_nodding",
+    "laying_severe_cough",
+    "looking_around",
+    "macarena_dance",
+    "male_sitting_pose",
+    "neck_stretching",
+    "nervously_look_around",
+    "old_man_walk",
+    "pointing",
+    "praying",
+    "running",
+    "running_tired",
+    "sad_idle",
+    "salsa_dancing",
+    "salute",
+    "scared",
+    "shrugging",
+    "singing",
+    "sitting",
+    "sleeping_idle",
+    "spinning",
+    "standing_equip_bow",
+    "standing_greeting",
+    "surprised",
+    "swinging",
+    "taunt",
+    "thinking",
+    "victory",
+    "yawn",
+    "yelling"
   ],
   "animation_root": "model_instance",
   "skeleton_path": "Skeleton3D",
@@ -215,7 +273,65 @@
     "wave": "wave",
     "pickup": "pickup",
     "fall": "fall",
-    "recover": "recover"
+    "recover": "recover",
+    "agreeing": "agreeing",
+    "angry": "angry",
+    "bashful": "bashful",
+    "bored": "bored",
+    "box_idle": "box_idle",
+    "box_walk_arc": "box_walk_arc",
+    "breakdance_swipes": "breakdance_swipes",
+    "carrying": "carrying",
+    "cheering": "cheering",
+    "clapping": "clapping",
+    "climbing": "climbing",
+    "climbing_down_wall": "climbing_down_wall",
+    "climbing_ladder": "climbing_ladder",
+    "climbing_up_wall": "climbing_up_wall",
+    "crying": "crying",
+    "dancing": "dancing",
+    "dancing_twerk": "dancing_twerk",
+    "dizzy_idle": "dizzy_idle",
+    "drinking": "drinking",
+    "excited": "excited",
+    "gangnam_style": "gangnam_style",
+    "happy": "happy",
+    "hip_hop_dancing": "hip_hop_dancing",
+    "holding_down": "holding_down",
+    "holding_walk": "holding_walk",
+    "jump": "jump",
+    "kiss": "kiss",
+    "laughing": "laughing",
+    "laying_nodding": "laying_nodding",
+    "laying_severe_cough": "laying_severe_cough",
+    "looking_around": "looking_around",
+    "macarena_dance": "macarena_dance",
+    "male_sitting_pose": "male_sitting_pose",
+    "neck_stretching": "neck_stretching",
+    "nervously_look_around": "nervously_look_around",
+    "old_man_walk": "old_man_walk",
+    "pointing": "pointing",
+    "praying": "praying",
+    "running": "running",
+    "running_tired": "running_tired",
+    "sad_idle": "sad_idle",
+    "salsa_dancing": "salsa_dancing",
+    "salute": "salute",
+    "scared": "scared",
+    "shrugging": "shrugging",
+    "singing": "singing",
+    "sitting": "sitting",
+    "sleeping_idle": "sleeping_idle",
+    "spinning": "spinning",
+    "standing_equip_bow": "standing_equip_bow",
+    "standing_greeting": "standing_greeting",
+    "surprised": "surprised",
+    "swinging": "swinging",
+    "taunt": "taunt",
+    "thinking": "thinking",
+    "victory": "victory",
+    "yawn": "yawn",
+    "yelling": "yelling"
   },
   "foot_anchor": [
     0,
@@ -301,6 +417,702 @@
       ]
     },
     "recover": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "agreeing": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "angry": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "bashful": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "bored": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "box_idle": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "box_walk_arc": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "breakdance_swipes": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "carrying": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "cheering": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "clapping": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "climbing": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "climbing_down_wall": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "climbing_ladder": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "climbing_up_wall": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "crying": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "dancing": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "dancing_twerk": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "dizzy_idle": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "drinking": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "excited": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "gangnam_style": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "happy": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "hip_hop_dancing": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "holding_down": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "holding_walk": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "jump": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "kiss": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "laughing": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "laying_nodding": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "laying_severe_cough": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "looking_around": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "macarena_dance": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "male_sitting_pose": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "neck_stretching": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "nervously_look_around": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "old_man_walk": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "pointing": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "praying": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "running": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "running_tired": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "sad_idle": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "salsa_dancing": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "salute": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "scared": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "shrugging": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "singing": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "sitting": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "sleeping_idle": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "spinning": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "standing_equip_bow": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "standing_greeting": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "surprised": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "swinging": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "taunt": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "thinking": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "victory": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "yawn": {
+      "min": [
+        -1.4,
+        -0.3,
+        -1.4
+      ],
+      "max": [
+        1.4,
+        2.1,
+        1.4
+      ]
+    },
+    "yelling": {
       "min": [
         -1.4,
         -0.3,

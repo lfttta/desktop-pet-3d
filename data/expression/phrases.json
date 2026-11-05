@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "phrases": [
+    {
+      "id": "idle_presence",
+      "text": "我在这儿，安静陪着你。",
+      "category": "idle",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true
+    },
+    {
+      "id": "idle_water",
+      "text": "要不要先喝口水？",
+      "category": "idle",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true
+    },
+    {
+      "id": "idle_stretch",
+      "text": "坐久了，起来伸个懒腰吧。",
+      "category": "idle",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true
+    },
+    {
+      "id": "idle_smalltalk",
+      "text": "今天有没有什么小开心的事？",
+      "category": "idle",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true
+    },
+    {
+      "id": "idle_encourage",
+      "text": "慢慢来，你已经做得不错了。",
+      "category": "idle",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true
+    },
+    {
+      "id": "greet_morning",
+      "text": "早上好呀，今天也一起加油。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true
+    },
+    {
+      "id": "greet_evening",
+      "text": "忙了一天，辛苦啦。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true
+    },
+    {
+      "id": "care_rest",
+      "text": "累的话就休息一会儿，我等你。",
+      "category": "care",
+      "cooldown_seconds": 12600,
+      "daily_limit": 1,
+      "enabled": true
+    },
+    {
+      "id": "care_eyes",
+      "text": "盯屏幕太久了，看看远处吧。",
+      "category": "care",
+      "cooldown_seconds": 12600,
+      "daily_limit": 2,
+      "enabled": true
+    },
+    {
+      "id": "night_rest",
+      "text": "夜深了，早点休息。",
+      "category": "night",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true
+    }
+  ]
+}

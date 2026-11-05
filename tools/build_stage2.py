@@ -117,7 +117,7 @@ def main() -> None:
     run('python-tests', [sys.executable, '-B', '-m', 'pytest', 'tests/service', 'tests/assets', '-q', '-p', 'no:cacheprovider', '--basetemp', str(ROOT / 'build/stage2/test-python')])
     godot('baseline', str(ROOT / 'tools/assets/verify_recovery.gd'), 'GODETTE_REGRESSION failures=0')
     godot('runtime', str(ROOT / 'tools/assets/verify_recovery_runtime.gd'), 'failures=0')
-    for name, marker in [('protocol', 'PROTOCOL_TESTS'), ('app_settings', 'APP_SETTINGS_TESTS'), ('windows', 'WINDOW_TESTS'), ('service_client', 'SERVICE_CLIENT_TESTS'), ('stage2_libraries', 'STAGE2_LIBRARY_TESTS'), ('stage2_controllers', 'STAGE2_CONTROLLER_TESTS'), ('stage2_character_catalog', 'STAGE2_CATALOG_TESTS'), ('stage2_character_view', 'STAGE2_CHARACTER_VIEW_TESTS'), ('godette_performance', 'GODETTE_PERFORMANCE'), ('godette_lifecycle', 'GODETTE_LIFECYCLE')]:
+    for name, marker in [('protocol', 'PROTOCOL_TESTS'), ('app_settings', 'APP_SETTINGS_TESTS'), ('windows', 'WINDOW_TESTS'), ('service_client', 'SERVICE_CLIENT_TESTS'), ('chat_framework', 'CHAT_FRAMEWORK_TESTS'), ('stage2_libraries', 'STAGE2_LIBRARY_TESTS'), ('stage2_controllers', 'STAGE2_CONTROLLER_TESTS'), ('stage2_character_catalog', 'STAGE2_CATALOG_TESTS'), ('stage2_character_view', 'STAGE2_CHARACTER_VIEW_TESTS'), ('godette_performance', 'GODETTE_PERFORMANCE'), ('godette_lifecycle', 'GODETTE_LIFECYCLE')]:
         godot(name, f'res://tests/test_{name}.gd', marker)
         if 'failures=0' not in (REPORT / (name + '.log')).read_text('utf-8'):
             raise RuntimeError(name + ' did not confirm zero failures')

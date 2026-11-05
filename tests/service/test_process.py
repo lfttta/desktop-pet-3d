@@ -134,7 +134,8 @@ def test_fragmented_utf8_multiple_lines_persist_cancel_and_shutdown(launch, tmp_
     assert all(settings[k] == v for k, v in patch.items())
     assert json.loads((tmp_path / '用户 数据/settings.json').read_text('utf-8')) == settings
     assert client.receive()['type'] == 'cancelled'
-    assert client.receive()['type'] == 'cancelled'
+    tts = client.receive()
+    assert tts['type'] == 'error' and tts['payload']['code'] == 'not_available'
     assert client.receive()['payload']['settings'] == settings
     shutdown = client.receive()
     assert shutdown['type'] == 'result' and shutdown['id'] == 'stop'
@@ -144,8 +145,7 @@ def test_fragmented_utf8_multiple_lines_persist_cancel_and_shutdown(launch, tmp_
     restarted.finish()
 
 
-@pytest.mark.parametrize('command', ['chat.send', 'tts.synthesize', 'memory.get', 'memory.search',
-                                    'memory.update', 'memory.delete'])
+@pytest.mark.parametrize('command', ['tts.synthesize', 'memory.update', 'user.profile'])
 def test_unavailable_features_are_explicit_errors(launch, command):
     client = launch()
     reply = client.request(command, {'text': 'hello'})

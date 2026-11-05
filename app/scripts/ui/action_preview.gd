@@ -1,7 +1,18 @@
 extends Node3D
 
-const ACTIONS := ["idle", "walk", "turn", "wave", "pickup", "fall", "recover"]
-const LABELS := ["待机", "行走", "转身", "挥手", "提起", "下落", "恢复"]
+## The review UI follows the shared motion library. Each manifest action carries
+## its display label; KNOWN_LABELS only covers legacy actions that predate it.
+const KNOWN_LABELS := {
+	"idle": "待机",
+	"walk": "行走",
+	"turn": "转身",
+	"wave": "挥手",
+	"pickup": "提起",
+	"fall": "下落",
+	"recover": "恢复",
+}
+var ACTIONS: Array[String] = []
+var LABELS: Array[String] = []
 var actor: Node3D
 var camera: Camera3D
 var action_choice: OptionButton
@@ -18,6 +29,7 @@ var exit_after := 0.0
 var captured := false
 
 func _ready() -> void:
+	_load_actions()
 	var window := get_window()
 	window.title = "Godette · 动作与表情"
 	window.borderless = false
@@ -120,6 +132,21 @@ func _ready() -> void:
 			exit_after = float(argument.trim_prefix("--auto-exit="))
 	_play()
 
+func _load_actions() -> void:
+	ACTIONS.clear()
+	LABELS.clear()
+	var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets_data/humanoid_core.json"))
+	if not manifest is Dictionary or not manifest.get("actions") is Dictionary:
+		push_error("Missing runtime motion library: res://assets_data/humanoid_core.json")
+		return
+	for action in manifest.actions:
+		var entry: Variant = manifest.actions[action]
+		var label := str(KNOWN_LABELS.get(action, action))
+		if entry is Dictionary and entry.has("label"):
+			label = str(entry["label"])
+		ACTIONS.append(str(action))
+		LABELS.append(label)
+
 func _label(parent: Control, text: String) -> void:
 	var label := Label.new()
 	label.text = text
@@ -131,12 +158,12 @@ func _move_camera(degrees: float) -> void:
 	camera.look_at(Vector3(0, 0.8, 0))
 
 func _play() -> void:
-	if not is_instance_valid(actor):
+	if not is_instance_valid(actor) or ACTIONS.is_empty():
 		return
 	pause.set_pressed_no_signal(false)
 	actor.pause_performance(false)
 	actor.action_controller.reset()
-	var selected_action: String = ACTIONS[action_choice.selected]
+	var selected_action: String = ACTIONS[maxi(action_choice.selected, 0)]
 	actor.request_action(selected_action, "user", speed.value, -1 if selected_action == "turn" and direction.button_pressed else 1)
 
 func _process(delta: float) -> void:

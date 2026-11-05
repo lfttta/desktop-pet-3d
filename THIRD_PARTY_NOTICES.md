@@ -12,3 +12,27 @@
 - 原生 Windows 桥接：本项目新增代码；若使用第三方接口头文件，其来源和许可位于 `native/`。
 
 旧原型路径：`D:\danjigame\3D-pet\work-pet`，用于参考和读取已有插件/样例；本轮未修改该工程。旧 Python 桌宠仅作设计参考，阶段 0 未引入其 Qt 呈现或后台服务。
+
+- MerZlin/dsh-pet-indesktop：MIT License，Copyright (c) 2026 Merzlin。本项目在服务端会话、记忆与角色状态的交互设计上参考并移植了该项目的部分思路；原始许可证文本与版权声明保留在本条目中。
+
+MIT License
+
+Copyright (c) 2026 Merzlin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

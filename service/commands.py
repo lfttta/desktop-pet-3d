@@ -1,21 +1,50 @@
 """Single dispatch registry for service commands.
 
-Every command is a handler(request, store) returning (event, payload). Adding a
+Every command is a handler(request, store, ctx) returning (event, payload) or
+None when the handler already emitted its own frames through ctx. Adding a
 feature means registering its commands here and publishing a capability; the
 transport loop and error envelopes stay unchanged.
 """
 
 from service import PROTOCOL_VERSION, SERVICE_VERSION
-from service.features import capabilities, chat
+from service.features import (ai, autonomy, capabilities, chat, diag, expression, growth,
+                              memory, state, usage)
 from service.persona import public_catalog
 from service.protocol import ProtocolError
 from service.settings import ValidationError
 
+
 RESERVED_COMMANDS = frozenset({'tts.synthesize'})
-RESERVED_PREFIX = 'memory'
+RESERVED_PREFIXES = (
+    'voice', 'tts', 'desktop', 'action', 'personality',
+    'memory', 'memory.fuzzy', 'memory.index', 'user',
+)
 
 
-def _hello(request, store):
+class _NullLog:
+    def record(self, level, module, code, message=''):
+        pass
+
+    def tail(self, limit=0):
+        return []
+
+
+class _NullContext:
+    store = None
+    database = None
+    log = _NullLog()
+
+    def emit(self, event, payload):
+        raise RuntimeError('event emission requires a transport context')
+
+    def post(self, event, payload):
+        raise RuntimeError('event emission requires a transport context')
+
+    def register_tick(self, hook):
+        raise RuntimeError('tick registration requires a runtime context')
+
+
+def _hello(request, store, ctx):
     payload = request['payload']
     if type(payload.get('protocol_version')) is not int:
         raise ProtocolError('invalid_request', 'hello requires integer protocol_version.', request['id'])
@@ -31,11 +60,11 @@ def _hello(request, store):
     }
 
 
-def _settings_get(request, store):
+def _settings_get(request, store, ctx):
     return 'result', {'settings': store.settings}
 
 
-def _settings_update(request, store):
+def _settings_update(request, store, ctx):
     try:
         saved = store.update(request['payload'])
     except ValidationError as exc:
@@ -46,15 +75,11 @@ def _settings_update(request, store):
     return 'result', {'settings': saved}
 
 
-def _shutdown(request, store):
+def _shutdown(request, store, ctx):
     return 'result', {}
 
 
-def _cancel_reserved(request, store):
-    return 'cancelled', {}
-
-
-def _not_available(request, store):
+def _not_available(request, store, ctx):
     raise ProtocolError('not_available', 'This feature is reserved for a later stage.', request['id'])
 
 
@@ -63,20 +88,30 @@ HANDLERS = {
     'settings.get': _settings_get,
     'settings.update': _settings_update,
     'shutdown': _shutdown,
-    'tts.cancel': _cancel_reserved,
     **chat.COMMANDS,
+    **memory.COMMANDS,
+    **state.COMMANDS,
+    **autonomy.COMMANDS,
+    **ai.COMMANDS,
+    **expression.COMMANDS,
+    **growth.COMMANDS,
+    **usage.COMMANDS,
+    **diag.COMMANDS,
 }
 
 
 def _is_reserved(command):
-    return command in RESERVED_COMMANDS or command == RESERVED_PREFIX \
-        or command.startswith(RESERVED_PREFIX + '.')
+    if command in RESERVED_COMMANDS:
+        return True
+    return any(command == prefix or command.startswith(prefix + '.')
+               for prefix in RESERVED_PREFIXES)
 
 
-def dispatch(request, store):
+def dispatch(request, store, ctx=None):
+    context = _NullContext() if ctx is None else ctx
     handler = HANDLERS.get(request['type'])
     if handler is not None:
-        return handler(request, store)
+        return handler(request, store, context)
     if _is_reserved(request['type']):
-        return _not_available(request, store)
+        return _not_available(request, store, context)
     raise ProtocolError('unknown_command', 'Unknown command.', request['id'])

@@ -11,6 +11,7 @@ tools/runtime/
 tests/package_guard/build-output/
 
 # ========== 测试运行残留 ==========
+.pytest-tmp/
 .tmp-*/
 
 # ========== Python ==========

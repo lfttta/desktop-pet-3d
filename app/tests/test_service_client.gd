@@ -15,11 +15,27 @@ func _wait_until(test: Callable, timeout := 5.0) -> bool:
 	while not test.call() and Time.get_ticks_msec() < deadline:
 		await process_frame
 	return bool(test.call())
+func _python_executable() -> String:
+	var configured := OS.get_environment("PET3D_PYTHON")
+	if not configured.is_empty() and FileAccess.file_exists(configured):
+		return configured
+	var local := ProjectSettings.globalize_path("res://../.venv/Scripts/python.exe").simplify_path()
+	if FileAccess.file_exists(local):
+		return local
+	var path := OS.get_environment("PATH")
+	for entry in path.split(";"):
+		var directory := entry.strip_edges().trim_prefix("\"").trim_suffix("\"")
+		if directory.is_empty():
+			continue
+		var candidate := directory.path_join("python.exe")
+		if FileAccess.file_exists(candidate):
+			return candidate
+	return "python"
 func _run() -> void:
 	var client := Client.new()
 	root.add_child(client)
 	var data := ProjectSettings.globalize_path("res://../build/test-service-client-%d" % OS.get_process_id())
-	client.configure(ProjectSettings.globalize_path("res://../.venv/Scripts/python.exe"), PackedStringArray(["-u", ProjectSettings.globalize_path("res://../service/main.py"), "--data-dir", data]))
+	client.configure(_python_executable(), PackedStringArray(["-u", ProjectSettings.globalize_path("res://../service/main.py"), "--data-dir", data]))
 	client.connected.connect(func(_settings, _warnings): connected_count += 1)
 	check(client.start(), "real child starts through nonblocking Godot pipes")
 	check(await _wait_until(func(): return client.state == "ready"), "real ready handshake arrives")
@@ -28,7 +44,7 @@ func _run() -> void:
 		client.free()
 		quit(1)
 		return
-	check(client.features.get("chat", {}).get("available", true) == false, "chat capability is advertised as unavailable")
+	check(client.features.get("chat", {}).get("available", false) == true, "chat capability is advertised as available")
 	check(client.personas.size() == 1 and client.personas[0].get("id") == "godette", "persona catalog arrives with the handshake")
 	var id := client.update_settings({"user_name": "中文测试 🐾", "scale": 1.25})
 	check(not id.is_empty(), "save request is accepted")

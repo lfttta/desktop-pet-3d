@@ -30,19 +30,19 @@ def test_hello_advertises_chat_capability_and_personas(tmp_path):
     store, payload = ready_payload(tmp_path)
     assert payload['settings']['persona_id'] == 'godette'
     assert payload['features']['chat'] == {
-        'available': False, 'reason': 'not_implemented',
-        'commands': ['chat.send', 'chat.cancel'],
+        'available': True, 'reason': '',
+        'commands': ['chat.send', 'chat.cancel', 'chat.history'],
     }
     assert payload['personas'] == [{'id': 'godette', 'display_name': 'Godette'}]
 
 
-def test_chat_send_valid_contract_stays_unavailable(tmp_path):
+def test_chat_send_without_storage_reports_storage_unavailable(tmp_path):
     store = SettingsStore(tmp_path)
     for payload in ({'text': '你好'}, {'text': 'x' * 8000},
                     {'text': '你好', 'conversation_id': 'c-1'}):
         with pytest.raises(ProtocolError) as caught:
             dispatch({'type': 'chat.send', 'id': 'chat', 'payload': payload}, store)
-        assert caught.value.code == 'not_available'
+        assert caught.value.code == 'storage_unavailable'
         assert caught.value.request_id == 'chat'
 
 
@@ -59,18 +59,17 @@ def test_chat_send_rejects_invalid_payload(tmp_path, payload):
     assert caught.value.request_id == 'chat'
 
 
-def test_chat_cancel_remains_a_placeholder(tmp_path):
+def test_chat_cancel_without_request_id_is_a_noop(tmp_path):
     store = SettingsStore(tmp_path)
     assert dispatch({'type': 'chat.cancel', 'id': 'cancel', 'payload': {}}, store) == ('cancelled', {})
 
 
 def test_memory_and_tts_remain_reserved(tmp_path):
     store = SettingsStore(tmp_path)
-    for command in ('memory', 'memory.get', 'tts.synthesize'):
+    for command in ('memory', 'memory.get', 'tts.synthesize', 'tts.cancel'):
         with pytest.raises(ProtocolError) as caught:
             dispatch({'type': command, 'id': 'reserved', 'payload': {}}, store)
         assert caught.value.code == 'not_available'
-    assert dispatch({'type': 'tts.cancel', 'id': 'cancel', 'payload': {}}, store) == ('cancelled', {})
     with pytest.raises(ProtocolError) as caught:
         dispatch({'type': 'nonsense', 'id': 'unknown', 'payload': {}}, store)
     assert caught.value.code == 'unknown_command'
@@ -85,21 +84,27 @@ def test_v1_settings_are_migrated_without_losing_values(tmp_path):
     (tmp_path / 'settings.json').write_bytes(
         (json.dumps(v1, ensure_ascii=False) + '\n').encode('utf-8'))
     store = SettingsStore(tmp_path)
-    assert store.settings == {**v1, 'schema_version': 2, 'persona_id': 'godette'}
-    assert any('schema version 2' in warning for warning in store.warnings)
+    assert {key: store.settings[key] for key in v1 if key != 'schema_version'} == \
+        {key: value for key, value in v1.items() if key != 'schema_version'}
+    assert store.settings['schema_version'] == 4
+    assert store.settings['persona_id'] == 'godette'
+    assert any('schema version 4' in warning for warning in store.warnings)
     assert json.loads((tmp_path / 'settings.json').read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 
 
 def test_v1_legacy_character_and_schema_migrate_together(tmp_path):
-    v1 = {**DEFAULTS, 'schema_version': 1, 'character_id': 'swordsman'}
-    v1.pop('persona_id')
+    v1 = {
+        'schema_version': 1, 'character_id': 'swordsman', 'scale': 1.0,
+        'screen_id': '', 'user_name': '你',
+        'placement': {'x': 1.0, 'y': 1.0, 'edge_x': 1, 'edge_y': 1},
+    }
     (tmp_path / 'settings.json').write_bytes(
         (json.dumps(v1, ensure_ascii=False) + '\n').encode('utf-8'))
     store = SettingsStore(tmp_path)
     assert store.settings['character_id'] == 'godette'
     assert store.settings['persona_id'] == 'godette'
-    assert store.settings['schema_version'] == 2
+    assert store.settings['schema_version'] == 4
     assert len(store.warnings) == 2
 
 

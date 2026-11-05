@@ -7,13 +7,15 @@
       "mode": "loop",
       "source": "Idle.fbx",
       "blend_seconds": 0.15,
-      "root_motion": "preserve"
+      "root_motion": "preserve",
+      "label": "待机"
     },
     "walk": {
       "mode": "loop",
       "source": "Walking.fbx",
       "blend_seconds": 0.15,
-      "root_motion": "vertical_only"
+      "root_motion": "vertical_only",
+      "label": "行走"
     },
     "turn": {
       "mode": "once",
@@ -21,33 +23,502 @@
       "blend_seconds": 0.12,
       "root_motion": "none",
       "derived": "turn_step",
-      "heading_degrees": 180
+      "heading_degrees": 180,
+      "label": "转身"
     },
     "wave": {
       "mode": "once",
       "source": "Waving.fbx",
       "blend_seconds": 0.15,
-      "root_motion": "preserve"
+      "root_motion": "preserve",
+      "label": "挥手"
     },
     "pickup": {
       "mode": "hold",
       "source": "Idle.fbx",
       "blend_seconds": 0.12,
       "root_motion": "none",
-      "derived": "suspended"
+      "derived": "suspended",
+      "label": "被提起"
     },
     "fall": {
       "mode": "hold",
       "source": "Falling.fbx",
       "blend_seconds": 0.08,
-      "root_motion": "none"
+      "root_motion": "none",
+      "label": "下落"
     },
     "recover": {
       "mode": "once",
       "source": "Idle.fbx",
       "blend_seconds": 0.12,
       "root_motion": "vertical_only",
-      "derived": "landing_cushion"
+      "derived": "landing_cushion",
+      "label": "恢复"
+    },
+    "agreeing": {
+      "mode": "once",
+      "source": "Agreeing.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "点头同意"
+    },
+    "angry": {
+      "mode": "once",
+      "source": "Angry.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "生气"
+    },
+    "bashful": {
+      "mode": "once",
+      "source": "Bashful.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "害羞"
+    },
+    "bored": {
+      "mode": "once",
+      "source": "Bored.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "无聊"
+    },
+    "box_idle": {
+      "mode": "loop",
+      "source": "Box_Idle.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "抱箱待机"
+    },
+    "box_walk_arc": {
+      "mode": "loop",
+      "source": "Box_Walk_Arc.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "vertical_only",
+      "semantic_status": "candidate",
+      "label": "抱箱行走"
+    },
+    "breakdance_swipes": {
+      "mode": "loop",
+      "source": "Breakdance_Swipes.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "霹雳舞"
+    },
+    "carrying": {
+      "mode": "once",
+      "source": "Carrying.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "搬运"
+    },
+    "cheering": {
+      "mode": "once",
+      "source": "Cheering.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "欢呼"
+    },
+    "clapping": {
+      "mode": "once",
+      "source": "Clapping.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "鼓掌"
+    },
+    "climbing": {
+      "mode": "once",
+      "source": "Climbing.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "攀爬"
+    },
+    "climbing_down_wall": {
+      "mode": "once",
+      "source": "Climbing_Down_Wall.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "翻墙下行"
+    },
+    "climbing_ladder": {
+      "mode": "once",
+      "source": "Climbing_Ladder.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "爬梯子"
+    },
+    "climbing_up_wall": {
+      "mode": "once",
+      "source": "Climbing_Up_Wall.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "翻墙上行"
+    },
+    "crying": {
+      "mode": "once",
+      "source": "Crying.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "哭泣"
+    },
+    "dancing": {
+      "mode": "once",
+      "source": "Dancing.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "跳舞"
+    },
+    "dancing_twerk": {
+      "mode": "once",
+      "source": "Dancing_Twerk.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "扭臀舞"
+    },
+    "dizzy_idle": {
+      "mode": "loop",
+      "source": "Dizzy_Idle.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "眩晕待机"
+    },
+    "drinking": {
+      "mode": "once",
+      "source": "Drinking.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "喝水"
+    },
+    "excited": {
+      "mode": "once",
+      "source": "Excited.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "兴奋"
+    },
+    "gangnam_style": {
+      "mode": "once",
+      "source": "Gangnam_Style.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "江南Style"
+    },
+    "happy": {
+      "mode": "once",
+      "source": "Happy.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "开心"
+    },
+    "hip_hop_dancing": {
+      "mode": "once",
+      "source": "Hip_Hop_Dancing.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "嘻哈舞"
+    },
+    "holding_down": {
+      "mode": "once",
+      "source": "Holding_Down.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "按住"
+    },
+    "holding_walk": {
+      "mode": "loop",
+      "source": "Holding_Walk.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "vertical_only",
+      "semantic_status": "candidate",
+      "label": "持物行走"
+    },
+    "jump": {
+      "mode": "once",
+      "source": "Jump.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "跳跃"
+    },
+    "kiss": {
+      "mode": "once",
+      "source": "Kiss.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "飞吻"
+    },
+    "laughing": {
+      "mode": "once",
+      "source": "Laughing.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "大笑"
+    },
+    "laying_nodding": {
+      "mode": "once",
+      "source": "Laying_Nodding.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "躺姿点头"
+    },
+    "laying_severe_cough": {
+      "mode": "once",
+      "source": "Laying_Severe_Cough.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "躺姿咳嗽"
+    },
+    "looking_around": {
+      "mode": "once",
+      "source": "Looking_Around.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "四处张望"
+    },
+    "macarena_dance": {
+      "mode": "loop",
+      "source": "Macarena_Dance.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "玛卡瑞纳舞"
+    },
+    "male_sitting_pose": {
+      "mode": "once",
+      "source": "Male_Sitting_Pose.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "坐姿"
+    },
+    "neck_stretching": {
+      "mode": "once",
+      "source": "Neck_Stretching.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "伸展颈部"
+    },
+    "nervously_look_around": {
+      "mode": "once",
+      "source": "Nervously_Look_Around.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "紧张张望"
+    },
+    "old_man_walk": {
+      "mode": "loop",
+      "source": "Old_Man_Walk.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "vertical_only",
+      "semantic_status": "candidate",
+      "label": "老人行走"
+    },
+    "pointing": {
+      "mode": "once",
+      "source": "Pointing.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "指向"
+    },
+    "praying": {
+      "mode": "once",
+      "source": "Praying.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "祈祷"
+    },
+    "running": {
+      "mode": "loop",
+      "source": "Running.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "vertical_only",
+      "semantic_status": "candidate",
+      "label": "奔跑"
+    },
+    "running_tired": {
+      "mode": "loop",
+      "source": "Running_Tired.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "vertical_only",
+      "semantic_status": "candidate",
+      "label": "疲惫奔跑"
+    },
+    "sad_idle": {
+      "mode": "loop",
+      "source": "Sad_Idle.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "难过待机"
+    },
+    "salsa_dancing": {
+      "mode": "once",
+      "source": "Salsa_Dancing.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "萨尔萨舞"
+    },
+    "salute": {
+      "mode": "once",
+      "source": "Salute.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "敬礼"
+    },
+    "scared": {
+      "mode": "once",
+      "source": "Scared.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "害怕"
+    },
+    "shrugging": {
+      "mode": "once",
+      "source": "Shrugging.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "耸肩"
+    },
+    "singing": {
+      "mode": "once",
+      "source": "Singing.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "唱歌"
+    },
+    "sitting": {
+      "mode": "once",
+      "source": "Sitting.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "坐下"
+    },
+    "sleeping_idle": {
+      "mode": "loop",
+      "source": "Sleeping_Idle.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "睡觉"
+    },
+    "spinning": {
+      "mode": "once",
+      "source": "Spinning.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "旋转"
+    },
+    "standing_equip_bow": {
+      "mode": "once",
+      "source": "Standing_Equip_Bow.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "站立取弓"
+    },
+    "standing_greeting": {
+      "mode": "once",
+      "source": "Standing_Greeting.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "站立问候"
+    },
+    "surprised": {
+      "mode": "once",
+      "source": "Surprised.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "惊讶"
+    },
+    "swinging": {
+      "mode": "once",
+      "source": "Swinging.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "挥摆"
+    },
+    "taunt": {
+      "mode": "once",
+      "source": "Taunt.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "挑衅"
+    },
+    "thinking": {
+      "mode": "once",
+      "source": "Thinking.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "思考"
+    },
+    "victory": {
+      "mode": "once",
+      "source": "Victory.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "胜利"
+    },
+    "yawn": {
+      "mode": "once",
+      "source": "Yawn.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "打哈欠"
+    },
+    "yelling": {
+      "mode": "once",
+      "source": "Yelling.fbx",
+      "blend_seconds": 0.15,
+      "root_motion": "none",
+      "semantic_status": "candidate",
+      "label": "大喊"
     }
   }
 }

@@ -465,6 +465,12 @@ LRESULT CALLBACK WindowState::role_proc(HWND hwnd, UINT message, WPARAM wp, LPAR
     if (message == WM_MOUSEACTIVATE) return MA_NOACTIVATE;
     if (message == WM_POINTERACTIVATE) return PA_NOACTIVATE;
     if (message == WM_NCHITTEST && !self->interactive_ && !self->capture_) return HTTRANSPARENT;
+    if (message == WM_RBUTTONUP && self->interactive_ && !self->capture_) {
+        // Right-click on the character body: same menu as the tray icon, so the
+        // 65-action list is reachable without hunting for the notification area.
+        self->show_menu();
+        return 0;
+    }
     if (message == WM_CAPTURECHANGED) {
         self->capture_ = false;
         if (!self->stopping_) self->apply_interaction();

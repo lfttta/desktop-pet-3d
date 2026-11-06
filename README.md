@@ -47,6 +47,39 @@
 
 ## 3. 怎么运行
 
+### 3.0 给别人用：打包版（不需要 Godot / Python）
+
+已经出好一个可直接分发到其他 Windows 电脑的包：
+
+```
+dist/Pet3D/              ← 整个文件夹拷走即可，双击 Pet3D.exe
+├─ Pet3D.exe             主程序（104 MB，Godot 导出）
+├─ Pet3D.pck             资源包（角色 / 65 动作 / 菜单表 / 界面）
+├─ pet_window.*.dll      窗口与托盘原生模块
+├─ libvrm_physics.*.dll  VRM 物理
+├─ service\              Python 服务（PyInstaller onedir，自带解释器）
+├─ 使用说明.md           给最终用户看的中文说明
+└─ THIRD_PARTY_NOTICES.md
+```
+
+95 MB → 141 MB，目标机器**不需要安装 Godot 或 Python**；`Pet3D.exe` 会自动拉起同目录的 `service\pet-service.exe`（`app/scripts/main.gd:84` 先找 `service/pet-service.exe`，找不到才回落到 Python 源码）。
+
+实测：双击 `Pet3D.exe` 后 `Pet3D` 与 `pet-service` 两个进程同时存活，服务写入 `%LOCALAPPDATA%\Pet3D\pet.db`，角色正常渲染。
+
+重新出包（三步，均需在本机）：
+
+```bat
+:: 1. 打包 Python 服务
+"D:\danjigame\3D-pet\3D-pet-gtpdo\.venv\Scripts\python.exe" -B tools\build_service.py --output build\pkg\service
+
+:: 2. 导出 Godot release（原生 DLL 必须是最新的，见 §3.1）
+"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe" --headless --path app --export-release "Windows" build\pkg\Pet3D.exe
+
+:: 3. 组装 dist\Pet3D\（Pet3D.exe / Pet3D.pck / 两个 DLL / service\ / THIRD_PARTY_NOTICES.md / 使用说明.md）
+```
+
+注意：`tools/build_stage2.py` 是完整门禁（含原生编译、全部测试、导出、manifest），比上面三步多得多；只想出包用上面三步即可，但**改了原生代码就必须先 `native\build.cmd --stage1`**，否则 DLL 与源码不一致。
+
 ### 3.1 引擎（Godot 4.7.2）
 
 - Godot 可执行文件：`D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe`（**GODDOT 和 WORD 中间是两个空格**）。

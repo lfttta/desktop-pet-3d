@@ -39,6 +39,7 @@
 | `docs/` | 设计与验收文档：`architecture.md`、`stage-2-plan.md`、`humanoid-skeleton-spec.md`、`humanoid-action-runbook.md`、`v3-acceptance.md`（V3 侧验收记录）、`合并记录.md`（本文档的姊妹篇）；`reference/`（V3 原始实施计划原文）、`reports/`（stage-0/1/2 历史报告，只增不改，见 AGENTS.md）、`superpowers/plans/`（历史计划存档） |
 | `build/` | 构建输出（gitignore，不入库） |
 | `run-dev.cmd` | 本机一键启动（Godot + 服务 Python 路径注入）；`PET3D_PYTHON` 已指向现行仓库根 `D:\danjigame\3D-pet\3D-pet-gtpdo\.venv`，历史问题见 §3.2 |
+| `动作预览.cmd` | 打开 65 动作 + 表情预览窗（`--review` 模式，不需要 Python 服务）；日常桌宠行为只用 7 个核心动作，其余动作在这里看 |
 | `requirements-dev.txt` | 开发依赖版本：pytest 9.1.1 / pyinstaller 6.21.0 / pillow 13.0.0（服务本体不用第三方包） |
 | `AGENTS.md` | 工程协作约定：仓库根、Godot/Python 版本、分支命名、文件所有权、验收命令、硬性禁止 |
 | `README-stage0/1/2.md` | 历史阶段说明（stage2 面向便携包最终用户，不是开发入口） |

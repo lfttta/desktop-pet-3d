@@ -33,6 +33,7 @@ bool WindowBridge::begin_capture() { auto state = state_; return state->begin_ca
 void WindowBridge::end_capture() { auto state = state_; state->end_capture(); }
 bool WindowBridge::has_capture() { auto state = state_; return state->has_capture(); }
 int64_t WindowBridge::poll_tray_action() { auto state = state_; return state->poll_tray_action(); }
+bool WindowBridge::set_menu_actions(const std::string &groups) { auto state = state_; return state->set_menu_actions(groups); }
 void WindowBridge::shutdown() { auto state = state_; state->shutdown(); }
 int64_t WindowBridge::acquire_instance(const std::string &key) { auto state = state_; return state->acquire_instance(key); }
 bool WindowBridge::adopt_service_process(int64_t pid) { auto state = state_; return state->adopt_service_process(pid); }
@@ -195,7 +196,13 @@ bool WindowState::has_capture() {
 }
 
 void WindowState::queue_action(int64_t action) {
-    if (action < 1 || action > 7 || stopping_ || shutdown_requested_.load()) return;
+    if (action >= action_command_base) {
+        // Reject indexes past the group table the owner actually sent.
+        if (static_cast<size_t>(action - action_command_base) >= menu_action_count_) return;
+    } else if (action < 1 || action > 7) {
+        return;
+    }
+    if (stopping_ || shutdown_requested_.load()) return;
     if (action == 5) {
         exit_pending_ = true;
         if (menu_open_) EndMenu(); // allow the main loop to poll Exit immediately
@@ -223,6 +230,53 @@ int64_t WindowState::poll_tray_action() {
     read_ = (read_ + 1) % actions_.size();
     --count_;
     return action;
+}
+
+bool WindowState::set_menu_actions(const std::string &groups) {
+    if (!on_thread()) return false;
+    // Input: one group per line, "label|item|item". Items are action display
+    // names in the order the owner wants them; the echoed command index maps
+    // back to the flat position, so the owner keeps the authoritative list.
+    std::vector<MenuGroup> parsed;
+    size_t total = 0;
+    std::string line;
+    auto widen = [](const std::string &text) {
+        if (text.empty()) return std::wstring();
+        const int size = MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+        if (size <= 0) return std::wstring();
+        std::wstring wide(static_cast<size_t>(size), L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), size);
+        return wide;
+    };
+    auto flush = [&]() {
+        if (line.empty()) return;
+        std::vector<std::wstring> items;
+        size_t start = 0;
+        std::wstring label;
+        bool first = true;
+        while (start <= line.size()) {
+            const size_t bar = line.find('|', start);
+            const std::string field = line.substr(start, bar == std::string::npos ? std::string::npos : bar - start);
+            if (first) label = widen(field);
+            else if (!field.empty()) items.push_back(widen(field));
+            first = false;
+            if (bar == std::string::npos) break;
+            start = bar + 1;
+        }
+        if (!label.empty() && !items.empty()) {
+            total += items.size();
+            parsed.push_back({label, items});
+        }
+        line.clear();
+    };
+    for (const char character : groups) {
+        if (character == '\n') flush();
+        else if (character != '\r') line.push_back(character);
+    }
+    flush();
+    menu_groups_ = std::move(parsed);
+    menu_action_count_ = total;
+    return !menu_groups_.empty();
 }
 
 NOTIFYICONDATAW WindowState::icon_data() const {
@@ -298,6 +352,24 @@ void WindowState::show_menu() {
     AppendMenuW(menu, MF_STRING, 4, L"待机 / 挥手  |  Idle / Wave (&W)");
     AppendMenuW(menu, MF_STRING, 6, L"设置  |  Settings (&T)");
     AppendMenuW(menu, MF_STRING, 7, L"聊天  |  Chat (&C)");
+    if (!menu_groups_.empty()) {
+        // One submenu per action category; commands echo action_command_base + flat index.
+        HMENU actions = CreatePopupMenu();
+        size_t flat = 0;
+        if (actions) {
+            for (const auto &group : menu_groups_) {
+                HMENU submenu = CreatePopupMenu();
+                if (!submenu) continue;
+                for (const auto &item : group.items) {
+                    InsertMenuW(submenu, static_cast<UINT>(-1), MF_BYPOSITION | MF_STRING,
+                            static_cast<UINT_PTR>(action_command_base + flat), item.c_str());
+                    ++flat;
+                }
+                AppendMenuW(actions, MF_POPUP, reinterpret_cast<UINT_PTR>(submenu), group.label.c_str());
+            }
+            AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(actions), L"动作  |  Actions (&A)");
+        }
+    }
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, 5, L"退出  |  Exit (&E)");
     SetMenuDefaultItem(menu, 1, FALSE);

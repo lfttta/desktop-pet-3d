@@ -4,6 +4,7 @@ extends Node3D
 const DragState = preload("res://scripts/drag_state.gd")
 const HitRegions = preload("res://scripts/hit_regions.gd")
 const ScreenMath = preload("res://scripts/screen_math.gd")
+const ActionMenu = preload("res://scripts/action_menu.gd")
 
 var camera: Camera3D
 var actor: Node3D
@@ -23,6 +24,8 @@ var screen := 0
 var dpi_scale := 1.0
 var previous_interactive := false
 var status_label: Label
+var action_menu := ActionMenu.new()
+var action_library := {}
 var _last_work_area := Rect2i()
 var _screen_timer := 0.0
 var _geometry := false
@@ -55,6 +58,7 @@ func _ready() -> void:
 		_change_character(int(options.get("character", "0")))
 	if options.has("diagnostics"):
 		_build_diagnostics()
+	_configure_action_menu()
 	_play_action(str(options.get("action", "idle")))
 	_recover_position()
 	if bridge:
@@ -62,6 +66,23 @@ func _ready() -> void:
 		drag.update(bridge.is_left_button_down(), false, bridge.get_cursor_position(), get_window().position, false, true)
 	print("[stage0] READY ", JSON.stringify(_status()))
 	# Stage 1 lifecycle checks also run headless; explicit shutdown owns exit.
+
+func _configure_action_menu() -> void:
+	# Feed the native tray menu the same flat order this class maps commands back to.
+	action_library.clear()
+	var manifest: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets_data/humanoid_core.json"))
+	if manifest is Dictionary:
+		var actions: Variant = manifest.get("actions", {})
+		if actions is Dictionary:
+			action_library = actions
+	if action_library.is_empty():
+		return
+	var built := ActionMenu.build(ActionMenu.load_table(), action_library)
+	action_menu.configure(built.groups, built.flat)
+	if bridge and bridge.has_method("set_menu_actions"):
+		if not bridge.set_menu_actions(action_menu.native_payload()):
+			push_error("Action menu payload rejected")
+	print("[stage0] ACTION_MENU groups=", action_menu.group_count(), " actions=", action_menu.actions().size())
 
 func _verify_package() -> void:
 	# Release templates omit --script. This explicit headless entry runs the
@@ -266,6 +287,10 @@ func _update_input() -> void:
 		_play_action("wave")
 
 func _handle_tray(action: int) -> void:
+	var chosen := action_menu.action_for_command(action)
+	if not chosen.is_empty():
+		_play_action(chosen)
+		return
 	match action:
 		1:
 			_cancel_drag()

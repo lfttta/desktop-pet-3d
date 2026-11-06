@@ -28,7 +28,7 @@
 
 | 路径 | 内容 |
 |---|---|
-| `app/` | Godot 4.7.2 工程：`project.godot`；`scripts/`（`character_view.gd` 动作链路、`scripts/animation/action_controller.gd` 动作优先级、`scripts/chat/` 聊天会话、`scripts/ui/` 各面板、`service_client.gd` 服务客户端）；`addons/`（`vrm` VRM 导入插件、`mtoon` MToon 渲染插件——两者在 `project.godot:20` 启用，`vrm/bin/` 带 vrm_physics 各平台二进制；`pet_window` 窗口桥 GDExtension 包装）；`models/`（`godette.vrm`、`alicia.vrm`、soldier/swordsman 等模型源）；`motions/`（短动作缓存 idle/wave，导出时排除）；`assets_data/`（角色配置 + `humanoid_core.json` 动作清单）；`resources/animations/`（`godette.tres` 与 `source/` 65 个 GLB）；`tests/`（headless 引擎测试，17 个 `.gd`）；`tools/`（Godot 侧脚本）；`export_presets.cfg`（导出过滤） |
+| `app/` | Godot 4.7.2 工程：`project.godot`；`scripts/`（`character_view.gd` 动作链路、`scripts/animation/action_controller.gd` 动作优先级、`action_menu.gd` 右键动作菜单模型、`scripts/chat/` 聊天会话、`scripts/ui/` 各面板、`service_client.gd` 服务客户端）；`addons/`（`vrm` VRM 导入插件、`mtoon` MToon 渲染插件——两者在 `project.godot:20` 启用，`vrm/bin/` 带 vrm_physics 各平台二进制；`pet_window` 窗口桥 GDExtension 包装）；`models/`（`godette.vrm`、`alicia.vrm`、soldier/swordsman 等模型源）；`motions/`（短动作缓存 idle/wave，导出时排除）；`assets_data/`（角色配置 + `humanoid_core.json` 动作清单 + `action_menu.json` 右键菜单分类表）；`resources/animations/`（`godette.tres` 与 `source/` 65 个 GLB）；`tests/`（headless 引擎测试，19 个 `.gd`）；`tools/`（Godot 侧脚本）；`export_presets.cfg`（导出过滤） |
 | `service/` | Python 3.13.14 后台服务（仅标准库）：`main.py` 入口（只解析 `--data-dir` 后调 `runtime.serve`）；`protocol.py` 信封；`commands.py:86` 起的 `HANDLERS` 注册 **40 条命令**；`features/`（chat / memory / state / autonomy / ai / expression / growth / usage / diag）；`persona.py`（人格卡）、`settings.py`（schema v4 + 迁移链）、`character_catalog.py`、`ai/`（本地路由 + DeepSeek 编排）、`behavior/`（主动行为预算） |
 | `characters/` | 角色契约源（绑定 `animations/humanoid_core` 的 v2 契约）：`godette.json`、`alicia.json`（数据已并入、运行目录未放行）、`swordsman.json`（历史遗留） |
 | `data/` | 服务的种子/配置数据（人读的仓库内文件）：`persona/godette.json` 人格卡（6 条 boundaries）、`expression/phrases.json` 台词库（10 条，care/greeting/idle/night 四类）。注意：**运行时持久化数据（设置/聊天记录/记忆）不在这里**，见 §3.4 |
@@ -84,7 +84,16 @@ python -I service\main.py --data-dir %TEMP%\pet3d-data
 python -I -c "import sys; sys.path.insert(0,'.'); from service.commands import HANDLERS; print(sorted(HANDLERS))"
 ```
 
-### 3.4 数据目录（运行时数据落在哪里）
+### 3.5 手动选动作（右键 / 托盘「动作」子菜单）
+
+桌宠自主行为只驱动 7 个核心动作（idle/walk/turn/wave/pickup/fall/recover，见 `character_view.gd` 状态机）。**全部 65 个动作通过右键或托盘菜单手动触发**：
+
+- 菜单来源：`app/assets_data/action_menu.json` 的 8 个分类（基础动作、跳舞、情绪、互动、日常、行走移动、道具动作、姿态），覆盖 `humanoid_core.json` 全部 65 项，不重不漏（`tests/assets/test_action_menu.py` 校验）。
+- 运行链路：`pet_window.gd:70` 的 `_configure_action_menu()` 把分类表拼成 `label|action|action` 文本经 `bridge.set_menu_actions()` 交给原生层；原生层渲染子菜单，命令号 = `1000 + 扁平索引`（固定命令仍是 1/2/4/5/6/7）；轮询回传后 `action_menu.action_for_command()` 映射回动作名，按 `user` 优先级播放。
+- 缺动作时静默丢弃：`ActionMenu.build()` 只保留 `humanoid_core.json` 里真实存在的动作，未知名不进菜单。
+- 新增/调整分类只改 `action_menu.json`，不需要动 C++ 或 GDScript。
+
+### 3.6 数据目录（运行时数据落在哪里）
 
 服务的持久化数据（设置、聊天记录、记忆数据库）不在仓库里，在用户目录，且**随启动方式不同而不同**：
 
@@ -98,9 +107,9 @@ python -I -c "import sys; sys.path.insert(0,'.'); from service.commands import H
 
 指向一个新的 `--data-dir` 就是全新状态：`settings.json` 缺失时 `SettingsStore` 直接写默认值（`service/settings.py:496-522`），`pet.db` 重新建库，**不会自动迁移**旧目录的数据。排查"设置没生效/聊天记录丢了"时，先确认这次是哪种启动方式、数据落在了哪个目录。
 
-### 3.5 测试
+### 3.7 测试
 
-Godot headless（`--path` 指向 `app`，输出形如 `STAGE2_LIBRARY_TESTS checks=27 failures=0`）。**下面的清单只是合并相关的子集（`app/tests/` 共 17 个 `.gd`）；整包门禁实际跑什么以 `tools/build_stage2.py:117-129` 为准**：pytest（:117）+ :120 列出的 11 个 godot 用例（比下表多 `test_stage2_controllers`、`test_godette_performance`、`test_godette_lifecycle`）+ `test_godette_preview`（:124，带渲染）+ `test_godette_review_regressions`（:125）+ baseline/runtime 资产回归与 poses 渲染验收（:118-119、:129）。其中 `test_v3_core` / `test_v3_panels` 目前**不在** stage2 门禁内（遗留问题 4）。
+Godot headless（`--path` 指向 `app`，输出形如 `STAGE2_LIBRARY_TESTS checks=27 failures=0`）。**下面的清单只是合并相关的子集（`app/tests/` 共 19 个 `.gd`）；整包门禁实际跑什么以 `tools/build_stage2.py:117-129` 为准**：pytest（:117）+ :120 列出的 13 个 godot 用例（含 `action_menu`、`action_wiring`、`v3_core`、`v3_panels`）+ `test_godette_preview`（:124，带渲染）+ `test_godette_review_regressions`（:125）+ baseline/runtime 资产回归与 poses 渲染验收（:118-119、:129）。
 
 ```bat
 "D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_protocol.gd
@@ -152,6 +161,8 @@ python -B tools/build_stage2.py
 | 12 | DeepSeek 真实链路（流式/取消） | ❌ | 需要 API key，合并线未跑；仅 v3 侧 `docs/v3-acceptance.md` 有当时记录 |
 | 13 | 整包构建 `tools/build_stage2.py` | ❌ | 本次未跑（含原生编译与导出，耗时长） |
 | 14 | `run-dev.cmd` 一键启动 | ✅（修复后实测） | 原 `PET3D_PYTHON` 指向已迁移的旧仓库根，被 "Missing Python venv" 守卫拦截（§3.2）；改为现行路径后实测 Godot 与服务进程正常拉起 |
+| 15 | 65 动作全部接入桌宠 | ✅ | `action_menu.json` 8 分类覆盖 65/65（`tests/assets/test_action_menu.py` 5 项）；`ACTION_MENU_TESTS` 290/0、`ACTION_WIRING_TESTS` 140/0（逐动作校验存在于 `godette.tres` 的 `shared/` 库、命令号唯一可达、固定命令不被误判）；真机日志 `[stage0] ACTION_MENU groups=8 actions=65`；原生三项 90/0、55/0、212/0 |
+| 16 | 原生库重编 | ✅ | `native/build.cmd --stage1`，新增 `set_menu_actions` 绑定，DLL 765,440 字节，`window_bridge_test` 90 项、`lifetime_test` 55 项、`stage1_test` 212 项全过 |
 
 合并运行时（`7fc92f6` 上）以上同一组 Godot 测试同样全绿，数字与本表一致。
 

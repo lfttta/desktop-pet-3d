@@ -12,7 +12,7 @@
 | v3 侧 | `8fd8478`（feat/v3-core） | Python 后台服务 `service/`（聊天、记忆、人格、表情、主动行为、成长、用量、诊断；settings schema v4）+ Godot 侧聊天窗口、V3 面板、`service_client.gd`（合计约 +3157 行） |
 
 - 合并提交：`7fc92f6`（双亲 `fed66f6` + `8fd8478`，2026-11-06 06:49 +0800）。
-- 其上还有一个合并后修复：`fbf0eec`（补 `res://tools/assets/verify_recovery*.gd` 两个转发入口和 4 个 `.uid`，修复合并测试基线加载 baseline/runtime 失败的问题）。**当前 HEAD 是 `fbf0eec`，不是 `7fc92f6`。**
+- 其上还有两个合并后修复：`fbf0eec`（补 4 个 `.uid`——v3 侧并入的 4 个 `.gd` 原本缺 uid）与 `102aac5`（移除 `fbf0eec` 曾短暂加入的两个 `app/tools/assets/verify_recovery*.gd` 转发桩；回归脚本由 `tools/build_stage2.py` 以**绝对路径** `--script` 驱动，工程内不需要 res:// 入口。移除后已按正式方式重跑：`GODETTE_REGRESSION failures=0`、`GODETTE_RUNTIME checks=68235 failures=0`）。**HEAD 以 `git log -1` 为准；本文描述到 `102aac5`。**
 
 归属实测（撰写本文时复核）：`git diff --stat 8fd8478 HEAD -- service/ data/` 为空（service/、data/ 与 v3 亲本零差异）；`app/scripts/chat`、`app/scripts/ui`、`app/scripts/service_client.gd` 全部来自 v3 侧；动画库与动作清单来自 main 侧。
 
@@ -22,7 +22,7 @@
 
 - **干活目录**：本合并线的开发在 worktree `D:\danjigame\3D-pet\wt\merge-v3-actions`（分支 `merge/v3-core-actions`）进行；仓库 `.git` 在 `D:\danjigame\3D-pet\3D-pet-gtpdo`（实测存在；旧路径 `D:\danjigame\3D-pet-gtpdo` 实测已不存在）。主仓库根的主 checkout 由集成者管理。
 - **文档优先级**：本文与 `docs/合并记录.md` 描述本合并线，全部实测于 HEAD `fbf0eec`。`AGENTS.md` 的流程规范（分支命名、验收纪律、文件所有权、热点文件）仍然有效，**但其 §1 的"git 仓库根"（:9）、§2 的 worktree 示例命令（:28）与"当前阶段"描述（:12-14）已过期**——写的还是旧路径 `D:\danjigame\3D-pet-gtpdo`，且只写"阶段 2、只做 Godette 单角色"、未提本合并线。两者冲突时以本文与实测为准；修订 AGENTS.md 属全仓库协作约定，建议由集成者在主仓库单独提交（见 `docs/合并记录.md` 遗留问题 6）。
-- **无 .git 的快照拷贝**：本文所有 git 证据（双亲、diff 归属、分支）都在上述 worktree 里复核。如果你拿到的是没有 `.git` 的目录（例如快照拷贝），这些证据无法在里面复核（`git status` 会报 not a git repository），请以 worktree/主仓库为准；该拷贝对应哪个提交：待确认。
+- **无 .git 的快照拷贝**：本文所有 git 证据（双亲、diff 归属、分支）都在上述 worktree 里复核。如果你拿到的是没有 `.git` 的目录（例如快照拷贝），这些证据无法在里面复核（`git status` 会报 not a git repository），请以 worktree/主仓库为准；该拷贝对应包含本文档的提交（在 worktree/主仓库里 `git log --oneline -- README.md` 第一条即可查到）。
 
 ## 2. 目录结构（逐项一句话）
 

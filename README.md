@@ -38,7 +38,7 @@
 | `tools/` | 构建与资产工具：`build_stage1.py` / `build_stage2.py` 整包构建，`assets/verify_*.gd` 资产验收，FBX/GLB 转换脚本 |
 | `docs/` | 设计与验收文档：`architecture.md`、`stage-2-plan.md`、`humanoid-skeleton-spec.md`、`humanoid-action-runbook.md`、`v3-acceptance.md`（V3 侧验收记录）、`合并记录.md`（本文档的姊妹篇）；`reference/`（V3 原始实施计划原文）、`reports/`（stage-0/1/2 历史报告，只增不改，见 AGENTS.md）、`superpowers/plans/`（历史计划存档） |
 | `build/` | 构建输出（gitignore，不入库） |
-| `run-dev.cmd` | 本机一键启动（Godot + 服务 Python 路径注入）——**当前其中 Python 路径过期，见 §3.2** |
+| `run-dev.cmd` | 本机一键启动（Godot + 服务 Python 路径注入）；`PET3D_PYTHON` 已指向现行仓库根 `D:\danjigame\3D-pet\3D-pet-gtpdo\.venv`，历史问题见 §3.2 |
 | `requirements-dev.txt` | 开发依赖版本：pytest 9.1.1 / pyinstaller 6.21.0 / pillow 13.0.0（服务本体不用第三方包） |
 | `AGENTS.md` | 工程协作约定：仓库根、Godot/Python 版本、分支命名、文件所有权、验收命令、硬性禁止 |
 | `README-stage0/1/2.md` | 历史阶段说明（stage2 面向便携包最终用户，不是开发入口） |
@@ -55,17 +55,15 @@
   "D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --editor --import --quit
   ```
 
-### 3.2 一键启动 `run-dev.cmd`（注意：当前有一处过期路径）
+### 3.2 一键启动 `run-dev.cmd`（已修复，可直接双击）
 
-`run-dev.cmd` 设置 `PET3D_PYTHON` 后用 Godot 启动 `app/`。但其中写死的是旧仓库根：
+`run-dev.cmd` 设置 `PET3D_PYTHON` 后用 Godot 启动 `app/`。此前写死的是已迁移走的旧仓库根（`D:\danjigame\3D-pet-gtpdo`），双击会被 "Missing Python venv" 守卫拦截；现已改为现行仓库根：
 
 ```bat
-set "PET3D_PYTHON=D:\danjigame\3D-pet-gtpdo\.venv\Scripts\python.exe"   ← 旧路径，已不存在
+set "PET3D_PYTHON=D:\danjigame\3D-pet\3D-pet-gtpdo\.venv\Scripts\python.exe"
 ```
 
-仓库根已迁移到 `D:\danjigame\3D-pet\3D-pet-gtpdo`（`.venv` 在其下，实测存在）。所以现在双击 `run-dev.cmd` 会被 "Missing Python venv" 守卫拦截退出。处理：把这一行改成新仓库根路径（一行改动）。
-
-为什么需要它：服务由 app 拉起，查找顺序在 `app/scripts/main.gd:88-91`——启动参数 `python` → 环境变量 `PET3D_PYTHON` → `res://../.venv/Scripts/python.exe`（即 worktree 根下的 `.venv`，本 worktree 没有）。所以从 worktree 跑完整 app，必须让前两条之一生效。服务本体只用标准库，任何 Python 3.13.14 都可以；`.venv` 主要给构建/测试用。
+为什么需要它：服务由 app 拉起，查找顺序在 `app/scripts/main.gd:88-91`——启动参数 `python` → 环境变量 `PET3D_PYTHON` → `res://../.venv/Scripts/python.exe`（即工程根下的 `.venv`，本快照拷贝里没有）。双击 `源文件pet\run-dev.cmd` 时走第二条（环境变量），已验证可用。服务本体只用标准库，任何 Python 3.13.14 都可以；`.venv` 主要给构建/测试用。
 
 ### 3.3 服务单独冒烟（不需要 Godot）
 
@@ -152,7 +150,7 @@ python -B tools/build_stage2.py
 | 11 | shutdown 的 0xC0000005 | ✅（复现） | 发 shutdown 后**不关 stdin**：stderr 打 `Fatal Python error: _enter_buffered_busy`，退出码 3221225477；立即关 stdin 则干净退 0。详见合并记录遗留问题 2 |
 | 12 | DeepSeek 真实链路（流式/取消） | ❌ | 需要 API key，合并线未跑；仅 v3 侧 `docs/v3-acceptance.md` 有当时记录 |
 | 13 | 整包构建 `tools/build_stage2.py` | ❌ | 本次未跑（含原生编译与导出，耗时长） |
-| 14 | `run-dev.cmd` 一键启动 | ❌（已知坏） | 原因与修法见 §3.2 与合并记录遗留问题 5 |
+| 14 | `run-dev.cmd` 一键启动 | ✅（修复后实测） | 原 `PET3D_PYTHON` 指向已迁移的旧仓库根，被 "Missing Python venv" 守卫拦截（§3.2）；改为现行路径后实测 Godot 与服务进程正常拉起 |
 
 合并运行时（`7fc92f6` 上）以上同一组 Godot 测试同样全绿，数字与本表一致。
 

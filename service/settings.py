@@ -14,7 +14,7 @@ from service.jsonutil import MAX_FRAME_BYTES, dumps, loads
 from service.character_catalog import ALLOWED_CHARACTER_IDS
 from service.persona import ALLOWED_PERSONA_IDS, DEFAULT_PERSONA_ID
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DEFAULTS_V1 = {
     'schema_version': 1, 'character_id': 'godette', 'scale': 1.0,
     'screen_id': '', 'user_name': '你',
@@ -88,6 +88,16 @@ AUTONOMY_DEFAULTS = {
     'min_seconds_between': 1800,
     'max_per_hour': 2,
     'manual_quiet_until': '',
+    'cloud_enabled': True,
+}
+DESKTOP_DEFAULTS = {
+    'enabled': True,
+    'poll_seconds': 3,
+    'idle_after_seconds': 300,
+    'fullscreen_policy': 'silent',
+    'dnd_policy': 'silent',
+    'work_focus_policy': 'minimal',
+    'idle_policy': 'gentle',
 }
 PRIVACY_DEFAULTS = {
     'log_prompts': False,
@@ -107,6 +117,7 @@ GROUP_DEFAULTS = {
     'autonomy': AUTONOMY_DEFAULTS,
     'privacy': PRIVACY_DEFAULTS,
     'growth': GROWTH_DEFAULTS,
+    'desktop': DESKTOP_DEFAULTS,
 }
 DEFAULTS = {
     'schema_version': SCHEMA_VERSION, 'character_id': 'godette',
@@ -260,6 +271,8 @@ def _group(name, value, partial):
             result[key] = _validate_autonomy(key, item)
         elif name == 'growth':
             result[key] = _validate_growth(key, item)
+        elif name == 'desktop':
+            result[key] = _validate_desktop(key, item)
         else:
             result[key] = _boolean(item)
     return result
@@ -340,7 +353,7 @@ def _validate_expression(key, value, partial):
 
 
 def _validate_autonomy(key, value):
-    if key == 'enabled':
+    if key in ('enabled', 'cloud_enabled'):
         return _boolean(value)
     if key in ('quiet_start', 'quiet_end'):
         return _time_of_day(value)
@@ -351,6 +364,32 @@ def _validate_autonomy(key, value):
     if key == 'manual_quiet_until':
         return _optional_timestamp(value)
     raise ValidationError('unsupported autonomy setting')
+
+
+DESKTOP_POLICY_CHOICES = {
+    'fullscreen_policy': ('silent', 'minimal'),
+    'dnd_policy': ('silent', 'minimal'),
+    'work_focus_policy': ('silent', 'minimal', 'normal'),
+    'idle_policy': ('silent', 'gentle', 'normal'),
+}
+
+
+def _validate_desktop(key, value):
+    if key == 'enabled':
+        return _boolean(value)
+    if key == 'poll_seconds':
+        return _integer(value, 1, 60)
+    if key == 'idle_after_seconds':
+        return _integer(value, 30, 86400)
+    if key in DESKTOP_POLICY_CHOICES:
+        return _choice(value, DESKTOP_POLICY_CHOICES[key], f'desktop.{key}')
+    raise ValidationError('unsupported desktop setting')
+
+
+def _choice(value, choices, label):
+    if type(value) is not str or value not in choices:
+        raise ValidationError(f'{label} must be one of ' + ', '.join(choices))
+    return value
 
 
 def _scalar(key, value):
@@ -412,21 +451,30 @@ def validate_document(document):
     return normalized
 
 
-def _add_v4_groups(document):
+def _add_v5_groups(document):
+    """Fill every settings group from defaults; used by the v1/v2 paths."""
     document['schema_version'] = SCHEMA_VERSION
     for key, value in GROUP_DEFAULTS.items():
         document[key] = deepcopy(value)
     return document
 
 
-V3_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'growth'}
+# v3 had every group except growth and desktop.
+V3_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'growth', 'desktop'}
+# v4 added growth but neither the desktop group nor autonomy.cloud_enabled.
+V4_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'desktop'}
+V4_AUTONOMY_KEYS = frozenset({
+    'enabled', 'quiet_start', 'quiet_end', 'min_seconds_between',
+    'max_per_hour', 'manual_quiet_until',
+})
 
 
 def _upgrade_v3(document):
-    """Add v4 fields while preserving every value already stored in v3."""
+    """Add v4/v5 fields while preserving every value already stored in v3."""
     migrated = deepcopy(document)
     migrated['schema_version'] = SCHEMA_VERSION
     migrated.setdefault('growth', deepcopy(GROWTH_DEFAULTS))
+    migrated.setdefault('desktop', deepcopy(DESKTOP_DEFAULTS))
     memory = migrated.get('memory')
     if type(memory) is dict:
         memory.setdefault('compaction', deepcopy(MEMORY_COMPACTION_DEFAULTS))
@@ -434,6 +482,20 @@ def _upgrade_v3(document):
     ai = migrated.get('ai')
     if type(ai) is dict:
         ai.setdefault('embedding', deepcopy(AI_EMBEDDING_DEFAULTS))
+    autonomy = migrated.get('autonomy')
+    if type(autonomy) is dict:
+        autonomy.setdefault('cloud_enabled', AUTONOMY_DEFAULTS['cloud_enabled'])
+    return migrated
+
+
+def _upgrade_v4(document):
+    """Add the desktop group and autonomy.cloud_enabled to a v4 document."""
+    migrated = deepcopy(document)
+    migrated['schema_version'] = SCHEMA_VERSION
+    migrated['desktop'] = deepcopy(DESKTOP_DEFAULTS)
+    autonomy = migrated.get('autonomy')
+    if type(autonomy) is dict:
+        autonomy['cloud_enabled'] = AUTONOMY_DEFAULTS['cloud_enabled']
     return migrated
 
 
@@ -445,13 +507,18 @@ def migrate_document(document):
             and document.keys() == DEFAULTS_V1.keys()):
         migrated = deepcopy(document)
         migrated['persona_id'] = DEFAULT_PERSONA_ID
-        return _add_v4_groups(migrated), True
+        return _add_v5_groups(migrated), True
     if (document.get('schema_version') == 2
             and document.keys() == DEFAULTS_V2.keys()):
-        return _add_v4_groups(deepcopy(document)), True
+        return _add_v5_groups(deepcopy(document)), True
     if (document.get('schema_version') == 3
             and document.keys() == V3_TOP_LEVEL_KEYS):
         return _upgrade_v3(document), True
+    if (document.get('schema_version') == 4
+            and document.keys() == V4_TOP_LEVEL_KEYS
+            and type(document.get('autonomy')) is dict
+            and document['autonomy'].keys() == V4_AUTONOMY_KEYS):
+        return _upgrade_v4(document), True
     return document, False
 
 
@@ -527,8 +594,8 @@ class SettingsStore:
         if migrated_character:
             self.warnings.append('Character changed to Godette; all other settings preserved.')
         if migrated_schema:
-            self.warnings.append('Settings migrated to schema version 4; '
-                                 'memory compaction/archive, AI embedding and growth defaults added.')
+            self.warnings.append('Settings migrated to schema version 5; '
+                                 'desktop sensing and autonomy.cloud_enabled defaults added.')
 
     def _backup(self):
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')

@@ -22,11 +22,12 @@ def _growth_settings(store):
 
 
 def _view(state, store):
-    """Return state plus the trait values and locked list the app displays."""
+    """Return state plus the trait, lock and presentation data the app displays."""
     return {
         'state': state,
         'personality': character.personality_values(state),
         'locked': character.locked_traits(_growth_settings(store)),
+        'presentation': character.presentation(state),
     }
 
 

@@ -48,7 +48,7 @@ def test_hello_advertises_phase2_feature_groups(tmp_path):
                            'payload': {'protocol_version': 1}}, store)
     features = payload['features']
     assert set(features) == {'chat', 'memory', 'state', 'autonomy',
-                             'expression', 'growth', 'usage', 'diag'}
+                             'expression', 'growth', 'usage', 'diag', 'desktop'}
     expected = {
         'expression': ['expression.phrases.list', 'expression.phrases.set_enabled'],
         'growth': ['growth.list', 'growth.approve', 'growth.reject', 'growth.history',

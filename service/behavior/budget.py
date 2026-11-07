@@ -16,12 +16,17 @@ local; this module never performs network access.
 """
 
 from datetime import datetime, timezone
+import math
+import sqlite3
 
 from service.database import SUBJECT_USER_ID
 
 IGNORE_WINDOW_SECONDS = 1200
 IGNORE_INTERVAL_FACTOR = 2.0
 HOUR_SECONDS = 3600
+# A per-state factor above one day per configured second is nonsense; keeping
+# it also stops a huge finite value from overflowing the seconds conversion.
+MAX_CONSTRAINT_FACTOR = 86400.0
 
 
 def normalize_now(value=None):
@@ -121,13 +126,67 @@ def _manual_quiet_until(config, row):
     return max(candidates)
 
 
-def can_speak(connection, config, now=None):
-    """Return the budget decision for one autonomous message."""
+def _constraints(value):
+    """Normalize optional per-state budget tightening.
+
+    ``min_factor`` multiplies the minimum interval; ``max_per_hour`` caps the
+    hourly limit from above. Anything unrecognized falls back to "no change".
+    """
+    if not isinstance(value, dict):
+        return 1.0, None
+    factor = value.get('min_factor')
+    if type(factor) in (int, float) and not isinstance(factor, bool):
+        try:
+            usable = (math.isfinite(factor) and 0 <= factor <= MAX_CONSTRAINT_FACTOR)
+        except (OverflowError, TypeError, ValueError):
+            # An integer too large for a float cannot describe a sane factor.
+            usable = False
+        factor = float(factor) if usable else 1.0
+    else:
+        factor = 1.0
+    cap = value.get('max_per_hour')
+    if type(cap) is not int or isinstance(cap, bool) or cap < 0:
+        cap = None
+    return factor, cap
+
+
+def last_activity(connection):
+    """Return the stored user-activity timestamp, or '' when it is absent."""
+    try:
+        row = _row(connection)
+    except (sqlite3.Error, AttributeError, TypeError):
+        return ''
+    if row is None:
+        return ''
+    value = row.get('updated_at')
+    return value if type(value) is str else ''
+
+
+def _apply_constraints(status, constraints):
+    """Report the constrained limits, including on early-return decisions."""
+    factor, cap = _constraints(constraints)
+    if factor != 1.0:
+        status['effective_min_seconds'] = int(
+            status['effective_min_seconds'] * factor)
+    if cap is not None:
+        status['effective_max_per_hour'] = min(
+            status['effective_max_per_hour'], cap)
+    return status
+
+
+def can_speak(connection, config, now=None, constraints=None):
+    """Return the budget decision for one autonomous message.
+
+    ``constraints`` optionally tightens the decision for the current desktop
+    state: it multiplies the effective minimum interval and caps the effective
+    hourly limit. The tightening is applied after the ignored-message
+    downgrade, so both effects stack.
+    """
     now = normalize_now(now)
     config = config if isinstance(config, dict) else {}
     row = _row(connection)
     quiet_until = _manual_quiet_until(config, row)
-    status = {
+    status = _apply_constraints({
         'allowed': False,
         'reason': 'disabled',
         'ignored': False,
@@ -138,7 +197,7 @@ def can_speak(connection, config, now=None):
         'hourly_count': 0,
         'last_autonomous_at': '',
         'seconds_until_allowed': 0,
-    }
+    }, constraints)
     if not config.get('enabled'):
         return status
 
@@ -173,8 +232,13 @@ def can_speak(connection, config, now=None):
     else:
         effective_min = base_min
         effective_max = base_max
+
     status['effective_min_seconds'] = effective_min
     status['effective_max_per_hour'] = effective_max
+    # Applied once here, after the ignored downgrade, so both effects stack.
+    _apply_constraints(status, constraints)
+    effective_min = status['effective_min_seconds']
+    effective_max = status['effective_max_per_hour']
 
     if base_max <= 0:
         status['reason'] = 'hourly_limit'

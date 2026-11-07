@@ -30,9 +30,13 @@ def _database(ctx):
 
 
 def get(request, store, ctx):
+    # Imported inside the function: the desktop feature imports this module and
+    # a module-level import here would create a cycle.
+    from service.features import desktop
     config = store.settings['autonomy']
     status = budget.can_speak(_database(ctx), config)
-    return 'result', {'autonomy': config, 'status': status}
+    return 'result', {'autonomy': config, 'status': status,
+                      'desktop': desktop.current(store, ctx)}
 
 
 def _patch(payload, request_id):

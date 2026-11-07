@@ -21,7 +21,7 @@ def _frame(command, payload=None, request_id='req-1'):
                        ensure_ascii=False) + '\n').encode('utf-8')
 
 
-def test_v2_settings_migrate_to_v4_and_keep_old_fields(tmp_path):
+def test_v2_settings_migrate_to_v5_and_keep_old_fields(tmp_path):
     v2 = {
         'schema_version': 2, 'character_id': 'godette', 'persona_id': 'godette',
         'scale': 0.75, 'screen_id': '显示器 一', 'user_name': '小明',
@@ -32,10 +32,11 @@ def test_v2_settings_migrate_to_v4_and_keep_old_fields(tmp_path):
     store = SettingsStore(tmp_path)
     old_fields = {key: value for key, value in v2.items() if key != 'schema_version'}
     assert {key: store.settings[key] for key in old_fields} == old_fields
-    assert store.settings['schema_version'] == 4
-    for group in ('ai', 'memory', 'expression', 'autonomy', 'privacy', 'growth'):
+    assert store.settings['schema_version'] == 5
+    for group in ('ai', 'memory', 'expression', 'autonomy', 'privacy', 'growth',
+                  'desktop'):
         assert store.settings[group] == DEFAULTS[group]
-    assert any('schema version 4' in warning for warning in store.warnings)
+    assert any('schema version 5' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 
@@ -128,9 +129,10 @@ def test_hello_advertises_v3_features_and_personas(tmp_path):
     event, payload = dispatch({'type': 'hello', 'id': 'hello',
                                'payload': {'protocol_version': 1}}, store)
     assert event == 'ready'
-    assert payload['settings']['schema_version'] == 4
+    assert payload['settings']['schema_version'] == 5
     assert set(payload['features']) == {'chat', 'memory', 'state', 'autonomy',
-                                        'expression', 'growth', 'usage', 'diag'}
+                                        'expression', 'growth', 'usage', 'diag',
+                                        'desktop'}
     expected = {
         'chat': ['chat.send', 'chat.cancel', 'chat.history'],
         'memory': ['memory.search', 'memory.propose', 'memory.correct',
@@ -146,6 +148,7 @@ def test_hello_advertises_v3_features_and_personas(tmp_path):
                    'growth.rollback', 'personality.lock'],
         'usage': ['usage.get'],
         'diag': ['diag.export'],
+        'desktop': ['desktop.status'],
     }
     for name, command_list in expected.items():
         assert payload['features'][name]['available'] is True
@@ -205,7 +208,7 @@ def test_one_request_can_emit_delta_frames_then_done(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('command', [
-    'voice.synthesize', 'tts.synthesize', 'tts.cancel', 'desktop.notify',
+    'voice.synthesize', 'tts.synthesize', 'tts.cancel',
     'action.perform', 'personality.get', 'memory.fuzzy.search',
     'memory.index.rebuild', 'user.profile', 'memory.get', 'memory.update',
 ])
@@ -215,6 +218,17 @@ def test_reserved_commands_return_not_available(tmp_path, command):
         dispatch({'type': command, 'id': 'r', 'payload': {}}, store)
     assert caught.value.code == 'not_available'
     assert caught.value.request_id == 'r'
+
+
+@pytest.mark.parametrize('command', ['desktop', 'desktop.notify', 'desktop.anything'])
+def test_desktop_prefix_is_owned_by_the_desktop_feature(tmp_path, command):
+    """``desktop`` is a real feature now, so only its own command is known."""
+    store = SettingsStore(tmp_path)
+    with pytest.raises(ProtocolError) as caught:
+        dispatch({'type': command, 'id': 'd', 'payload': {}}, store)
+    assert caught.value.code == 'unknown_command'
+    assert caught.value.request_id == 'd'
+    assert 'desktop' not in commands.RESERVED_PREFIXES
 
 
 class _MemorySecretStore:

@@ -264,13 +264,19 @@ def serve(directory, input_stream, output_stream, error_stream):
         for warning in store.warnings:
             log.write(warning)
         runtime = Runtime(store, output_stream, log, database)
-        # Service-initiated tick hooks (autonomy) need the runtime, so they are
-        # attached after construction and before the loop starts.
+        # Service-initiated tick hooks need the runtime, so they are attached
+        # after construction and before the loop starts. The scheduler owns a
+        # background provider worker, so it is always closed on the way out.
         store.log = log
-        from service.features import autonomy
-        autonomy.register_tick(runtime, store, database)
+        from service.behavior.proactive import ProactiveScheduler
+        scheduler = None
         try:
+            scheduler = ProactiveScheduler(runtime, store, database)
+            runtime.register_tick(scheduler.tick)
             return runtime.run(input_stream)
         except ProtocolError as exc:
             emit_error(output_stream, exc)
             return 2 if exc.fatal else 0
+        finally:
+            if scheduler is not None:
+                scheduler.close()

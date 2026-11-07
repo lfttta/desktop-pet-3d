@@ -8,9 +8,11 @@ state instead of pretending to work.
 
 from copy import deepcopy
 
-from service.features import autonomy, chat, diag, expression, growth, memory, state, usage
+from service.features import (autonomy, chat, desktop, diag, expression, growth, memory,
+                              state, usage)
 
-FEATURE_MODULES = (autonomy, chat, memory, state, expression, growth, usage, diag)
+FEATURE_MODULES = (autonomy, chat, memory, state, expression, growth, usage, diag,
+                   desktop)
 
 
 def capabilities():

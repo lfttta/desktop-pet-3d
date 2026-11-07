@@ -330,3 +330,61 @@ def reset_state(connection, now=None):
     if connection is not None:
         _save(connection, state)
     return state
+
+
+# Presentation mapping. The PAD pleasure axis is the only input the renderer
+# needs: it selects one of three expressions and a blend weight in
+# [MIN_EXPRESSION_WEIGHT, 1.0]. Thresholds are inclusive at the boundary.
+HAPPY_THRESHOLD = 0.20
+SAD_THRESHOLD = -0.15
+MIN_EXPRESSION_WEIGHT = 0.35
+
+
+def _presentation_pleasure(state):
+    """Return the finite pleasure value of a state document, else ``None``."""
+    if not isinstance(state, dict):
+        return None
+    pad = state.get('pad')
+    if not isinstance(pad, dict):
+        return None
+    value = pad.get('pleasure')
+    # ``bool`` is an ``int`` subclass but not a meaningful PAD value.
+    if type(value) not in (int, float):
+        return None
+    try:
+        # Huge integers make math.isfinite raise OverflowError.
+        if not math.isfinite(value):
+            return None
+        return float(value)
+    except (OverflowError, TypeError, ValueError):
+        return None
+
+
+def _expression_weight(magnitude):
+    """Blend weight for a non-negative pleasure magnitude, rounded to 4 places."""
+    weight = clamp(0.45 + magnitude * 0.55, MIN_EXPRESSION_WEIGHT, 1.0)
+    return round(weight, 4)
+
+
+def presentation(state):
+    """Map a state document onto ``{'emotion': label, 'weight': float}``.
+
+    ``emotion`` is ``happy`` when ``pad.pleasure`` reaches
+    ``HAPPY_THRESHOLD``, ``sad`` when it falls to ``SAD_THRESHOLD`` or below,
+    and ``neutral`` otherwise. The weight grows with the absolute pleasure
+    value and is always clamped to ``[MIN_EXPRESSION_WEIGHT, 1.0]``. Missing,
+    malformed or non-finite input yields the neutral presentation; this
+    function never raises.
+    """
+    try:
+        pleasure = _presentation_pleasure(state)
+    except Exception:
+        # A hostile mapping may raise from ``get``; presentation is best-effort.
+        pleasure = None
+    if pleasure is None:
+        return {'emotion': 'neutral', 'weight': 1.0}
+    if pleasure >= HAPPY_THRESHOLD:
+        return {'emotion': 'happy', 'weight': _expression_weight(pleasure)}
+    if pleasure <= SAD_THRESHOLD:
+        return {'emotion': 'sad', 'weight': _expression_weight(-pleasure)}
+    return {'emotion': 'neutral', 'weight': 1.0}

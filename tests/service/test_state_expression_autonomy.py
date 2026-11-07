@@ -88,17 +88,23 @@ def test_stored_personality_is_replaced_by_the_locked_block(database):
 def test_state_commands_get_and_reset(database, tmp_path):
     store = SettingsStore(tmp_path)
     ctx = SimpleNamespace(database=database)
+    # ``state.get`` decays toward the baseline using the wall clock, so the
+    # delta must be applied now; a pinned NOW would decay to the baseline.
     with database.transaction() as connection:
-        character.apply_delta(connection, {'pad': {'pleasure': 1.0}}, now=NOW)
+        character.apply_delta(connection, {'pad': {'pleasure': 1.0}},
+                              now=datetime.now(timezone.utc))
 
     event, payload = state_feature.get({'id': 'r1', 'payload': {}}, store, ctx)
     assert event == 'result'
     assert payload['state']['pad']['pleasure'] > character.PERSONALITY['baseline']['pleasure']
+    assert payload['presentation'] == character.presentation(payload['state'])
+    assert payload['presentation']['emotion'] == 'happy'
 
     event, payload = state_feature.reset({'id': 'r2', 'payload': {}}, store, ctx)
     assert event == 'result'
     assert payload['state']['pad'] == character.PERSONALITY['baseline']
     assert payload['state']['psych'] == character.PSYCH_BASELINE
+    assert payload['presentation'] == {'emotion': 'neutral', 'weight': 1.0}
 
     assert state_feature.CAPABILITY['available'] is True
     assert autonomy.CAPABILITY['available'] is True

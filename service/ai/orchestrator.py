@@ -527,6 +527,7 @@ class ChatOrchestrator:
             'applied': True,
             'suggestion': suggestion,
             'state': {'pad': dict(state['pad']), 'psych': dict(state['psych'])},
+            'presentation': character.presentation(state),
         }
 
     def _memory_ops(self, candidates, memory_settings):

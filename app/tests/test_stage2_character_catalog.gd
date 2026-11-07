@@ -13,8 +13,9 @@ func run() -> void:
 	var failures := 0
 	if catalog.size() != 1 or catalog[0].id != "godette":
 		failures += 1
-	# Only the display selector remains.
-	if window.find_children("*", "OptionButton", true, false).size() != 1:
+	# The display selector still exists; the desktop policy selectors added by
+	# the v3 settings page are not character pickers.
+	if window.display_choice == null or window.find_children("*", "OptionButton", true, false).is_empty():
 		failures += 1
 	var patches: Array = []
 	window.save_requested.connect(func(value): patches.append(value))

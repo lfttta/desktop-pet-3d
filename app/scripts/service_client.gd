@@ -12,6 +12,10 @@ const Decoder = preload("res://scripts/protocol_decoder.gd")
 const STREAM_TIMEOUT_SECONDS := 40.0
 const STREAM_TIMEOUT_MS := 40000
 const TERMINAL_EVENTS := ["chat.done", "chat.error"]
+# A stalled generation or a slow periodic poll must not tear down the whole
+# transport: those requests fail locally and the service keeps running. Other
+# commands keep the older behaviour where a timeout is a transport failure.
+const LOCAL_TIMEOUT_COMMANDS := ["chat.send", "state.get", "desktop.status"]
 var state := "stopped"
 var detail := "后台服务尚未启动"
 var process_pid := 0
@@ -143,7 +147,14 @@ func _process(_delta: float) -> void:
 	if not OS.is_process_running(process_pid):
 		_process_exit()
 		return
-	var now := Time.get_ticks_msec()
+	_expire_requests(Time.get_ticks_msec())
+
+## Fail every request whose deadline has passed.
+##
+## Chat generations and periodic polls fail locally so one slow request cannot
+## tear down a healthy backend; other commands still treat a timeout as a
+## transport failure.
+func _expire_requests(now: int) -> void:
 	var expired: Array = []
 	for id: String in pending.keys():
 		if now >= int(pending[id].deadline):
@@ -151,15 +162,16 @@ func _process(_delta: float) -> void:
 	for id: String in expired:
 		if not pending.has(id):
 			continue
-		if str(pending[id].get("type", "")) == "chat.send":
-			# A stalled generation must not tear down the whole transport.
-			var stream_id := str(pending[id].get("stream_id", ""))
-			if not stream_id.is_empty():
-				request("chat.cancel", {"request_id": stream_id}, 8.0)
+		var expired_type := str(pending[id].get("type", ""))
+		if LOCAL_TIMEOUT_COMMANDS.has(expired_type):
+			if expired_type == "chat.send":
+				var stream_id := str(pending[id].get("stream_id", ""))
+				if not stream_id.is_empty():
+					request("chat.cancel", {"request_id": stream_id}, 8.0)
 			_drop_pending(id)
 			request_finished.emit(id, "error", {
 				"code": "timeout",
-				"message": "聊天响应超时，请重试。",
+				"message": "聊天响应超时，请重试。" if expired_type == "chat.send" else "后台服务响应超时，请重试。",
 				"retryable": true,
 			})
 			continue

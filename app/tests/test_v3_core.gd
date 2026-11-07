@@ -100,6 +100,19 @@ func _test_client_dispatch() -> void:
 	check(client.pending.has("s4"), "a result-shaped accepted payload also aliases the request")
 	client._dispatch({"id": "s4", "type": "chat.error", "payload": {"code": "internal_error", "message": "坏了", "retryable": true}})
 	check(not client.pending.has("s4") and not client.pending.has("c4"), "an aliased error clears the request")
+
+	# A slow periodic poll must fail locally instead of restarting the backend.
+	var poll_results: Array = []
+	client.request_finished.connect(func(_id: String, type: String, payload: Dictionary):
+		poll_results.append({"type": type, "payload": payload}))
+	client.pending["p1"] = _pending_entry("state.get", "p1")
+	client.pending["p1"]["deadline"] = 0
+	client._expire_requests(Time.get_ticks_msec())
+	check(not client.pending.has("p1"), "an expired state.get is dropped")
+	check(poll_results.size() == 1 and poll_results[0].payload.get("code") == "timeout",
+		"an expired state.get reports a local timeout")
+	check(client.state == "ready",
+		"an expired state.get does not tear down the transport")
 	client.free()
 
 func _test_chat_session() -> void:

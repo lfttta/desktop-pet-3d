@@ -3,6 +3,7 @@ extends Window
 ## a generator, but streaming frames render as they arrive.
 
 signal retry_requested
+signal state_updated(state_delta: Dictionary)
 
 const ChatSession = preload("res://scripts/chat/chat_session.gd")
 const UNAVAILABLE_TEXT := "聊天功能尚未接入。"
@@ -263,6 +264,8 @@ func _on_completed(_message: String, usage: Dictionary, memory_ops: Array, state
 	if not notes.is_empty():
 		status.text += "，" + "，".join(PackedStringArray(notes))
 	_refresh_availability()
+	if state_delta.has("presentation"):
+		state_updated.emit(state_delta)
 
 func _on_error(_code: String, message: String, retryable: bool) -> void:
 	_last_retryable = retryable

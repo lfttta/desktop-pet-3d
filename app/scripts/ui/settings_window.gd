@@ -49,6 +49,37 @@ const AUTONOMY_DEFAULTS := {
 	"enabled": false,
 	"quiet_start": "23:00",
 	"quiet_end": "08:00",
+	"cloud_enabled": true,
+}
+# Defaults mirror service/settings.py DESKTOP_DEFAULTS. The desktop group is
+# only sent when the connected service advertises schema v5 or later; an older
+# service rejects the whole patch, so it must receive none of these keys.
+const DESKTOP_DEFAULTS := {
+	"enabled": true,
+	"poll_seconds": 3,
+	"idle_after_seconds": 300,
+	"fullscreen_policy": "silent",
+	"dnd_policy": "silent",
+	"work_focus_policy": "minimal",
+	"idle_policy": "gentle",
+}
+# Option values match the service policy vocabulary in service/behavior/proactive.py.
+const FULLSCREEN_POLICIES := ["silent", "minimal"]
+const WORK_FOCUS_POLICIES := ["silent", "minimal", "normal"]
+const IDLE_POLICIES := ["silent", "gentle", "normal"]
+# spin boxes must cover the full service range or a saved value is clamped:
+# service/settings.py allows idle_after_seconds 30..86400.
+const DESKTOP_IDLE_MIN := 30
+const DESKTOP_IDLE_MAX := 86400
+const DESKTOP_STATUS_THROTTLE_MS := 10000
+const DESKTOP_LABELS := {
+	"unknown": "未知",
+	"do_not_disturb": "勿扰模式",
+	"fullscreen": "全屏",
+	"sleep_hours": "休息时段",
+	"idle": "空闲",
+	"active_interaction": "交互中",
+	"active_work": "专注工作",
 }
 
 var tabs: TabContainer
@@ -100,12 +131,35 @@ var quiet_start_input: LineEdit
 var quiet_end_input: LineEdit
 var quiet_button: Button
 var autonomy_status: Label
+var desktop_enabled: CheckButton
+var desktop_idle: SpinBox
+var fullscreen_policy: OptionButton
+var work_focus_policy: OptionButton
+var idle_policy: OptionButton
+var cloud_proactive: CheckButton
+var desktop_state_label: Label
 var _display_ids: Array[String] = []
 var _service
 var _requests := {}
 var _service_state := "stopped"
 var _ai_available := true
 var _autonomy_available := false
+var _desktop_available := true
+var _desktop_status_due := 0
+# True once any desktop.status reply has been rendered, so the periodic
+# _refresh_controls() call does not replace the rendered text with a placeholder.
+var _desktop_known := false
+# Values the service reported but the window has no control for. Saving must
+# send them back unchanged instead of overwriting them with a constant.
+var _desktop_poll_seconds := int(DESKTOP_DEFAULTS.poll_seconds)
+var _desktop_dnd_policy := str(DESKTOP_DEFAULTS.dnd_policy)
+# Settings schema the connected service reported. The desktop group and
+# autonomy.cloud_enabled only exist from schema v5; an older service rejects
+# the whole patch when it sees them.
+var _schema_version := 0
+# True when the previous service status was not ready, so a reconnect must
+# re-query the desktop state instead of keeping the "not connected" label.
+var _was_disconnected := true
 
 func _ready() -> void:
 	title = "Pet3D 设置"
@@ -316,6 +370,9 @@ func _build_autonomy_page() -> void:
 	autonomy_enabled = CheckButton.new()
 	autonomy_enabled.text = "启用主动行为"
 	_row(page, "主动行为", autonomy_enabled)
+	cloud_proactive = CheckButton.new()
+	cloud_proactive.text = "使用云端生成主动消息"
+	_row(page, "云端主动消息", cloud_proactive)
 	quiet_start_input = LineEdit.new()
 	quiet_start_input.max_length = 5
 	quiet_start_input.placeholder_text = "HH:MM"
@@ -324,6 +381,22 @@ func _build_autonomy_page() -> void:
 	quiet_end_input.max_length = 5
 	quiet_end_input.placeholder_text = "HH:MM"
 	_row(page, "安静结束", quiet_end_input)
+	_section(page, "桌面感知")
+	desktop_enabled = CheckButton.new()
+	desktop_enabled.text = "启用桌面感知"
+	_row(page, "桌面感知", desktop_enabled)
+	desktop_idle = _spin(DESKTOP_IDLE_MIN, DESKTOP_IDLE_MAX, 1)
+	_row(page, "空闲判定秒数", desktop_idle)
+	fullscreen_policy = _policy_option(["静默", "仅关怀"], FULLSCREEN_POLICIES)
+	_row(page, "全屏时", fullscreen_policy)
+	work_focus_policy = _policy_option(["静默", "仅关怀", "正常"], WORK_FOCUS_POLICIES)
+	_row(page, "专注工作时", work_focus_policy)
+	idle_policy = _policy_option(["静默", "温和", "正常"], IDLE_POLICIES)
+	_row(page, "空闲时", idle_policy)
+	desktop_state_label = Label.new()
+	desktop_state_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desktop_state_label.text = "当前：—"
+	page.add_child(desktop_state_label)
 	var quiet_row := HBoxContainer.new()
 	quiet_button = Button.new()
 	quiet_button.text = "安静 30 分钟"
@@ -334,6 +407,29 @@ func _build_autonomy_page() -> void:
 	autonomy_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	quiet_row.add_child(autonomy_status)
 	page.add_child(quiet_row)
+
+func _policy_option(labels: Array, values: Array) -> OptionButton:
+	var button := OptionButton.new()
+	for index in range(values.size()):
+		button.add_item(str(labels[index]))
+		button.set_item_metadata(index, str(values[index]))
+	button.select(0)
+	return button
+
+## Returns the selected metadata value, or the first option when unset.
+func _policy_value(button: OptionButton, fallback: String) -> String:
+	var index := button.selected
+	if index < 0:
+		return fallback
+	var value: Variant = button.get_item_metadata(index)
+	return str(value) if value != null else fallback
+
+func _select_policy(button: OptionButton, value: String) -> void:
+	for index in range(button.item_count):
+		if str(button.get_item_metadata(index)) == value:
+			button.select(index)
+			return
+	button.select(0)
 
 func _build_growth_page() -> void:
 	var page := _page("成长", "GrowthPage")
@@ -420,6 +516,7 @@ func _feature_available(name: String) -> bool:
 	return feature is Dictionary and bool(feature.get("available", false))
 
 func populate(settings: Dictionary, displays: Array) -> void:
+	_schema_version = int(settings.get("schema_version", 0))
 	name_input.text = str(settings.get("user_name", "你"))
 	size_slider.value = float(settings.get("scale", 1))
 	size_value.text = "%d%%" % roundi(size_slider.value * 100)
@@ -479,8 +576,21 @@ func populate(settings: Dictionary, displays: Array) -> void:
 		growth_panel.populate_locks(growth.get("locked_traits", []))
 	var autonomy := _group(settings, "autonomy")
 	autonomy_enabled.button_pressed = bool(autonomy.get("enabled", AUTONOMY_DEFAULTS.enabled))
+	cloud_proactive.button_pressed = bool(autonomy.get("cloud_enabled", AUTONOMY_DEFAULTS.cloud_enabled))
 	quiet_start_input.text = str(autonomy.get("quiet_start", AUTONOMY_DEFAULTS.quiet_start))
 	quiet_end_input.text = str(autonomy.get("quiet_end", AUTONOMY_DEFAULTS.quiet_end))
+	var desktop := _group(settings, "desktop")
+	desktop_enabled.button_pressed = bool(desktop.get("enabled", DESKTOP_DEFAULTS.enabled))
+	desktop_idle.value = float(desktop.get("idle_after_seconds", DESKTOP_DEFAULTS.idle_after_seconds))
+	_select_policy(fullscreen_policy, str(desktop.get("fullscreen_policy", DESKTOP_DEFAULTS.fullscreen_policy)))
+	_select_policy(work_focus_policy, str(desktop.get("work_focus_policy", DESKTOP_DEFAULTS.work_focus_policy)))
+	_select_policy(idle_policy, str(desktop.get("idle_policy", DESKTOP_DEFAULTS.idle_policy)))
+	# Keep service-only values so saving does not overwrite them.
+	_desktop_poll_seconds = int(desktop.get("poll_seconds", DESKTOP_DEFAULTS.poll_seconds))
+	_desktop_dnd_policy = str(desktop.get("dnd_policy", DESKTOP_DEFAULTS.dnd_policy))
+	# The schema version decides whether the desktop controls are editable.
+	_refresh_controls()
+	_request_desktop_status()
 
 func _group(settings: Dictionary, name: String) -> Dictionary:
 	var value: Variant = settings.get(name, {})
@@ -535,15 +645,37 @@ func _save() -> void:
 			"max_step": growth_max_step.value,
 			"cooldown_days": int(growth_cooldown_days.value),
 		},
-		"autonomy": {
-			"enabled": autonomy_enabled.button_pressed,
-			"quiet_start": quiet_start,
-			"quiet_end": quiet_end,
-		},
+		"autonomy": _autonomy_patch(quiet_start, quiet_end),
 	}
+	if _supports_desktop() and _desktop_available:
+		patch["desktop"] = {
+			"enabled": desktop_enabled.button_pressed,
+			"poll_seconds": _desktop_poll_seconds,
+			"idle_after_seconds": int(desktop_idle.value),
+			"fullscreen_policy": _policy_value(fullscreen_policy, DESKTOP_DEFAULTS.fullscreen_policy),
+			"dnd_policy": _desktop_dnd_policy,
+			"work_focus_policy": _policy_value(work_focus_policy, DESKTOP_DEFAULTS.work_focus_policy),
+			"idle_policy": _policy_value(idle_policy, DESKTOP_DEFAULTS.idle_policy),
+		}
 	if expression_panel:
 		patch["expression"] = {"style": expression_panel.style_values()}
 	save_requested.emit(patch)
+
+## True only when the connected service understands the v5 keys. An unknown
+## schema (older service or no handshake yet) must not receive them: the whole
+## patch would be rejected and even user_name/scale would fail to save.
+func _supports_desktop() -> bool:
+	return _schema_version >= 5
+
+func _autonomy_patch(quiet_start: String, quiet_end: String) -> Dictionary:
+	var patch := {
+		"enabled": autonomy_enabled.button_pressed,
+		"quiet_start": quiet_start,
+		"quiet_end": quiet_end,
+	}
+	if _supports_desktop():
+		patch["cloud_enabled"] = cloud_proactive.button_pressed
+	return patch
 
 func _valid_time(value: String) -> bool:
 	if value.length() != 5 or value[2] != ":":
@@ -578,6 +710,47 @@ func _set_quiet() -> void:
 	if id.is_empty():
 		_refresh_controls()
 
+## Query the desktop state at most once per throttle window. Pages call this on
+## populate/open instead of running a standing timer.
+func _request_desktop_status() -> void:
+	if _service == null or _service_state != "ready":
+		return
+	if not _supports_desktop():
+		# A pre-v5 service does not understand the desktop group at all; do not
+		# fire a request that can only come back as unknown_command.
+		return
+	var now := Time.get_ticks_msec()
+	if _desktop_status_due > 0 and now < _desktop_status_due:
+		return
+	_desktop_status_due = now + DESKTOP_STATUS_THROTTLE_MS
+	var id: String = _service.request("desktop.status", {}, 10.0)
+	if id.is_empty():
+		desktop_state_label.text = "当前：—"
+		return
+	_requests[id] = "desktop.status"
+	desktop_state_label.text = "当前：查询中…"
+
+func _render_desktop_status(payload: Dictionary) -> void:
+	var state := str(payload.get("state", "unknown"))
+	var label := str(DESKTOP_LABELS.get(state, DESKTOP_LABELS["unknown"]))
+	# The service nests the speaking decision under "policy"; a flat "allowed"
+	# key is accepted too so the label works against either shape.
+	var allowed := true
+	var policy: Variant = payload.get("policy")
+	if policy is Dictionary:
+		allowed = bool(policy.get("allowed", true))
+	elif payload.has("allowed"):
+		allowed = bool(payload.get("allowed", true))
+	_desktop_known = true
+	if not bool(payload.get("enabled", true)):
+		desktop_state_label.text = "当前：桌面感知已关闭"
+		return
+	if str(payload.get("reason", "")) == "sampling_failed":
+		desktop_state_label.text = "当前：暂时无法读取桌面状态"
+		return
+	var suffix := "" if allowed else "，主动消息已暂停"
+	desktop_state_label.text = "当前：%s%s" % [label, suffix]
+
 func _send(type: String, payload: Dictionary, timeout: float) -> String:
 	if _service == null or _service_state != "ready":
 		show_message("后台服务未连接。", true)
@@ -607,12 +780,24 @@ func _on_request_finished(id: String, type: String, payload: Dictionary) -> void
 		elif command == "autonomy.set_quiet":
 			_autonomy_available = false
 			autonomy_status.text = "主动行为未接入。"
+		elif command == "desktop.status":
+			_desktop_available = false
+			_desktop_known = false
+			desktop_state_label.text = "桌面感知未接入。"
+			show_message("该功能未接入。", true)
+			_refresh_controls()
+			return
 		show_message("该功能未接入。", true)
 		_refresh_controls()
 		return
 	if type != "result":
 		if detail.is_empty():
 			detail = "操作失败。"
+		if command == "desktop.status":
+			# A timeout or transport failure must not leave the label on the
+			# querying placeholder forever; fall back to the unknown text.
+			_desktop_known = false
+			desktop_state_label.text = "当前：—"
 		show_message(detail, true)
 		_refresh_controls()
 		return
@@ -631,6 +816,8 @@ func _on_request_finished(id: String, type: String, payload: Dictionary) -> void
 		var until := str(payload.get("manual_quiet_until", ""))
 		autonomy_status.text = "已进入安静模式。" if until.is_empty() else "安静至 %s。" % until
 		show_message("已进入安静模式。")
+	elif command == "desktop.status":
+		_render_desktop_status(payload)
 	_refresh_controls()
 
 func _refresh_controls() -> void:
@@ -665,6 +852,17 @@ func _refresh_controls() -> void:
 	autonomy_enabled.disabled = not ready
 	quiet_start_input.editable = ready
 	quiet_end_input.editable = ready
+	# cloud_enabled only exists from schema v5; a legacy service would reject it.
+	cloud_proactive.disabled = not (ready and _supports_desktop())
+	# Desktop controls stay unavailable once the service reported the command
+	# as missing, or when the service is too old to accept the desktop group:
+	# saving a setting the service cannot honour silently drops the choice.
+	var desktop_ready := ready and _desktop_available and _supports_desktop()
+	desktop_enabled.disabled = not desktop_ready
+	desktop_idle.editable = desktop_ready
+	fullscreen_policy.disabled = not desktop_ready
+	work_focus_policy.disabled = not desktop_ready
+	idle_policy.disabled = not desktop_ready
 	var ai_enabled := ready and _ai_available
 	ai_key.editable = ai_enabled
 	ai_key_button.disabled = not ai_enabled
@@ -674,6 +872,7 @@ func _refresh_controls() -> void:
 	if not ready:
 		ai_key_status.text = "后台服务未连接。"
 		autonomy_status.text = "后台服务未连接。"
+		desktop_state_label.text = "当前：后台服务未连接。"
 		return
 	if not _ai_available:
 		ai_key_status.text = "AI 未接入。"
@@ -683,8 +882,16 @@ func _refresh_controls() -> void:
 		autonomy_status.text = "主动行为未接入。"
 	elif autonomy_status.text in ["后台服务未连接。", "主动行为未接入。"]:
 		autonomy_status.text = ""
+	if not _desktop_available:
+		desktop_state_label.text = "桌面感知未接入。"
+	elif not _desktop_known:
+		desktop_state_label.text = "当前：—"
 
 func show_status(state: String, detail: String) -> void:
+	# A reconnect invalidates the previous desktop reading and its throttle, so
+	# the next open queries again instead of showing "service not connected".
+	var reconnected := _was_disconnected and state == "ready"
+	_was_disconnected = state != "ready"
 	_service_state = state
 	status.text = detail
 	save_button.disabled = state != "ready"
@@ -692,6 +899,18 @@ func show_status(state: String, detail: String) -> void:
 	if state == "ready":
 		_ai_available = true
 		_autonomy_available = _feature_available("autonomy")
+		_desktop_available = true
+		# The window may have been populated before the handshake; refresh the
+		# schema so the v5-only controls unlock once the real service is known.
+		if _service != null:
+			var live: Variant = _service.get("settings")
+			if live is Dictionary and live.has("schema_version"):
+				_schema_version = int(live.schema_version)
+		if reconnected:
+			_desktop_known = false
+			_desktop_status_due = 0
+			if desktop_state_label:
+				desktop_state_label.text = "当前：—"
 	for panel in _panels():
 		if panel and panel.has_method("set_service_state"):
 			panel.set_service_state(state)
@@ -709,3 +928,5 @@ func open() -> void:
 			panel.set_service_state(_service_state)
 		if panel and panel.has_method("refresh"):
 			panel.refresh()
+	_refresh_controls()
+	_request_desktop_status()

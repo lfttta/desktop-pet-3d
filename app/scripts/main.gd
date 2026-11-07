@@ -4,12 +4,14 @@ const AppSettings = preload("res://scripts/app_settings.gd")
 const ServiceClient = preload("res://scripts/service_client.gd")
 const SettingsWindow = preload("res://scripts/ui/settings_window.gd")
 const ChatWindow = preload("res://scripts/ui/chat_window.gd")
+const EmotionPresenter = preload("res://scripts/state/emotion_presenter.gd")
 var client: Node
 var saved_settings := AppSettings.defaults()
 var data_directory := ""
 var displays: Array = []
 var settings_window: Window
 var chat_window: Window
+var emotion_presenter: Node
 var notice: AcceptDialog
 var _app_ready := false
 var _closing := false
@@ -112,9 +114,11 @@ func _load_characters() -> void:
 	options["character"] = "0"
 
 func _change_character(index: int) -> void:
-	super._change_character(0)
+	super._change_character(index)
 	if is_instance_valid(actor) and not actor.is_connected("visible_bounds_changed", _constrain_window):
 		actor.connect("visible_bounds_changed", _constrain_window)
+	if emotion_presenter:
+		emotion_presenter.apply_now()
 
 func _resize_role() -> void:
 	if DisplayServer.get_name() != "headless":
@@ -222,6 +226,10 @@ func _create_windows() -> void:
 	chat_window.size = Vector2i(Vector2(520, 400) * dpi_scale)
 	chat_window.retry_requested.connect(client.retry)
 	chat_window.configure_chat(client, saved_settings)
+	emotion_presenter = EmotionPresenter.new()
+	add_child(emotion_presenter)
+	emotion_presenter.configure(client, self)
+	chat_window.state_updated.connect(emotion_presenter.apply_delta)
 	notice = AcceptDialog.new()
 	notice.title = "Pet3D"
 	add_child(notice)
@@ -288,6 +296,8 @@ func _on_settings_received(settings: Dictionary) -> void:
 	_applying = false
 	if chat_window:
 		chat_window.update_settings(saved_settings)
+	if emotion_presenter:
+		emotion_presenter.apply_now()
 
 func _on_request_finished(id: String, type: String, payload: Dictionary) -> void:
 	if not _saving.has(id):

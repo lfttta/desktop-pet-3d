@@ -1,11 +1,37 @@
 extends SceneTree
 
-const ACTIONS := ["idle", "walk", "turn", "wave", "pickup", "fall", "recover"]
-const IDS := ["godette"]
+const CONTRACT_DIRECTORY := "res://../characters"
+const MOTION_LIBRARY_PREFIX := "humanoid_core"
 
 
 func _initialize() -> void:
 	call_deferred("run")
+
+
+## Bake targets are the contracts, not a fixed roster: every schema v2 contract
+## bound to this motion library qualifies. Local-only samples stay opt-in.
+func discover_characters() -> Array:
+	var result: Array = []
+	var directory := DirAccess.open(ProjectSettings.globalize_path(CONTRACT_DIRECTORY))
+	if directory == null:
+		push_error("Cannot open " + CONTRACT_DIRECTORY)
+		return result
+	var names: Array[String] = []
+	for file in directory.get_files():
+		if file.ends_with(".json") and not file.ends_with(".local.json"):
+			names.append(file)
+	names.sort()
+	for file in names:
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CONTRACT_DIRECTORY + "/" + file))
+		if not parsed is Dictionary:
+			continue
+		var config: Dictionary = parsed
+		if int(config.get("schema_version", 0)) < 2:
+			continue
+		if not str(config.get("motion_library", "")).begins_with(MOTION_LIBRARY_PREFIX):
+			continue
+		result.append(config)
+	return result
 
 
 func find_first(root_node: Node, class_name_: String) -> Node:
@@ -58,36 +84,49 @@ func solve_world_rotation(skeleton: Skeleton3D, index: int, desired: Dictionary,
 func run() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://../build/stage2"))
 	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://../animations/humanoid_core/manifest.json"))
+	var actions: Array = manifest.actions.keys()
 	var report := {}
-	for character_id in IDS:
-		var config: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://assets_data/%s.json" % character_id))
+	# One contract failing must not stop the remaining contracts from baking: the
+	# packed character's library is written and reported before the run fails.
+	var failures: Array[String] = []
+	for config in discover_characters():
+		var character_id := str(config.id)
+		var output := "res://../build/stage2/%s.tres" % character_id
 		var packed := load(str(config.model_path)) as PackedScene
 		if packed == null:
 			push_error("Cannot load " + character_id)
-			quit(2)
-			return
+			failures.append(character_id + ": cannot load " + str(config.model_path))
+			continue
 		var model := packed.instantiate()
 		root.add_child(model)
 		await process_frame
 		var target := model.get_node_or_null(str(config.skeleton_path)) as Skeleton3D
 		if target == null:
 			push_error("Cannot resolve skeleton for " + character_id + ": " + str(config.skeleton_path))
-			quit(3)
-			return
+			failures.append(character_id + ": cannot resolve skeleton")
+			model.free()
+			continue
 		var library := AnimationLibrary.new()
 		var character_report := {}
-		for action in ACTIONS:
+		var character_failed := false
+		for action in actions:
 			# Bake from unoptimized keys, as the baseline baker does. Editor
 			# scene import can simplify tracks before our fixed-rate sampling.
 			var document := GLTFDocument.new()
 			var state := GLTFState.new()
 			if document.append_from_file("res://resources/animations/source/%s.glb" % action, state, 8) != OK:
-				quit(7)
-				return
+				failures.append(character_id + ": cannot open source " + str(action))
+				character_failed = true
+				break
 			var source_model := document.generate_scene(state)
 			root.add_child(source_model)
 			var source := find_first(source_model, "Skeleton3D") as Skeleton3D
 			var source_player := find_first(source_model, "AnimationPlayer") as AnimationPlayer
+			if source == null or source_player == null or source_player.get_animation(action) == null:
+				failures.append(character_id + ": source clip " + str(action) + " is not playable")
+				character_failed = true
+				source_model.free()
+				break
 			var original := source_player.get_animation(action)
 			var pairs := {}
 			var corrections := {}
@@ -102,8 +141,12 @@ func run() -> void:
 			for required in ["Hips", "Spine", "Head", "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg", "LeftFoot", "RightFoot"]:
 				if not pairs.has(required):
 					push_error(character_id + " missing mapped bone " + required)
-					quit(4)
-					return
+					failures.append(character_id + ": missing mapped bone " + required)
+					character_failed = true
+					break
+			if character_failed:
+				source_model.free()
+				break
 			var yaw := Quaternion(Vector3.UP, deg_to_rad(float(config.source_to_target_yaw_degrees)))
 			var next := alignment_pairs()
 			for profile in pairs:
@@ -174,13 +217,22 @@ func run() -> void:
 			library.add_animation(action, animation)
 			character_report[action] = {"length": animation.length, "frames": frame_count, "tracks": animation.get_track_count()}
 			source_model.free()
-		var output := "res://../build/stage2/%s.tres" % character_id
+		if character_failed:
+			# Never leave a stale library behind for a contract that failed.
+			var stale := ProjectSettings.globalize_path(output)
+			if FileAccess.file_exists(stale):
+				DirAccess.remove_absolute(stale)
+			model.free()
+			continue
 		if ResourceSaver.save(library, output) != OK:
 			push_error("Could not save " + output)
-			quit(5)
-			return
+			failures.append(character_id + ": cannot save " + output)
+			model.free()
+			continue
 		report[character_id] = character_report
 		model.free()
 	print("STAGE2_BAKED ", JSON.stringify(report))
+	if not failures.is_empty():
+		print("STAGE2_BAKE_FAILURES ", JSON.stringify(failures))
 	await process_frame
-	quit(0)
+	quit(0 if failures.is_empty() else 1)

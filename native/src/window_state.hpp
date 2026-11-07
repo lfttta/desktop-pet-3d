@@ -15,6 +15,8 @@
 #include "window_bridge.hpp"
 #include <cstdint>
 #include <mutex>
+#include <string>
+#include <vector>
 
 namespace pet3d {
 
@@ -27,6 +29,8 @@ public:
     static constexpr auto helper_class = WindowBridge::helper_class;
     static constexpr int recover_hotkey = WindowBridge::recover_hotkey;
     static constexpr int exit_hotkey = WindowBridge::exit_hotkey;
+    // Menu commands for the action submenu start here; fixed commands stay 1..7.
+    static constexpr int64_t action_command_base = 1000;
     WindowState();
     ~WindowState();
     WindowState(const WindowState &) = delete;
@@ -41,6 +45,7 @@ public:
     void end_capture();
     bool has_capture();
     int64_t poll_tray_action();
+    bool set_menu_actions(const std::string &groups);
     void shutdown();
     int64_t acquire_instance(const std::string &key);
     bool adopt_service_process(int64_t pid);
@@ -76,6 +81,16 @@ private:
     std::array<int64_t, 32> actions_{};
     size_t read_ = 0;
     size_t count_ = 0;
+
+    // Action submenu fed by GDScript: one group per line, "label|item|item".
+    // Commands are action_command_base + flat item index, so the owner can map
+    // the echoed number back to the action name it sent.
+    struct MenuGroup {
+        std::wstring label;
+        std::vector<std::wstring> items;
+    };
+    std::vector<MenuGroup> menu_groups_;
+    size_t menu_action_count_ = 0;
     std::mutex resources_mutex_;
     HANDLE instance_mutex_ = nullptr;
     HANDLE activation_event_ = nullptr;

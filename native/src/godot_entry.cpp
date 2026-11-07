@@ -63,7 +63,7 @@ std::string read_string(GDExtensionConstStringPtr value) {
 }
 
 enum class Method { configure, interactive, cursor, dpi, left_down, begin, end, captured, poll, shutdown,
-    acquire, adopt, terminate, displays };
+    acquire, adopt, terminate, displays, menu_actions };
 struct MethodSpec {
     const char *name;
     Method id;
@@ -86,6 +86,7 @@ MethodSpec methods[] = {
     {"adopt_service_process", Method::adopt, boolean, integer, "pid"},
     {"terminate_service_processes", Method::terminate, nil, nil, ""},
     {"get_displays_json", Method::displays, string, nil, ""},
+    {"set_menu_actions", Method::menu_actions, boolean, string, "groups"},
 };
 
 // Output storage is explicitly typed and copied to avoid aliasing Godot types.
@@ -120,6 +121,7 @@ Value invoke(Method id, pet3d::WindowBridge *bridge, const Value &argument) {
         case Method::adopt: result.flag = bridge->adopt_service_process(argument.number); break;
         case Method::terminate: bridge->terminate_service_processes(); break;
         case Method::displays: result.text = bridge->get_displays_json(); break;
+        case Method::menu_actions: result.flag = bridge->set_menu_actions(argument.text); break;
     }
     return result;
 }

@@ -8,7 +8,8 @@
       "fps": 30.0,
       "frame_start": 1.0,
       "frame_end": 251.0,
-      "output": "build/stage2/motions/idle.glb"
+      "output": "build/stage2/motions/idle.glb",
+      "output_sha256": "d9a01fe232f6ed3c02e4a05025a7eca3847ffb115c43791c71a0a434dacdb4b8"
     },
     "walk": {
       "source_file": "Walking.fbx",
@@ -17,7 +18,8 @@
       "fps": 30.0,
       "frame_start": 1.0,
       "frame_end": 32.0,
-      "output": "build/stage2/motions/walk.glb"
+      "output": "build/stage2/motions/walk.glb",
+      "output_sha256": "3ddd7d1773e70bb0a3f7da524b4d12c57fd58a93aee4170b4af5bd236256e114"
     },
     "turn": {
       "source_file": "Idle.fbx",
@@ -27,7 +29,8 @@
       "fps": 30,
       "frame_start": 1,
       "frame_end": 25,
-      "output": "build/stage2/motions/turn.glb"
+      "output": "build/stage2/motions/turn.glb",
+      "output_sha256": "d5199e8b87006fe63354e1d7666ac7f1c2cdc591b9077199f80b46371e383d71"
     },
     "wave": {
       "source_file": "Waving.fbx",
@@ -36,7 +39,8 @@
       "fps": 30.0,
       "frame_start": 1.0,
       "frame_end": 17.0,
-      "output": "build/stage2/motions/wave.glb"
+      "output": "build/stage2/motions/wave.glb",
+      "output_sha256": "12145390cbffd3471c5b1edae693c4c896f976f535c54d86ecc894144c9c6dd7"
     },
     "pickup": {
       "source_file": "Idle.fbx",
@@ -46,7 +50,8 @@
       "fps": 30,
       "frame_start": 1,
       "frame_end": 13,
-      "output": "build/stage2/motions/pickup.glb"
+      "output": "build/stage2/motions/pickup.glb",
+      "output_sha256": "7663e94223be4d38a7807044590ae75edacd021fc561e81116240f529fb09a3e"
     },
     "fall": {
       "source_file": "Falling.fbx",
@@ -55,7 +60,8 @@
       "fps": 30.0,
       "frame_start": 1.0,
       "frame_end": 136.0,
-      "output": "build/stage2/motions/fall.glb"
+      "output": "build/stage2/motions/fall.glb",
+      "output_sha256": "7fff541693559efdcc33ecfd08e39a58ad1e2557a04d426601e6b5d515b24009"
     },
     "recover": {
       "source_file": "Idle.fbx",
@@ -65,7 +71,588 @@
       "fps": 30,
       "frame_start": 1,
       "frame_end": 22,
-      "output": "build/stage2/motions/recover.glb"
+      "output": "build/stage2/motions/recover.glb",
+      "output_sha256": "fe91a50b7946f236e2da2e9677f57efdcab8662ea0f3d627f65775a2ae64066c"
+    },
+    "agreeing": {
+      "source_file": "Agreeing.fbx",
+      "source_sha256": "2b50fcc6a713c162e92f26fb80dc8395423885cdce7493425fd838d2e974735d",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 142.0,
+      "output": "build/stage2/motions/agreeing.glb",
+      "output_sha256": "787a2c17a98822af8d6f070d9ac337ae5ca242a75d93de357e90a758241adb87"
+    },
+    "angry": {
+      "source_file": "Angry.fbx",
+      "source_sha256": "42cc0573a4c97b4688cd7d391d85e0e43e4d93638300e893effabe3ba1f4972d",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 576.0,
+      "output": "build/stage2/motions/angry.glb",
+      "output_sha256": "fc21884349250d8db1d3c4190e9a752933417c143ecfb8617a4fac6af911a643"
+    },
+    "bashful": {
+      "source_file": "Bashful.fbx",
+      "source_sha256": "f5c6837124bee87de0c668602b81504e368b84c2d1e4f61a55a4e761f7501a6c",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 331.0,
+      "output": "build/stage2/motions/bashful.glb",
+      "output_sha256": "9e8e45baebb168bb07d55d47a81f382ca47fc3c0c97f40295bf7bb06208f7212"
+    },
+    "bored": {
+      "source_file": "Bored.fbx",
+      "source_sha256": "d9587071097ec4243f64f6ef0b3f3b4e0f9ee2f617345c00cfd7eb258de92211",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 321.0,
+      "output": "build/stage2/motions/bored.glb",
+      "output_sha256": "235d6e8cd68b6abaaf7e460af7909078a54def1fb874bb71a1ae4d9fc4d63e84"
+    },
+    "box_idle": {
+      "source_file": "Box_Idle.fbx",
+      "source_sha256": "a7a5a8cee63d45c58d9d821b884b72af7172ff186f17a83b302e1463a2b02d2c",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 190.0,
+      "output": "build/stage2/motions/box_idle.glb",
+      "output_sha256": "f5eb7f4cff68b02d79095ec49f91eebf75b5d6d38a132e174d95ae7fd52520f5"
+    },
+    "box_walk_arc": {
+      "source_file": "Box_Walk_Arc.fbx",
+      "source_sha256": "6db76a519f77a1081b720a092d9fd750f5161c12c099f140c12bceaeb402dfe8",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 38.0,
+      "output": "build/stage2/motions/box_walk_arc.glb",
+      "output_sha256": "1555976d48e979df6d6f4ac6d612380432ce44635eec68f1a0bc529dd33a57d7"
+    },
+    "breakdance_swipes": {
+      "source_file": "Breakdance_Swipes.fbx",
+      "source_sha256": "2872f4f8580ef133962a03657d2a71ce0234ff6e9c910643f18bf530fda3ca2c",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 91.0,
+      "output": "build/stage2/motions/breakdance_swipes.glb",
+      "output_sha256": "c721c6f7ca4e4b493c76efc36694d949948dd4fe06617f2909c4ccaeabcb1004"
+    },
+    "carrying": {
+      "source_file": "Carrying.fbx",
+      "source_sha256": "4b5cac903a18222837d531f10d988394220015201a99cbc90ed47b8e15899396",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 301.0,
+      "output": "build/stage2/motions/carrying.glb",
+      "output_sha256": "f48660eae733b22b2819e6b21fdd7998fac44452458d4c06406fae3b8f423b43"
+    },
+    "cheering": {
+      "source_file": "Cheering.fbx",
+      "source_sha256": "b16d6524dbefec23bdc60ce2c068afa3b3d2cf3aec2675fcda28b9ade89b1466",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 88.0,
+      "output": "build/stage2/motions/cheering.glb",
+      "output_sha256": "c680216b1df5301210f5cbc96976ef7f02ee31238fdecf83e127b5aced65a511"
+    },
+    "clapping": {
+      "source_file": "Clapping.fbx",
+      "source_sha256": "171916c489ae4696db05d6c6093f85ae274dcde2389745fcf6819b88590587a9",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 36.0,
+      "output": "build/stage2/motions/clapping.glb",
+      "output_sha256": "4c7357605e68829cfcf6f1e6b12fa2ac17eb186cb1334f54cf9e27d6ebbbbaa1"
+    },
+    "climbing": {
+      "source_file": "Climbing.fbx",
+      "source_sha256": "ad9929198341c03088b5655ad9f7d37238552ec98c8b38f4967d8a0daf22fbc7",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 116.0,
+      "output": "build/stage2/motions/climbing.glb",
+      "output_sha256": "a330c4d04d2efe23443c46642ce1435ca542509f0bf849283dca5904a3aa5055"
+    },
+    "climbing_down_wall": {
+      "source_file": "Climbing_Down_Wall.fbx",
+      "source_sha256": "512270f77685ccc5b094ece880ba538390f5461ea5d0b3a4fbca2e6195963290",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 61.0,
+      "output": "build/stage2/motions/climbing_down_wall.glb",
+      "output_sha256": "7f35fffda121caed6e8a22de0ffe34f5322efb57969a83e504b6013f99915580"
+    },
+    "climbing_ladder": {
+      "source_file": "Climbing_Ladder.fbx",
+      "source_sha256": "6290fe99a6f8204a810d3902c9982f89ebd1ff3964b37da6e88625405c8c6c21",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 24.0,
+      "output": "build/stage2/motions/climbing_ladder.glb",
+      "output_sha256": "3a5ae6143793831374fa0f0999371d64a9c20999806133fb41f5533ab48a4579"
+    },
+    "climbing_up_wall": {
+      "source_file": "Climbing_Up_Wall.fbx",
+      "source_sha256": "c342f681955eef33ba7f3b832dc411afaebb9247ac38a96b07f45f5516e3e3ad",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 61.0,
+      "output": "build/stage2/motions/climbing_up_wall.glb",
+      "output_sha256": "0eada624ab068da8571cd6c1c926c1a0afb71055179ffc902ae28d0460cf1dbd"
+    },
+    "crying": {
+      "source_file": "Crying.fbx",
+      "source_sha256": "f647e90ca58d191acc453fad9b3d71ec06dacf7f2c2ff6fd34c61137d095a856",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 189.0,
+      "output": "build/stage2/motions/crying.glb",
+      "output_sha256": "add3812c4b770250314516ad9016c0756b7965bc3bff459e1edf6da342347753"
+    },
+    "dancing": {
+      "source_file": "Dancing.fbx",
+      "source_sha256": "b0786ea7ba2c23691b3b7f29b044db5563b09978402c8ab2c2b4bd88c3c3aca9",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 643.0,
+      "output": "build/stage2/motions/dancing.glb",
+      "output_sha256": "1bef26167f5f06fc4292ea369faaaaaab96a8ac59d24cf572f346b5fe53a551a"
+    },
+    "dancing_twerk": {
+      "source_file": "Dancing_Twerk.fbx",
+      "source_sha256": "f8d95b47c1cd88027e62efeb66bf4e929afeb07c1a22ec73a5e9816cb07b5732",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 457.0,
+      "output": "build/stage2/motions/dancing_twerk.glb",
+      "output_sha256": "6f9ed0f5123e334df1ca31454a29ee03d6326739c71e5701244f1a3138e75353"
+    },
+    "dizzy_idle": {
+      "source_file": "Dizzy_Idle.fbx",
+      "source_sha256": "93c7e0656f130e77d9825a2abab267f8b48ca440972d20db48a8228601079f05",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 129.0,
+      "output": "build/stage2/motions/dizzy_idle.glb",
+      "output_sha256": "86d7e2b9fb9a1539e60cc1934ec57452730fefa7b120fc09f5691af330841d9f"
+    },
+    "drinking": {
+      "source_file": "Drinking.fbx",
+      "source_sha256": "26da60107a2a1ad77a6fd92828a13e882305999ee228b206e1ce9ceddb19d213",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 267.0,
+      "output": "build/stage2/motions/drinking.glb",
+      "output_sha256": "bc358cb85387cf2975e9ca9c7a72d25fdbe1a40a6798624086f24b4eaac05dd9"
+    },
+    "excited": {
+      "source_file": "Excited.fbx",
+      "source_sha256": "3580ae46c2914962cc5c9538f421e3457af19dd2702a75d8d381cb2b40e94ae7",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 198.0,
+      "output": "build/stage2/motions/excited.glb",
+      "output_sha256": "1a41d852b2a63744f43b6b27fedc6cfa0135b5e5c65b263393734688ddc990f3"
+    },
+    "gangnam_style": {
+      "source_file": "Gangnam_Style.fbx",
+      "source_sha256": "9f21dfe26f57d5b6417501a3fdab51089bee362f011955dec40bb3426a0ddd91",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 372.0,
+      "output": "build/stage2/motions/gangnam_style.glb",
+      "output_sha256": "6867ff2b5df8a8975583f7005f458f2145d42b430587321a005d145c3b3d89eb"
+    },
+    "happy": {
+      "source_file": "Happy.fbx",
+      "source_sha256": "ae9f6f92fcfd576864299568100d9d223aa1078a4175ddfc019b9e4ef432f35c",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 301.0,
+      "output": "build/stage2/motions/happy.glb",
+      "output_sha256": "19a626c1d45325e589664678987bbde6a335736abd1b0356cb443f6621cbae90"
+    },
+    "hip_hop_dancing": {
+      "source_file": "Hip_Hop_Dancing.fbx",
+      "source_sha256": "b1eae9fe6f4698ba83514ca21738775b1a03c51e856c81d5925da2b8f016fa66",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 191.0,
+      "output": "build/stage2/motions/hip_hop_dancing.glb",
+      "output_sha256": "65068f0fb13fd1ea295e7843a9da60f5c366d89812896c2c3e275d46e3f9748f"
+    },
+    "holding_down": {
+      "source_file": "Holding_Down.fbx",
+      "source_sha256": "4bcde01dd2f08502a7b4a03f9dce204b684c552bac66246782493269feb64e85",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 58.0,
+      "output": "build/stage2/motions/holding_down.glb",
+      "output_sha256": "a43221425bccb65fabc13b51f0c2cb96916d8a488aa4171f7766ee6de26b8ba2"
+    },
+    "holding_walk": {
+      "source_file": "Holding_Walk.fbx",
+      "source_sha256": "fe0d7026a9417121d4ed7eb20619c610a7b153e115406572552a3a747b2fb808",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 42.0,
+      "output": "build/stage2/motions/holding_walk.glb",
+      "output_sha256": "806c2828b76c074d15250edd57c32dd1b862f5d40b64fc3ceabb090f0d653693"
+    },
+    "jump": {
+      "source_file": "Jump.fbx",
+      "source_sha256": "21fa2c6a0c9e3756ecd67bf1660700c8dfff3294d516d7ba0344935f9646abb7",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 29.0,
+      "output": "build/stage2/motions/jump.glb",
+      "output_sha256": "18345acc979fd20c9b73ebefe0a727862977ab64ddc5d3e2f9944a98e4644bc0"
+    },
+    "kiss": {
+      "source_file": "Kiss.fbx",
+      "source_sha256": "7d4a5f4c26327b1df7defb6b900259b6c2aa2598f8581bf93c1264ca56adccd9",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 213.0,
+      "output": "build/stage2/motions/kiss.glb",
+      "output_sha256": "aac800739f2104f940f361fd11b5509f207877ef78e4e85e305eb5cd37c115a7"
+    },
+    "laughing": {
+      "source_file": "Laughing.fbx",
+      "source_sha256": "ac5b39afa3eb509ec535d21cb13f98f83affd8c572cd48724c4b2220160bc492",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 294.0,
+      "output": "build/stage2/motions/laughing.glb",
+      "output_sha256": "5c53c36e9f8ea27b05ab2b081e287ef3bb59fd911d7048312faf0cac59830675"
+    },
+    "laying_nodding": {
+      "source_file": "Laying_Nodding.fbx",
+      "source_sha256": "4b85e3e40d40a1946dcdb5984612b68964a97383339801c7478839c2824231b0",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 44.0,
+      "output": "build/stage2/motions/laying_nodding.glb",
+      "output_sha256": "a65fa5dea53329b7d9fe359fd020a7b8cd8b41b7e438b86743a47293c5ebc336"
+    },
+    "laying_severe_cough": {
+      "source_file": "Laying_Severe_Cough.fbx",
+      "source_sha256": "cfda5988f1e9342751a0797c835ef22afb4f5dd65d82ae024c49349fa535532b",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 54.0,
+      "output": "build/stage2/motions/laying_severe_cough.glb",
+      "output_sha256": "29062500f887ac16a0667a3e6cbaf21b3b0a794034bdb818e04ee07d4b4e55e7"
+    },
+    "looking_around": {
+      "source_file": "Looking_Around.fbx",
+      "source_sha256": "ccbce72802e7ee64e722910a7a7ef30f6b97a0791d4ed16fe37b480043cd2c87",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 195.0,
+      "output": "build/stage2/motions/looking_around.glb",
+      "output_sha256": "b33298048dabe183b31dc7b35cb6b6417c88d04a4360deb3ce2aac3b5af9da18"
+    },
+    "macarena_dance": {
+      "source_file": "Macarena_Dance.fbx",
+      "source_sha256": "ba26816497f010a8d859b14eed8aba3c2c9409b2ae84c9329df02cdda0143912",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 248.0,
+      "output": "build/stage2/motions/macarena_dance.glb",
+      "output_sha256": "d7fce044d9f8d6b75b786892ad70f93c2c5391e3d30209cef38e2be85912d167"
+    },
+    "male_sitting_pose": {
+      "source_file": "Male_Sitting_Pose.fbx",
+      "source_sha256": "20014a20768ee77bcd0b2946627a11f86c3a213d1243001595f983ea00e200f6",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 2.0,
+      "output": "build/stage2/motions/male_sitting_pose.glb",
+      "output_sha256": "c8a21ab124f4ffdf0b139797a22bf4dba2221b446aefa1415227d06be7e05b45"
+    },
+    "neck_stretching": {
+      "source_file": "Neck_Stretching.fbx",
+      "source_sha256": "7bdc5c40452df19542cacf8e37c3c9a01d5d9d27ef9faee046d9eda156837f94",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 97.0,
+      "output": "build/stage2/motions/neck_stretching.glb",
+      "output_sha256": "9bd04e6b33fabd3bcb920d8fc6f431c1f7567784b67b783272e84b53bdec6147"
+    },
+    "nervously_look_around": {
+      "source_file": "Nervously_Look_Around.fbx",
+      "source_sha256": "b3b0987971b14bcb88da440e2fcea8e36da63665c85c9acf7b091f414e447bee",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 189.0,
+      "output": "build/stage2/motions/nervously_look_around.glb",
+      "output_sha256": "6a043c95b3f25ddfb56a49a7c8e0f0a2983752269942db4c1538e06a0d92ef5d"
+    },
+    "old_man_walk": {
+      "source_file": "Old_Man_Walk.fbx",
+      "source_sha256": "a7d438bf1de720f8c54139c5bade7c3a4e9f43b12e0d202c83b1128012da45d8",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 39.0,
+      "output": "build/stage2/motions/old_man_walk.glb",
+      "output_sha256": "99a649668ede012e36af96f8caef8318514a99849a3d774c897df20bb178136a"
+    },
+    "pointing": {
+      "source_file": "Pointing.fbx",
+      "source_sha256": "5ca4edb4c2e0c63d88c79ef9a595ae6f330325eb04fb62c7e3e881c822e804ad",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 104.0,
+      "output": "build/stage2/motions/pointing.glb",
+      "output_sha256": "59b793ce54298d2f8e820337e009854265fa54b0c102778c3761275e4038f988"
+    },
+    "praying": {
+      "source_file": "Praying.fbx",
+      "source_sha256": "c0c1a21455abe79daa7491b1a44192fb46d0b7cde2d2473da41c58ae8738cc82",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 98.0,
+      "output": "build/stage2/motions/praying.glb",
+      "output_sha256": "bbe5bdbd7e39bfdbf0ca87415cc2482e1b2920082f6b89a7a39c0f9da13b81a7"
+    },
+    "running": {
+      "source_file": "Running.fbx",
+      "source_sha256": "5f97d2287bef61b6c969593150270c8fb380a95e831f54579a0881bafca95cd0",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 20.0,
+      "output": "build/stage2/motions/running.glb",
+      "output_sha256": "86f81a3156459e48da5670aa8be2763f9445f6b9f07bce7f75e64111eb256fc1"
+    },
+    "running_tired": {
+      "source_file": "Running_Tired.fbx",
+      "source_sha256": "fb841742460223bdbc9177c77495d322567537e64c9b2404174c01784538db96",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 211.0,
+      "output": "build/stage2/motions/running_tired.glb",
+      "output_sha256": "a5f11a4288ca760dafdda7df473183796f2b1967355a4e921a19f3abe194da9d"
+    },
+    "sad_idle": {
+      "source_file": "Sad_Idle.fbx",
+      "source_sha256": "4d0374bebb196094b0407d443ee96c1a876a2b3aba9026cc69d442fd808ffba9",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 85.0,
+      "output": "build/stage2/motions/sad_idle.glb",
+      "output_sha256": "35a993e63be1390eec40ae09dfbb77ceb016f75fea854e7762c8a335e3c45f4f"
+    },
+    "salsa_dancing": {
+      "source_file": "Salsa_Dancing.fbx",
+      "source_sha256": "ced996abf3cc7f70dcd98b3a7b64b4aba4edf9643f58085d09afce57fe6e8df2",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 648.0,
+      "output": "build/stage2/motions/salsa_dancing.glb",
+      "output_sha256": "9a4e782a3fac027f82214ab3713ff939938de5d31d90ac7010d13a03ee533a18"
+    },
+    "salute": {
+      "source_file": "Salute.fbx",
+      "source_sha256": "123515268c9bd309202eba8a2e8986575bd09f61ada193e6405321ed77fb0612",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 86.0,
+      "output": "build/stage2/motions/salute.glb",
+      "output_sha256": "ff02ef98c0518edb4a7087e0c5d92c8402aff84909e04262eb3f10efd57d2ad6"
+    },
+    "scared": {
+      "source_file": "Scared.fbx",
+      "source_sha256": "1239fa53edd1b26bbea0174d599885b24212154aac2d37440dfee747670e1a4a",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 303.0,
+      "output": "build/stage2/motions/scared.glb",
+      "output_sha256": "b7c88871b6154583f3b9b913fe806c9b88d3a4e0a83051fa77dcb08625132c61"
+    },
+    "shrugging": {
+      "source_file": "Shrugging.fbx",
+      "source_sha256": "459c20e8c0ba171487d970ae846fc27c09d148a38e1976003503627ea90f36f7",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 61.0,
+      "output": "build/stage2/motions/shrugging.glb",
+      "output_sha256": "e63b34f363e2b7b5336f20e76c28f8f71c7f654d1b03c140e6352fe267154676"
+    },
+    "singing": {
+      "source_file": "Singing.fbx",
+      "source_sha256": "4752545c1c9ae438d33c20367f2b2892e8c0c6fc68cc76ac8dc8f66acf5df438",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 420.0,
+      "output": "build/stage2/motions/singing.glb",
+      "output_sha256": "9b595b540a4bec832fd87c3a6c24887c042f9782c3da69e6bf97192a575bb120"
+    },
+    "sitting": {
+      "source_file": "Sitting.fbx",
+      "source_sha256": "44a4861438c567619feb6b40fd914ac50f6d19eb3ca2a90209990265dab65b06",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 288.0,
+      "output": "build/stage2/motions/sitting.glb",
+      "output_sha256": "8fdb97eb1c919232f1245535b07ff7e0279a4c53d920141a92657017496a71d0"
+    },
+    "sleeping_idle": {
+      "source_file": "Sleeping_Idle.fbx",
+      "source_sha256": "edbc91acc5ba1423a11f58b46bd2e302d0667c630e1e996fc9b324c88dc5e4aa",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 529.0,
+      "output": "build/stage2/motions/sleeping_idle.glb",
+      "output_sha256": "4ea0aafd09cdb02809feb5430ebe6834aae984106f992a3b325e764c6f612b02"
+    },
+    "spinning": {
+      "source_file": "Spinning.fbx",
+      "source_sha256": "2adf1db107d7820e614a33ec55e84c182d4bc2d24923d9658b0bfa183805e685",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 52.0,
+      "output": "build/stage2/motions/spinning.glb",
+      "output_sha256": "a7b43d323b47aad9c880fcf7ef76acab4ba5e1fac49743824c338094763a2e60"
+    },
+    "standing_equip_bow": {
+      "source_file": "Standing_Equip_Bow.fbx",
+      "source_sha256": "181e37baebb2249c2b18c2103695f468ecda84c70e39fffdfd4da3ac4db98f46",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 28.0,
+      "output": "build/stage2/motions/standing_equip_bow.glb",
+      "output_sha256": "2de5db825dfb209f6e5560bad404f91851ee296ed5b581ba28ede8ad280e7e81"
+    },
+    "standing_greeting": {
+      "source_file": "Standing_Greeting.fbx",
+      "source_sha256": "a23053ef01259eb3e90a281e9ab5f45598da2d779e6301ed258a7706d84a304f",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 154.0,
+      "output": "build/stage2/motions/standing_greeting.glb",
+      "output_sha256": "ec29776d813a65348d9dad78a93a0fe99a02beaed11007ac05bb76d763eaa4e4"
+    },
+    "surprised": {
+      "source_file": "Surprised.fbx",
+      "source_sha256": "ff9d36286d19fe5aa65b5dcc4625ccaf12930364a4c668d4d21f1b41337a111e",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 121.0,
+      "output": "build/stage2/motions/surprised.glb",
+      "output_sha256": "607bf0116813313729abc64740bb270e568997c6ef28b0afddbcb3fc2e742858"
+    },
+    "swinging": {
+      "source_file": "Swinging.fbx",
+      "source_sha256": "e884bb92a6fcfe7d58c235f27fd01c3d5d942701e659de7370527ed1a00a0763",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 60.0,
+      "output": "build/stage2/motions/swinging.glb",
+      "output_sha256": "45837d892d531917bca7f9ebbddbaef270db2df35ea6cdf7d0edaf9101fcbf6d"
+    },
+    "taunt": {
+      "source_file": "Taunt.fbx",
+      "source_sha256": "6ee0394b070e49f071fde968446abf42ceef76449d495a4ca26a8b570a355551",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 50.0,
+      "output": "build/stage2/motions/taunt.glb",
+      "output_sha256": "e1592710b7a03f738641cd9a760ab9aad5177662a7e61478b66499c65c793235"
+    },
+    "thinking": {
+      "source_file": "Thinking.fbx",
+      "source_sha256": "82de62713039e00f7e74e20e306b927fd65f37824d60082c77ecefa4c25716a7",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 128.0,
+      "output": "build/stage2/motions/thinking.glb",
+      "output_sha256": "b7e1023ffa20e87b3472e8a238b06fafd5c9656c016dae2b6e86add4576eb71f"
+    },
+    "victory": {
+      "source_file": "Victory.fbx",
+      "source_sha256": "36015d14f5042846a0cef2e4f483b7daffc47cec9b1d9b034f8a188d99cbf552",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 136.0,
+      "output": "build/stage2/motions/victory.glb",
+      "output_sha256": "988a3ed3f96251e75b533b9b8881b252d5c36757280a309bd24a906d069a2078"
+    },
+    "yawn": {
+      "source_file": "Yawn.fbx",
+      "source_sha256": "636cc308c511e63407453f67ff9157eedf0aed9a7cd3863713f7a781269445b5",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 251.0,
+      "output": "build/stage2/motions/yawn.glb",
+      "output_sha256": "8d3d9b4df7fce90bb30402c77642e83cbd88ac4e297a26f4a1600c1ce609a13d"
+    },
+    "yelling": {
+      "source_file": "Yelling.fbx",
+      "source_sha256": "038a0d7816094b4c6876b83aa3f20c519786266832093048ec7d5c3929d4f066",
+      "semantic_status": "candidate",
+      "fps": 30.0,
+      "frame_start": 1.0,
+      "frame_end": 236.0,
+      "output": "build/stage2/motions/yelling.glb",
+      "output_sha256": "5d97d9cab77ddc53ddc1548c056e2680195bfc50ec806707d7ba77a67a9a9a94"
     }
   }
 }

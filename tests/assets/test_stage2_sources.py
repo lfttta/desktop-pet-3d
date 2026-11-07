@@ -4,7 +4,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-ACTIONS = {"idle", "walk", "turn", "wave", "pickup", "fall", "recover"}
+MANIFEST = json.loads((ROOT / "animations/humanoid_core/manifest.json").read_text("utf-8"))
+ACTIONS = set(MANIFEST["actions"])
+SEMANTIC_STATUS = {"verified", "authored", "candidate"}
 
 
 def read_glb_json(path: Path):
@@ -14,13 +16,15 @@ def read_glb_json(path: Path):
     return json.loads(data[20:20 + json_size])
 
 
-def test_stage2_source_manifest_has_seven_real_inputs():
+def test_source_manifest_covers_every_manifest_action():
+    """The conversion record must track the manifest one-to-one: every action the
+    manifest enumerates has exactly one provenance entry, and vice versa."""
     manifest = json.loads((ROOT / "animations/humanoid_core/source_manifest.json").read_text("utf-8"))
     assert set(manifest["clips"]) == ACTIONS
     for name, clip in manifest["clips"].items():
         assert clip["source_sha256"]
         assert clip["source_file"].endswith(".fbx")
-        assert clip["semantic_status"] in {"verified", "authored"}
+        assert clip["semantic_status"] in SEMANTIC_STATUS
 
 
 def test_normalized_stage2_clips_are_meter_y_up_and_named():

@@ -3,7 +3,11 @@ import struct
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-ACTIONS = {'idle', 'walk', 'turn', 'wave', 'pickup', 'fall', 'recover'}
+MANIFEST = json.loads((ROOT / 'animations/humanoid_core/manifest.json').read_text('utf-8'))
+# The manifest enumerates every available action; godette still ships exactly the
+# seven-action baseline, so this contract must never silently lose one of them.
+ACTIONS = set(MANIFEST['actions'])
+BASELINE = {'idle', 'walk', 'turn', 'wave', 'pickup', 'fall', 'recover'}
 
 
 def test_runtime_contains_only_godette_contract():
@@ -11,9 +15,14 @@ def test_runtime_contains_only_godette_contract():
     assert [entry['id'] for entry in catalog] == ['godette']
     config = json.loads((ROOT / 'app/assets_data/godette.json').read_text('utf-8'))
     assert config['schema_version'] == 2
+    assert BASELINE <= ACTIONS
+    # prepare_stage2.sync_actions makes the manifest the action set for every
+    # contract, so the shipped runtime exposes everything the library carries.
     assert set(config['animations']) == ACTIONS
     assert set(config['action_map']) == ACTIONS
     assert set(config['action_bounds']) == ACTIONS
+    assert config['animations'], 'contract must ship at least one manifest action'
+    assert set(config['animations']) == set(config['action_map']) == set(config['action_bounds'])
     assert config['animation_library'] == 'res://resources/animations/godette.tres'
     assert (ROOT / 'app' / config['animation_library'].removeprefix('res://')).is_file()
     assert config['bone_map']['Hips'] == 'Hips'
@@ -30,11 +39,9 @@ def test_expressions_come_from_embedded_vrm_metadata():
 
 
 def test_action_semantics_and_cache_baseline():
-    manifest = json.loads((ROOT / 'animations/humanoid_core/manifest.json').read_text('utf-8'))
-    assert set(manifest['actions']) == ACTIONS
-    assert manifest['actions']['turn']['derived'] == 'turn_step'
-    assert manifest['actions']['pickup']['derived'] == 'suspended'
-    assert manifest['actions']['recover']['derived'] == 'landing_cushion'
+    assert MANIFEST['actions']['turn']['derived'] == 'turn_step'
+    assert MANIFEST['actions']['pickup']['derived'] == 'suspended'
+    assert MANIFEST['actions']['recover']['derived'] == 'landing_cushion'
     assert (ROOT / 'app/motions/cache/godette.tres').is_file()
 
 

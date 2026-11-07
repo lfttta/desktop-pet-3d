@@ -225,18 +225,65 @@ def author_action(clip: str, rule: dict) -> dict:
             "frame_start": 1, "frame_end": count + 1, "output": destination.relative_to(ROOT).as_posix()}
 
 
+def glb_extras(path: Path) -> dict:
+    blob = path.read_bytes()
+    size = struct.unpack_from("<I", blob, 12)[0]
+    return json.loads(blob[20:20 + size]).get("asset", {}).get("extras", {})
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def cached_record(clip: str, rule: dict, previous: dict, staged: Path, runtime: Path) -> dict | None:
+    """Reuse a cached conversion only when its provenance still matches the
+    manifest entry: same source file and source bytes, same derivation, the
+    root-motion policy read back from the GLB extras, and a byte-identical
+    runtime copy. Anything else is converted again."""
+    record = previous.get(clip)
+    if not staged.is_file() or not runtime.is_file() or record is None:
+        return None
+    if record.get("source_file") != rule["source"] or record.get("derivation") != rule.get("derived"):
+        return None
+    source = SOURCE_ROOT / rule["source"]
+    if not source.is_file() or record.get("source_sha256") != sha256(source):
+        return None
+    if glb_extras(staged).get("root_motion") != rule["root_motion"]:
+        return None
+    staged_digest = sha256(staged)
+    if sha256(runtime) != staged_digest:
+        return None
+    if record.get("output_sha256", staged_digest) != staged_digest:
+        return None
+    record["output_sha256"] = staged_digest
+    return record
+
+
 def main() -> None:
     manifest = json.loads((ROOT / "animations/humanoid_core/manifest.json").read_text("utf-8"))
-    clips = {}
-    for clip, rule in manifest["actions"].items():
-        clips[clip] = author_action(clip, rule) if "derived" in rule else convert(clip, SOURCE_ROOT / rule["source"], rule["root_motion"])
     runtime_source = ROOT / "app/resources/animations/source"
-    runtime_source.mkdir(parents=True, exist_ok=True)
-    for clip in clips:
-        shutil.copy2(OUTPUT / f"{clip}.glb", runtime_source / f"{clip}.glb")
     path = ROOT / "animations/humanoid_core/source_manifest.json"
-    path.write_text(json.dumps({"schema_version": 1, "clips": clips}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print("PET3D_STAGE2_CONVERTED", {name: value["frame_end"] for name, value in clips.items()})
+    # Incremental: a clip may only be kept when cached_record proves that both
+    # the manifest entry and the source bytes are unchanged; the record also
+    # carries the output digest so a hand-edited GLB is detected next run.
+    previous = json.loads(path.read_text("utf-8")).get("clips", {}) if path.is_file() else {}
+    clips = {}
+    converted: list[str] = []
+    for clip, rule in manifest["actions"].items():
+        record = cached_record(clip, rule, previous, OUTPUT / f"{clip}.glb", runtime_source / f"{clip}.glb")
+        if record is not None:
+            clips[clip] = record
+            continue
+        clips[clip] = author_action(clip, rule) if "derived" in rule else convert(clip, SOURCE_ROOT / rule["source"], rule["root_motion"])
+        clips[clip]["output_sha256"] = sha256(OUTPUT / f"{clip}.glb")
+        converted.append(clip)
+    runtime_source.mkdir(parents=True, exist_ok=True)
+    for clip in converted:
+        shutil.copy2(OUTPUT / f"{clip}.glb", runtime_source / f"{clip}.glb")
+    # Explicit LF: .gitattributes normalizes text to LF, so a CRLF write would
+    # show every line as changed on the next checkout.
+    path.write_text(json.dumps({"schema_version": 1, "clips": clips}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+    print("PET3D_STAGE2_CONVERTED", {name: value.get("frame_end") for name, value in clips.items()})
 
 
 if __name__ == "__main__":

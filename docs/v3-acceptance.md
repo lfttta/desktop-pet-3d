@@ -1,6 +1,6 @@
 # V3 验收记录
 
-分支：`feat/v3-core`，基线提交 `aea2f33`。
+分支：`feat/v3-core`，基线提交 `aea2f33`。骨骼与动作库合并后的分支为 `feat/v3-core-actions`；原 `feat/v3-core` 分支保留。
 
 ## 已实现
 
@@ -39,6 +39,17 @@
 - 表情呈现：服务端随聊天完成和 `state.get` 轮询下发 `presentation`（`emotion` + `weight`），前端 `emotion_presenter.gd` 映射为 `neutral` / `happy` / `sad`，权重钳制到 0..1，无法识别的表情或权重回退为 `neutral` / 1.0。
 - 前端迟滞：与演员当前实际表情的差异小于 0.12 时不重复应用；演员无法呈现某表情时回退到 `neutral`；只有被接受的表情才更新缓存，避免轮询造成表情抖动。
 - 默认值：表情开关 `expression.enabled=true`，台词库 `expression.phrases_enabled=true`。
+
+### 骨骼与动作库合并
+
+- 合并来源：`merge/v3-core-actions`（统一骨骼 + 65 动作 + 动作菜单）。合并提交 `0f935ee`（"merge: 合并统一骨骼与全量动作到 V3"），双亲为 V3 侧 `89abb3e` 与动作线 `b267a35`。
+- 合并后分支：`feat/v3-core-actions`；原 `feat/v3-core` 分支保留（仍指向 `89abb3e`），未删除、未改写历史。
+- 动作库：`app/assets_data/action_menu.json` 定义 8 个分类（core 7、dance 8、emotion 12、social 10、daily 12、move 9、prop 4、pose 3），共 65 个动作；动作以 `app/assets_data/humanoid_core.json` 的统一骨骼契约为准，`character_view.gd` 读取后将动作表交给 `app/scripts/animation/action_controller.gd` 播放。
+- 动作入口：
+  - 右键角色 / 托盘菜单：原生菜单在 `native/src/window_bridge.cpp` 渲染，右键角色身体与托盘右键打开同一菜单（`window_bridge.cpp:468-471`、`:508-509`）；`pet_window.gd:70` 启动时经 `set_menu_actions` 下发分类子菜单，命令号为 `1000 + 扁平索引`，由 `app/scripts/action_menu.gd` 映射回动作名并以 `user` 优先级播放（`pet_window.gd:289-292`）。
+  - 动作预览：`动作预览.cmd` 以 `-- --review` 启动 `app/scripts/ui/action_preview.gd`，列出 manifest 中全部 65 个动作，可切换动作、表情、速度、方向、暂停并截图。
+- 已知限制：聊天模型的动作白名单仍是原有 8 个 id（`service/ai/schema.py:12-14` 的 `ALLOWED_ACTIONS`、`service/ai/prompt.py:39`：`none/idle/walk/turn/wave/pickup/fall/recover`），聊天回复最多驱动这些动作；动作菜单直接调用动作控制器，不经过该白名单，因此 65 个动作均可手动播放。`chat.done` 的 `action` 字段在 app 侧仍无消费者。
+- 测试结果：`python -B -m pytest tests/service tests/assets -q` → `530 passed, 2 skipped`；Godot 17 个 headless 套件（protocol、app_settings、windows、service_client、chat_framework、action_menu、action_wiring、v3_core、v3_panels、stage2_libraries、stage2_controllers、stage2_character_catalog、stage2_character_view、godette_performance、godette_lifecycle、desktop_settings、emotion_presenter）全部 `failures=0`。完整构建门禁（含渲染与打包）未在本节重跑，以最终门禁为准。
 
 ### 成长、用量、诊断
 
@@ -80,7 +91,7 @@
 
 ## 尚未完成 / 占位
 
-- 角色动作与骨骼：未改动，沿用现有动画系统。
+- 角色动作与骨骼：原 V3 侧未改动，沿用现有动画系统；现由 `merge/v3-core-actions` 合并统一骨骼与 65 动作，并加手动动作菜单，详见“骨骼与动作库合并”一节。聊天线仍未接通 65 动作。
 - 语音与 TTS：`tts.synthesize` 仍为保留命令，未实现。
 - 多用户：未实现。
 - 本地模型：`Router` 保留 `local_model` 开关，未接入本地模型实现。

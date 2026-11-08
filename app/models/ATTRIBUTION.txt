@@ -1,24 +1,15 @@
-Pet3D stage-0 local technical assets
+Pet3D character assets
 
-Low-Poly Godette / Godette_vrm_v4.vrm
+Low-Poly Godette / godette.vrm
 Original author: SirRichard94
 VRM adaptation: Lyuma
 Source: https://github.com/SirRichard94/low-poly-godette
 Embedded VRM metadata: title "Low-Poly Godette", version "0.21", licenseName "CC_BY".
 The supplied VRM is copied byte-for-byte. Preserve this attribution with distributions.
 
-LOW POLY character (swordsman) / 小纸人.glb
-Author: IVA (https://sketchfab.com/barsychokart12)
-Source: https://sketchfab.com/3d-models/low-poly-character-swordsman-24aae01ca3a64a8c9dfc232840c2542b
-Embedded license: CC-BY-4.0 (https://creativecommons.org/licenses/by/4.0/)
-The supplied GLB is copied byte-for-byte. Shared motions are separate generated resources.
-The config identifies the static display pedestal for hiding at runtime.
-
 Idle / wave motions
 Converted solely from the user's Idle.fbx and Waving.fbx, not from model-bundled clips.
-No motion license evidence accompanied these two files; public redistribution clearance
+No motion license evidence accompanied these files; public redistribution clearance
 has not been established. See docs/reports/stage-0/assets.md before public packaging.
 
-AvatarSample_M (VRM1) is NOT included here or in the default character list.
-Its embedded metadata restricts redistribution and modification. External local technical
-verification only; its model, test exports and cache must not enter public packages.
+This repository contains exactly one character model: Godette.

@@ -1,4 +1,4 @@
-extends SceneTree
+﻿extends SceneTree
 ## Run ONLY in tests/assets. Writes the agreed per-target AnimationLibrary caches.
 ## No source positions are copied to non-hip joints: target lengths remain exact.
 
@@ -57,8 +57,8 @@ func solve_rotation(index: int, sk: Skeleton3D, desired: Dictionary, rotations: 
 
 func run() -> void:
 	var summaries := {}
-	for id in ["godette", "swordsman", "avatar_sample_m"]:
-		var config_path: String = STAGE+"/assets_data/"+id+(".local" if id=="avatar_sample_m" else "")+".json"
+	for id in ["godette"]:
+		var config_path: String = STAGE+"/assets_data/"+id+".json"
 		var config: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(config_path))
 		var model := load_model(config.model_path)
 		if model == null:

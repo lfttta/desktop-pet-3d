@@ -1,4 +1,4 @@
-# Pet3D
+﻿# Pet3D
 
 Windows 桌面 3D 陪伴桌宠：Godot 4.7 负责窗口、角色与动作，Python 标准库后台负责对话、记忆、人格与状态。
 
@@ -160,7 +160,7 @@ python -B tools/build_stage2.py
 - 桌面感知仅 Windows；其他平台返回 `unknown`。
 - 主动行为、人格成长、记忆压缩默认关闭，需要在设置中开启。
 - 向量检索需要支持 embeddings 的 Provider；未配置时 `memory.index.*` 返回 `unavailable`。
-- Alicia 的契约与模型已并入，但未启用：缺少 `alicia.tres`，角色目录只放行 Godette。
+- 仓库只包含 Godette 一个角色模型；其他历史角色素材已移除。
 - 聊天模型的动作白名单仍是 8 个；65 个动作通过右键/托盘菜单和动作预览使用。
 - 主动消息只显示在聊天窗口，不写入对话历史。
 - 完整分发打包/导出未在本次验收中重跑。
@@ -169,8 +169,8 @@ python -B tools/build_stage2.py
 ## 第三方素材与许可证
 
 - Godette：SirRichard94，VRM 适配 Lyuma，CC BY 3.0，保留署名。
-- Alicia Solid VRM：© DWANGO Co., Ltd.；公开再分发前须单独确认规则。
-- 士兵 GLB、部分动作 GLB：来源与再分发授权未完全确认。
+
+- 部分动作 GLB：来源与再分发授权未完全确认。
 - Godot Engine、V-Sekai/godot-vrm、Godot-MToon-Shader、MerZlin/dsh-pet-indesktop 等许可见 `THIRD_PARTY_NOTICES.md` 与 `app/addons/*/LICENSE`。
 
 **本仓库为私有开发仓库，第三方素材的再分发授权未全部确认；在确认之前不要公开转发或公开发布。** 代码本身暂未授予开源许可证。

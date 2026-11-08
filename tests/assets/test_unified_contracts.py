@@ -120,9 +120,25 @@ def test_runtime_catalog_lists_only_godette():
     assert [entry['id'] for entry in catalog] == ['godette']
 
 
-def test_export_presets_exclude_alicia():
-    """(d) app/export_presets.cfg carries the alicia exclusion entries."""
+def test_export_presets_exclude_development_assets():
+    """(d) export_presets.cfg keeps test fixtures and source assets out of the package.
+
+    The repository ships one character (Godette); the other character exclusions
+    were removed with their assets, so only the development paths remain.
+    """
     text = (ROOT / 'app/export_presets.cfg').read_text('utf-8')
     exclude_lines = [line for line in text.splitlines() if line.strip().startswith('exclude_filter=')]
     assert exclude_lines, 'export_presets.cfg must define exclude_filter'
-    assert 'alicia' in exclude_lines[0].lower(), 'exclude_filter must exclude alicia assets'
+    excluded = exclude_lines[0].lower()
+    for required in ('tests/*', 'motions/*', 'resources/animations/source/*'):
+        assert required in excluded, f'exclude_filter must drop {required}'
+
+
+def test_repository_ships_exactly_one_character():
+    """(e) Only Godette's model and contracts remain in the tree."""
+    models = sorted(path.name for path in (ROOT / 'app/models').glob('*.vrm'))
+    assert models == ['godette.vrm'], f'unexpected VRM models: {models}'
+    assert not list((ROOT / 'app/models').glob('*.glb')), 'no loose GLB models should remain'
+    assert sorted(path.stem for path in (ROOT / 'characters').glob('*.json')) == ['godette']
+    assert sorted(path.stem for path in (ROOT / 'app/assets_data').glob('*.json')) == [
+        'action_menu', 'characters', 'godette', 'humanoid_core']

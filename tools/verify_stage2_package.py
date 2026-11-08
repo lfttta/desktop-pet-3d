@@ -1,4 +1,4 @@
-"""Verify Stage 2 package resources and Chinese-space-path startup."""
+﻿"""Verify Stage 2 package resources and Chinese-space-path startup."""
 from __future__ import annotations
 
 import json
@@ -72,8 +72,8 @@ def verify_package(package: Path, report: Path) -> None:
         if not (package / relative).is_file():
             raise AssertionError("Missing " + relative)
     manifest = json.loads((package / "manifest.json").read_text("utf-8"))
-    if any("swordsman" in entry["path"].lower() for entry in manifest):
-        raise AssertionError("Stage 2 manifest contains swordsman assets")
+    if any(name in entry["path"].lower() for entry in manifest for name in ("swordsman", "alicia", "soldier")):
+        raise AssertionError("Stage 2 manifest contains a removed character asset")
     report.mkdir(parents=True, exist_ok=True)
     run_export_check(package, report, "stage2-export-package")
     with tempfile.TemporaryDirectory(prefix="Pet3D-stage2-") as temporary:
@@ -89,7 +89,7 @@ def verify_package(package: Path, report: Path) -> None:
         "package": str(package.resolve()),
         "resource_check": "pass",
         "character_count": 1,
-        "excluded_character": "swordsman",
+        "excluded_characters": ["alicia", "soldier", "swordsman"],
         "chinese_space_path": "pass",
         "saved_character_restore": "godette",
         "single_instance": "pass",

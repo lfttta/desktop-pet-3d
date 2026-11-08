@@ -1,4 +1,4 @@
-extends SceneTree
+﻿extends SceneTree
 ## Independent playback/skin validation of saved caches, not the baker's working data.
 const BASE := "D:/danjigame/3D-pet-gtpdo"
 const STAGE := BASE+"/prototypes/stage0"
@@ -69,8 +69,8 @@ func export_pose(model: Node3D, sk: Skeleton3D, config: Dictionary, path: String
 
 func run() -> void:
 	var results := {}
-	for id in ["godette","swordsman","avatar_sample_m"]:
-		var config_path: String = STAGE+"/assets_data/"+id+(".local" if id=="avatar_sample_m" else "")+".json"
+	for id in ["godette"]:
+		var config_path: String = STAGE+"/assets_data/"+id+".json"
 		var config: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(config_path))
 		var model := load_model(config.model_path)
 		check(model!=null,"Missing model "+id)

@@ -1,164 +1,136 @@
-# Pet3D · `merge/v3-core-actions` 合并线总说明
+# Pet3D
 
-接手前按顺序读三份东西：本文（这个分支是什么、怎么跑）、`AGENTS.md`（工程协作约定：分支/验收/热点文件规则）、`docs/合并记录.md`（合并的来龙去脉、逐项核对与遗留问题）。
+Windows 桌面 3D 陪伴桌宠：Godot 4.7 负责窗口、角色与动作，Python 标准库后台负责对话、记忆、人格与状态。
 
-## 1. 这个分支是什么
+当前为 **0.1.0 实验版本**，私有开发仓库。
 
-`merge/v3-core-actions` 是把两条开发线合并后的**集成线：V3 服务框架 + 统一骨骼全量动作库**。
+## 功能
 
-| 侧 | 来源提交 | 提供什么 |
-|---|---|---|
-| main 侧 | `fed66f6`（stage2: 合并统一骨骼与全量动作库） | 统一骨骼的**全量 65 动作库**：`app/resources/animations/source/` 下 65 个 GLB 源、`app/resources/animations/godette.tres`（32.8MB 内嵌 AnimationLibrary，65 动画）、动作清单 `app/assets_data/humanoid_core.json`（65 action）；以及 Godette/Alicia 角色契约 |
-| v3 侧 | `8fd8478`（feat/v3-core） | Python 后台服务 `service/`（聊天、记忆、人格、表情、主动行为、成长、用量、诊断；settings schema v4）+ Godot 侧聊天窗口、V3 面板、`service_client.gd`（合计约 +3157 行） |
+### 对话
+- OpenAI 兼容 Provider（默认 DeepSeek），流式回复、停止生成、连续会话、历史记录。
+- 人格卡、边界规则、本地快捷指令（问候、`记住……`、挥手、过来、安静）。
+- 结构化输出校验、一次格式修复、降级回复、熔断、超时与预算控制。
 
-- 合并提交：`7fc92f6`（双亲 `fed66f6` + `8fd8478`，2026-11-06 06:49 +0800）。
-- 其上还有两个合并后修复：`fbf0eec`（补 4 个 `.uid`——v3 侧并入的 4 个 `.gd` 原本缺 uid）与 `102aac5`（移除 `fbf0eec` 曾短暂加入的两个 `app/tools/assets/verify_recovery*.gd` 转发桩；回归脚本由 `tools/build_stage2.py` 以**绝对路径** `--script` 驱动，工程内不需要 res:// 入口。移除后已按正式方式重跑：`GODETTE_REGRESSION failures=0`、`GODETTE_RUNTIME checks=68235 failures=0`）。**HEAD 以 `git log -1` 为准；本文描述到 `102aac5`。**
+### 记忆
+- SQLite 元数据 + Markdown 正文。
+- 新增、纠正（旧版 superseded）、版本链、归档/恢复、删除 Outbox。
+- 关键词/FTS 检索、去重合并、冲突检测与人工处理。
+- 后台压缩/归档任务（默认关闭，可选模型压缩）。
+- 可选向量索引；需要支持 `/v1/embeddings` 的 Provider。
 
-归属实测（撰写本文时复核）：`git diff --stat 8fd8478 HEAD -- service/ data/` 为空（service/、data/ 与 v3 亲本零差异）；`app/scripts/chat`、`app/scripts/ui`、`app/scripts/service_client.gd` 全部来自 v3 侧；动画库与动作清单来自 main 侧。
+### 人格、情绪与成长
+- PAD 情绪状态（pleasure / arousal / dominance）与 energy / affinity / stress，带平滑、衰减。
+- 模型只能提交状态增量；核心人格值不会被模型直接改写。
+- 表情映射：`happy` / `sad` / `neutral` + 权重，前端带迟滞与回退。
+- 人格成长：证据收集、候选生成、审批/拒绝/历史/回滚、核心特质锁定（默认关闭）。
 
-运行形态：Godot 4.7.2 桌宠主程序（`app/`）通过 stdio 启动 Python 服务（`service/main.py`），JSON-lines 协议（`version=1`）；服务只依赖标准库。
+### 桌面感知与主动行为
+- Windows 下只读全屏、系统勿扰/演示/锁屏、键鼠空闲秒数，不读窗口标题、进程名、屏幕内容或键鼠内容。
+- 状态：`do_not_disturb / fullscreen / sleep_hours / idle / active_interaction / active_work / unknown`。
+- 主动行为受安静时段、手动静音、最小间隔、每小时上限、每日 Token/月度费用预算共同约束。
+- 云端主动消息 + 本地台词回退；失败指数退避；相似内容去重；不写记忆、不改人格。
+- 默认值：桌面感知开启，主动行为关闭，云端主动消息开启（随主动行为生效）。
 
-### 在哪干活、以哪份文档为准（先读这段）
+### 骨骼与动作库
+- 统一骨骼 + 65 个动作（核心、舞蹈、情绪、互动、日常、移动、道具、姿态）。
+- 右键角色或托盘菜单触发；`动作预览.cmd` 可查看全部动作、速度、方向、表情。
+- 聊天模型的 `action` 字段仍只允许原有 8 个动作 id（`none/idle/walk/turn/wave/pickup/fall/recover`）；65 个动作通过菜单手动使用。
 
-- **干活目录**：本合并线的开发在 worktree `D:\danjigame\3D-pet\wt\merge-v3-actions`（分支 `merge/v3-core-actions`）进行；仓库 `.git` 在 `D:\danjigame\3D-pet\3D-pet-gtpdo`（实测存在；旧路径 `D:\danjigame\3D-pet-gtpdo` 实测已不存在）。主仓库根的主 checkout 由集成者管理。
-- **文档优先级**：本文与 `docs/合并记录.md` 描述本合并线，全部实测于 HEAD `fbf0eec`。`AGENTS.md` 的流程规范（分支命名、验收纪律、文件所有权、热点文件）仍然有效，**但其 §1 的"git 仓库根"（:9）、§2 的 worktree 示例命令（:28）与"当前阶段"描述（:12-14）已过期**——写的还是旧路径 `D:\danjigame\3D-pet-gtpdo`，且只写"阶段 2、只做 Godette 单角色"、未提本合并线。两者冲突时以本文与实测为准；修订 AGENTS.md 属全仓库协作约定，建议由集成者在主仓库单独提交（见 `docs/合并记录.md` 遗留问题 6）。
-- **无 .git 的快照拷贝**：本文所有 git 证据（双亲、diff 归属、分支）都在上述 worktree 里复核。如果你拿到的是没有 `.git` 的目录（例如快照拷贝），这些证据无法在里面复核（`git status` 会报 not a git repository），请以 worktree/主仓库为准；该拷贝对应包含本文档的提交（在 worktree/主仓库里 `git log --oneline -- README.md` 第一条即可查到）。
+### 设置、用量与诊断
+- 设置 schema v5，支持 v1–v4 迁移。
+- API Key 使用 Windows DPAPI 保存，不进入仓库、设置文件、日志或诊断包。
+- 用量账本：今日/本月、按模型、按天。
+- 诊断导出 zip：manifest、脱敏设置、诊断信息、日志。
 
-## 2. 目录结构（逐项一句话）
+## 架构
 
-| 路径 | 内容 |
-|---|---|
-| `app/` | Godot 4.7.2 工程：`project.godot`；`scripts/`（`character_view.gd` 动作链路、`scripts/animation/action_controller.gd` 动作优先级、`action_menu.gd` 右键动作菜单模型、`scripts/chat/` 聊天会话、`scripts/ui/` 各面板、`service_client.gd` 服务客户端）；`addons/`（`vrm` VRM 导入插件、`mtoon` MToon 渲染插件——两者在 `project.godot:20` 启用，`vrm/bin/` 带 vrm_physics 各平台二进制；`pet_window` 窗口桥 GDExtension 包装）；`models/`（`godette.vrm`、`alicia.vrm`、soldier/swordsman 等模型源）；`motions/`（短动作缓存 idle/wave，导出时排除）；`assets_data/`（角色配置 + `humanoid_core.json` 动作清单 + `action_menu.json` 右键菜单分类表）；`resources/animations/`（`godette.tres` 与 `source/` 65 个 GLB）；`tests/`（headless 引擎测试，19 个 `.gd`）；`tools/`（Godot 侧脚本）；`export_presets.cfg`（导出过滤） |
-| `service/` | Python 3.13.14 后台服务（仅标准库）：`main.py` 入口（只解析 `--data-dir` 后调 `runtime.serve`）；`protocol.py` 信封；`commands.py:86` 起的 `HANDLERS` 注册 **40 条命令**；`features/`（chat / memory / state / autonomy / ai / expression / growth / usage / diag）；`persona.py`（人格卡）、`settings.py`（schema v4 + 迁移链）、`character_catalog.py`、`ai/`（本地路由 + DeepSeek 编排）、`behavior/`（主动行为预算） |
-| `characters/` | 角色契约源（绑定 `animations/humanoid_core` 的 v2 契约）：`godette.json`、`alicia.json`（数据已并入、运行目录未放行）、`swordsman.json`（历史遗留） |
-| `data/` | 服务的种子/配置数据（人读的仓库内文件）：`persona/godette.json` 人格卡（6 条 boundaries）、`expression/phrases.json` 台词库（10 条，care/greeting/idle/night 四类）。注意：**运行时持久化数据（设置/聊天记录/记忆）不在这里**，见 §3.4 |
-| `animations/` | 动作资产管线中间产物（`asset_manifest.json`、`humanoid_core/`、`source_conversion.json` 等） |
-| `native/` | GDExtension 原生模块源码（`window_bridge.cpp` 窗口桥等，构建期编译） |
-| `tests/` | pytest 测试（`tests/service`、`tests/assets` 等；`conftest.py` 在 `tests/service/`） |
-| `tools/` | 构建与资产工具：`build_stage1.py` / `build_stage2.py` 整包构建，`assets/verify_*.gd` 资产验收，FBX/GLB 转换脚本 |
-| `docs/` | 设计与验收文档：`architecture.md`、`stage-2-plan.md`、`humanoid-skeleton-spec.md`、`humanoid-action-runbook.md`、`v3-acceptance.md`（V3 侧验收记录）、`合并记录.md`（本文档的姊妹篇）；`reference/`（V3 原始实施计划原文）、`reports/`（stage-0/1/2 历史报告，只增不改，见 AGENTS.md）、`superpowers/plans/`（历史计划存档） |
-| `build/` | 构建输出（gitignore，不入库） |
-| `run-dev.cmd` | 本机一键启动（Godot + 服务 Python 路径注入）；`PET3D_PYTHON` 已指向现行仓库根 `D:\danjigame\3D-pet\3D-pet-gtpdo\.venv`，历史问题见 §3.2 |
-| `动作预览.cmd` | 打开 65 动作 + 表情预览窗（`--review` 模式，不需要 Python 服务）；日常桌宠行为只用 7 个核心动作，其余动作在这里看 |
-| `requirements-dev.txt` | 开发依赖版本：pytest 9.1.1 / pyinstaller 6.21.0 / pillow 13.0.0（服务本体不用第三方包） |
-| `AGENTS.md` | 工程协作约定：仓库根、Godot/Python 版本、分支命名、文件所有权、验收命令、硬性禁止 |
-| `README-stage0/1/2.md` | 历史阶段说明（stage2 面向便携包最终用户，不是开发入口） |
-| `THIRD_PARTY_NOTICES.md` | 第三方素材/依赖声明 |
-
-## 3. 怎么运行
-
-### 3.0 给别人用：打包版（不需要 Godot / Python）
-
-已经出好一个可直接分发到其他 Windows 电脑的包：
-
-```
-dist/Pet3D/              ← 整个文件夹拷走即可，双击 Pet3D.exe
-├─ Pet3D.exe             主程序（104 MB，Godot 导出）
-├─ Pet3D.pck             资源包（角色 / 65 动作 / 菜单表 / 界面）
-├─ pet_window.*.dll      窗口与托盘原生模块
-├─ libvrm_physics.*.dll  VRM 物理
-├─ service\              Python 服务（PyInstaller onedir，自带解释器）
-├─ 使用说明.md           给最终用户看的中文说明
-└─ THIRD_PARTY_NOTICES.md
+```text
+Godot 4.7 应用 (app/)
+  ├─ 桌宠窗口 / VRM 角色 / 动作控制 / 聊天与设置面板
+  └─ service_client.gd
+        │  JSON-lines over stdin/stdout
+        ▼
+Python 3.13 后台服务 (service/)
+  ├─ runtime: reader thread + inbound queue + 100ms tick
+  ├─ chat / memory / state / autonomy / expression / growth / usage / diag
+  ├─ SQLite (pet.db) + Markdown 记忆正文
+  └─ OpenAI 兼容 Provider（可替换）
 ```
 
-95 MB → 141 MB，目标机器**不需要安装 Godot 或 Python**；`Pet3D.exe` 会自动拉起同目录的 `service\pet-service.exe`（`app/scripts/main.gd:84` 先找 `service/pet-service.exe`，找不到才回落到 Python 源码）。
+服务只使用 Python 标准库；网络调用在后台线程，SQLite 写入保持在服务主线程。
 
-实测：双击 `Pet3D.exe` 后 `Pet3D` 与 `pet-service` 两个进程同时存活，服务写入 `%LOCALAPPDATA%\Pet3D\pet.db`，角色正常渲染。
+## 环境要求
 
-重新出包（三步，均需在本机）：
+- Windows 10/11 x64
+- Godot 4.7.2（项目 `app/project.godot`）
+- Python 3.13.14（服务本体无第三方依赖）
+- 可选：Visual Studio Build Tools（重编原生窗口桥）、PyInstaller（打包服务）
+
+## 快速开始
 
 ```bat
-:: 1. 打包 Python 服务
-"D:\danjigame\3D-pet\3D-pet-gtpdo\.venv\Scripts\python.exe" -B tools\build_service.py --output build\pkg\service
-
-:: 2. 导出 Godot release（原生 DLL 必须是最新的，见 §3.1）
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe" --headless --path app --export-release "Windows" build\pkg\Pet3D.exe
-
-:: 3. 组装 dist\Pet3D\（Pet3D.exe / Pet3D.pck / 两个 DLL / service\ / THIRD_PARTY_NOTICES.md / 使用说明.md）
+git clone <repo-url>
+cd desktop-pet-3d
 ```
 
-注意：`tools/build_stage2.py` 是完整门禁（含原生编译、全部测试、导出、manifest），比上面三步多得多；只想出包用上面三步即可，但**改了原生代码就必须先 `native\build.cmd --stage1`**，否则 DLL 与源码不一致。
-
-### 3.1 引擎（Godot 4.7.2）
-
-- Godot 可执行文件：`D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe`（**GODDOT 和 WORD 中间是两个空格**）。
-- 用编辑器打开 `app/project.godot`，或命令行 `Godot.exe --path app`。
-- worktree 首次打开会重新生成 `app/.godot` 导入缓存（约 1 分钟，不入库）；跑 headless 测试前先执行一次导入：
-  ```bat
-  "D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --editor --import --quit
-  ```
-
-### 3.2 一键启动 `run-dev.cmd`（已修复，可直接双击）
-
-`run-dev.cmd` 设置 `PET3D_PYTHON` 后用 Godot 启动 `app/`。此前写死的是已迁移走的旧仓库根（`D:\danjigame\3D-pet-gtpdo`），双击会被 "Missing Python venv" 守卫拦截；现已改为现行仓库根：
+设置 Python 与 Godot：
 
 ```bat
-set "PET3D_PYTHON=D:\danjigame\3D-pet\3D-pet-gtpdo\.venv\Scripts\python.exe"
+set PET3D_PYTHON=C:\Python313\python.exe
+set GODOT=C:\Godot\Godot_v4.7.2-stable_win64.exe
 ```
 
-为什么需要它：服务由 app 拉起，查找顺序在 `app/scripts/main.gd:88-91`——启动参数 `python` → 环境变量 `PET3D_PYTHON` → `res://../.venv/Scripts/python.exe`（即工程根下的 `.venv`，本快照拷贝里没有）。双击 `源文件pet\run-dev.cmd` 时走第二条（环境变量），已验证可用。服务本体只用标准库，任何 Python 3.13.14 都可以；`.venv` 主要给构建/测试用。
+也可以直接双击 `run-dev.cmd`：脚本会依次查找仓库内 `.venv`、相邻的 `3D-pet-gtpdo\.venv`、PATH 上的 `python`，Godot 同理。数据目录默认 `%LOCALAPPDATA%\Pet3D-v3-dev`，可用 `PET3D_DATA` 覆盖。
 
-### 3.3 服务单独冒烟（不需要 Godot）
+首次在编辑器打开 `app/project.godot` 会生成 `.godot` 导入缓存（约 1 分钟，不入库）。
+
+启动后在设置 → AI 中填入 API Key（DPAPI 加密保存在本机），即可聊天。
+
+服务也可以单独冒烟，不启动 Godot：
 
 ```bat
 python -I service\main.py --data-dir %TEMP%\pet3d-data
 ```
 
-往 stdin 写 JSON 行即可对话，例如 hello：
+向 stdin 写入：
 
 ```json
 {"version":1,"id":"1","type":"hello","payload":{"protocol_version":1}}
 ```
 
-服务回 `ready` 帧（含 settings 全量、features 能力表、personas）。40 条命令清单可枚举：
+## 目录结构
 
-```bat
-python -I -c "import sys; sys.path.insert(0,'.'); from service.commands import HANDLERS; print(sorted(HANDLERS))"
-```
+| 路径 | 内容 |
+|---|---|
+| `app/` | Godot 工程：角色、动作、聊天/设置/记忆/成长/用量面板、服务客户端 |
+| `service/` | Python 后台：协议、路由、AI、记忆、状态、表达、成长、诊断 |
+| `characters/` | 角色契约源（统一骨骼 v2） |
+| `data/` | 人格卡与台词库等种子数据 |
+| `animations/` | 动作资产管线中间产物 |
+| `native/` | 窗口桥 GDExtension 源码 |
+| `tests/service/` | pytest 服务测试 |
+| `tests/assets/` | 资产/动作契约测试 |
+| `docs/` | 设计、验收、动作规范与历史报告 |
+| `app/resources/animations/` | `godette.tres` 与 65 个 GLB 动作源 |
 
-### 3.5 手动选动作（右键 / 托盘「动作」子菜单）
+## 数据与隐私
 
-桌宠自主行为只驱动 7 个核心动作（idle/walk/turn/wave/pickup/fall/recover，见 `character_view.gd` 状态机）。**全部 65 个动作通过右键或托盘菜单手动触发**：
-
-- 菜单来源：`app/assets_data/action_menu.json` 的 8 个分类（基础动作、跳舞、情绪、互动、日常、行走移动、道具动作、姿态），覆盖 `humanoid_core.json` 全部 65 项，不重不漏（`tests/assets/test_action_menu.py` 校验）。
-- 运行链路：`pet_window.gd:70` 的 `_configure_action_menu()` 把分类表拼成 `label|action|action` 文本经 `bridge.set_menu_actions()` 交给原生层；原生层渲染子菜单，命令号 = `1000 + 扁平索引`（固定命令仍是 1/2/4/5/6/7）；轮询回传后 `action_menu.action_for_command()` 映射回动作名，按 `user` 优先级播放。
-- 缺动作时静默丢弃：`ActionMenu.build()` 只保留 `humanoid_core.json` 里真实存在的动作，未知名不进菜单。
-- 新增/调整分类只改 `action_menu.json`，不需要动 C++ 或 GDScript。
-
-### 3.6 数据目录（运行时数据落在哪里）
-
-服务的持久化数据（设置、聊天记录、记忆数据库）不在仓库里，在用户目录，且**随启动方式不同而不同**：
+运行时数据在用户目录，不在仓库内：
 
 | 启动方式 | 数据目录 |
 |---|---|
-| `run-dev.cmd`（app + 服务开发启动） | `%LOCALAPPDATA%\Pet3D-v3-dev`（run-dev.cmd 写死 `--data-dir` 传入） |
-| Godot app 不带参数启动 | `%LOCALAPPDATA%\Pet3D`（`app/scripts/main.gd:33`），并把这个目录传给它拉起的服务 |
-| 裸跑 `python -I service\main.py` 不带 `--data-dir` | `%LOCALAPPDATA%\Pet3D`（`service/main.py:32-34`） |
+| `run-dev.cmd` | `%LOCALAPPDATA%\Pet3D-v3-dev` |
+| Godot 不带参数 | `%LOCALAPPDATA%\Pet3D` |
+| 服务单独启动 | `--data-dir` 指定，默认 `%LOCALAPPDATA%\Pet3D` |
 
-数据目录里实测是三件套：`settings.json`（设置，schema v4）、`pet.db`（SQLite，聊天记录/记忆）、`service.lock`（单实例锁）；本机 `%LOCALAPPDATA%\Pet3D` 已存在（含 2026-11-03 的 settings.json）。
+目录内包含 `settings.json`、`pet.db`、`service.lock`、DPAPI 加密的 `secrets.bin`。
 
-指向一个新的 `--data-dir` 就是全新状态：`settings.json` 缺失时 `SettingsStore` 直接写默认值（`service/settings.py:496-522`），`pet.db` 重新建库，**不会自动迁移**旧目录的数据。排查"设置没生效/聊天记录丢了"时，先确认这次是哪种启动方式、数据落在了哪个目录。
+- 桌面感知只采集全屏/勿扰/锁屏/空闲元数据。
+- 默认不记录 prompt 正文；诊断包导出前脱敏。
+- API Key 不写入源码、设置文件、日志或诊断包。
+- 记忆写入默认需要显式操作；自动记录可在设置中开启。
 
-### 3.7 测试
-
-Godot headless（`--path` 指向 `app`，输出形如 `STAGE2_LIBRARY_TESTS checks=27 failures=0`）。**下面的清单只是合并相关的子集（`app/tests/` 共 19 个 `.gd`）；整包门禁实际跑什么以 `tools/build_stage2.py:117-129` 为准**：pytest（:117）+ :120 列出的 13 个 godot 用例（含 `action_menu`、`action_wiring`、`v3_core`、`v3_panels`）+ `test_godette_preview`（:124，带渲染）+ `test_godette_review_regressions`（:125）+ baseline/runtime 资产回归与 poses 渲染验收（:118-119、:129）。
-
-```bat
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_protocol.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_app_settings.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_windows.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_service_client.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_chat_framework.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_stage2_libraries.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_stage2_controllers.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_stage2_character_view.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_stage2_character_catalog.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_godette_performance.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_godette_lifecycle.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_v3_core.gd
-"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe" --headless --path app --script res://tests/test_v3_panels.gd
-```
+## 测试
 
 Python（3.13.14）：
 
@@ -166,43 +138,51 @@ Python（3.13.14）：
 python -m pytest tests/service tests/assets -q
 ```
 
-整包构建（慢，含原生编译、PyInstaller、Godot 导出、整包验收）：
+当前基线：`530 passed, 2 skipped`。
+
+Godot headless（在仓库根执行）：
+
+```bat
+"%GODOT%" --headless --path app --script res://tests/test_v3_core.gd
+"%GODOT%" --headless --path app --script res://tests/test_action_wiring.gd
+```
+
+完整套件清单以 `tools/build_stage2.py` 为准；当前 17 个套件全部 `failures=0`，另加 `main.gd --check-only`。
+
+完整构建（原生编译、PyInstaller、Godot 导出、整包验收）需要本机工具链：
 
 ```bat
 python -B tools/build_stage2.py
 ```
 
-纪律（AGENTS.md §5）：局部改动只跑最相关的聚焦用例；不要拿"整包构建通过"代替聚焦测试，也不要拿聚焦测试冒充整包验收。
+## 已知限制
 
-## 4. 本次合并验证状态（逐条）
+- 桌面感知仅 Windows；其他平台返回 `unknown`。
+- 主动行为、人格成长、记忆压缩默认关闭，需要在设置中开启。
+- 向量检索需要支持 embeddings 的 Provider；未配置时 `memory.index.*` 返回 `unavailable`。
+- Alicia 的契约与模型已并入，但未启用：缺少 `alicia.tres`，角色目录只放行 Godette。
+- 聊天模型的动作白名单仍是 8 个；65 个动作通过右键/托盘菜单和动作预览使用。
+- 主动消息只显示在聊天窗口，不写入对话历史。
+- 完整分发打包/导出未在本次验收中重跑。
+- 兼容性与性能只在当前开发机验证。
 
-标注含义：**✅** = 撰写文档时在 HEAD `fbf0eec` 上亲自重跑/复核；**📋** = 合并运行时的实测记录（当时在合并提交 `7fc92f6` 上完成，撰写时未重跑）；**❌** = 未验证。
+## 第三方素材与许可证
 
-| # | 项目 | 状态 | 结果 |
-|---|---|---|---|
-| 1 | Godot 引擎测试 6 项 | ✅ | `STAGE2_LIBRARY_TESTS` 27/0、`STAGE2_CHARACTER_VIEW_TESTS` 25/0（`[character] loaded id=godette bones=69 springs=1`）、`STAGE2_CATALOG_TESTS` 3/0、`CHAT_FRAMEWORK_TESTS` 18/0、`V3_CORE_TESTS` 105/0、`V3_PANELS_TESTS` 87/0 |
-| 2 | pytest `tests/service tests/assets` | ✅ | **319 passed, 2 skipped**（skip 原因：`tests/service/test_ai_chat.py:907` 非 Windows 行为、`tests/service/test_build.py:16` 需 `--build-service` 才跑真实构建） |
-| 3 | 服务 stdio 冒烟 | ✅ | hello→ready 153 ms（features 含 autonomy/chat/diag/expression/growth/memory/state/usage，personas=[godette]）；settings.get / state.get / expression.phrases.list / autonomy.get / chat.history 全部 result；chat.send「你好」→ accepted{request_id, conversation_id} → chat.done 0.11 s（本地路由，无需 API key）→ chat.history 2 条（user+assistant）；shutdown 后干净退出（exit 0） |
-| 4 | 命令注册 | ✅ | `HANDLERS` 枚举 **40 条**，任务点名的 ai / memory / expression / behavior(经 autonomy 消费) / state / features 聚合全部接入 |
-| 5 | 65 动作三方一致 | ✅ | `godette.tres` 65 个 resource_name ↔ `source/` 65 个 GLB ↔ `humanoid_core.json` 65 个 action，双向差集全空、无重复；`godette.json` 的 65 个动画全部存在于 tres |
-| 6 | 人格/台词加载 | ✅ | `load_card('godette')` → source=card、6 条 boundaries；`public_catalog()`=[godette]；`load_phrases()` → 10 条 4 类 |
-| 7 | 协议对齐抽查 | ✅ | 信封 version==1 双侧一致；chat 超时 40s（`service_client.gd:73-74` = `chat_session.gd:19`）；文本上限 8000；`chat.done` 负载键（`orchestrator.py:494-508`）与消费端 `_finish`（`chat_session.gd:203-223`）逐键一致；`autonomy.bubble` 双侧处理（`service_client.gd:184`、`chat_session.gd:135`） |
-| 8 | Alicia 数据合格性 | ✅（数据层面） | `characters/alicia.json` 与 `app/assets_data/alicia.json` 均为合格 v2 契约（schema_version=2、65 animations）；但 `alicia.tres` 不存在、目录未放行（见 §5.1） |
-| 9 | 设置 v1/v2/v3→v4 迁移 | 📋 | 合并运行时实测三种旧文档全部迁移成功、警告文案正确；迁移代码 `settings.py:440` 起撰写时核对过 |
-| 10 | action_preview 引擎级 65/65 | 📋 | 合并运行时以临时脚本实测（count=65 labels=65，全部存在于 tres）；静态代码 `_load_actions()`（`action_preview.gd:135-148`）撰写时核对过 |
-| 11 | shutdown 的 0xC0000005 | ✅（复现） | 发 shutdown 后**不关 stdin**：stderr 打 `Fatal Python error: _enter_buffered_busy`，退出码 3221225477；立即关 stdin 则干净退 0。详见合并记录遗留问题 2 |
-| 12 | DeepSeek 真实链路（流式/取消） | ❌ | 需要 API key，合并线未跑；仅 v3 侧 `docs/v3-acceptance.md` 有当时记录 |
-| 13 | 整包构建 `tools/build_stage2.py` | ❌ | 本次未跑（含原生编译与导出，耗时长） |
-| 14 | `run-dev.cmd` 一键启动 | ✅（修复后实测） | 原 `PET3D_PYTHON` 指向已迁移的旧仓库根，被 "Missing Python venv" 守卫拦截（§3.2）；改为现行路径后实测 Godot 与服务进程正常拉起 |
-| 15 | 65 动作全部接入桌宠 | ✅ | `action_menu.json` 8 分类覆盖 65/65（`tests/assets/test_action_menu.py` 5 项）；`ACTION_MENU_TESTS` 290/0、`ACTION_WIRING_TESTS` 140/0（逐动作校验存在于 `godette.tres` 的 `shared/` 库、命令号唯一可达、固定命令不被误判）；真机日志 `[stage0] ACTION_MENU groups=8 actions=65`；原生三项 90/0、55/0、212/0 |
-| 16 | 原生库重编 | ✅ | `native/build.cmd --stage1`，新增 `set_menu_actions` 绑定，DLL 765,440 字节，`window_bridge_test` 90 项、`lifetime_test` 55 项、`stage1_test` 212 项全过 |
+- Godette：SirRichard94，VRM 适配 Lyuma，CC BY 3.0，保留署名。
+- Alicia Solid VRM：© DWANGO Co., Ltd.；公开再分发前须单独确认规则。
+- 士兵 GLB、部分动作 GLB：来源与再分发授权未完全确认。
+- Godot Engine、V-Sekai/godot-vrm、Godot-MToon-Shader、MerZlin/dsh-pet-indesktop 等许可见 `THIRD_PARTY_NOTICES.md` 与 `app/addons/*/LICENSE`。
 
-合并运行时（`7fc92f6` 上）以上同一组 Godot 测试同样全绿，数字与本表一致。
+**本仓库为私有开发仓库，第三方素材的再分发授权未全部确认；在确认之前不要公开转发或公开发布。** 代码本身暂未授予开源许可证。
 
-## 5. 已知边界
+## 开发约定
 
-1. **Alicia 数据已并入，但运行目录只放行 godette**。契约与角色配置均合格（见上表 #8），但 `service/character_catalog.py:2` 的 `ALLOWED_CHARACTER_IDS` 只有 `'godette'`；`app/assets_data/characters.json` 只列 godette；`app/resources/animations/alicia.tres` 不存在（`app/assets_data/alicia.json` 指向它；模型文件 `app/models/alicia.vrm` 本身存在，缺的只是这个动画库）；`app/export_presets.cfg` 明确排除 alicia 资产；存量设置里 `character_id=alicia` 会被静默迁移为 godette（`service/settings.py:120` `LEGACY_CHARACTERS`），`settings.update` 直接传 alicia 会被 validate 拒绝。启用 Alicia 需要三件事：烘焙 `alicia.tres`、放开目录、更新 characters.json 与导出过滤——具体顺序见合并记录"下一步"。
-2. **向量检索需要支持 embeddings 的端点**。`ai.embedding` 默认 `enabled=false`、model 为空（ready 帧实测）；记忆索引相关命令（`memory.index.*`）存在，但未配置 embeddings 端点时向量检索不可用。
-3. **主动行为 / 成长 / 记忆压缩默认关闭**。ready 帧实测默认值：`autonomy.enabled=false`、`growth.enabled=false`、`memory.compaction.enabled=false`（台词库 `expression.phrases_enabled` 默认开）。
-4. **聊天线最多触发旧 7 动作**。运行时库有 65 动作，但 AI 管线的动作枚举、本地路由和前端消费仍限旧集合——不会报错，但 65 动作能力对聊天链路没接通。这是本次合并最大的"看起来合了、其实没打通"，详见 `docs/合并记录.md` 遗留问题 1。
-5. **仓库根已迁移**。主仓库 `.git` 现位于 `D:\danjigame\3D-pet\3D-pet-gtpdo`；本分支是其 worktree（`D:\danjigame\3D-pet\wt\merge-v3-actions`）。旧路径 `D:\danjigame\3D-pet-gtpdo` 已不存在，`run-dev.cmd` 和 `AGENTS.md` 都还没跟上（§3.2、§1"以哪份文档为准"、合并记录遗留问题 5/6）。
+- 主开发分支：`feat/v3-core-actions`
+- 备份标签：`pre-actions-merge`
+- 协作约定见 `AGENTS.md`
+- 验收记录见 `docs/v3-acceptance.md` 与 `docs/合并记录.md`
+- 动作规范见 `docs/humanoid-skeleton-spec.md`、`docs/humanoid-action-runbook.md`
+
+## 致谢
+
+Godette 模型作者与 VRM 适配者、Godot 与 V-Sekai 社区、以及所有第三方素材作者。详见 `THIRD_PARTY_NOTICES.md`。

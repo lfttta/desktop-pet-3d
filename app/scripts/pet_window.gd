@@ -6,6 +6,7 @@ const HitRegions = preload("res://scripts/hit_regions.gd")
 const ScreenMath = preload("res://scripts/screen_math.gd")
 const ActionMenu = preload("res://scripts/action_menu.gd")
 const MotionController = preload("res://scripts/motion/motion_controller.gd")
+const BehaviorController = preload("res://scripts/behavior/behavior_controller.gd")
 
 var camera: Camera3D
 var actor: Node3D
@@ -46,6 +47,26 @@ var _hold_pending := false
 var _press_cursor := Vector2i.ZERO
 ## Replaces the real desktop rect in headless tests, which report a 0x0 area.
 var work_area_override := Rect2i()
+
+## Autonomous behaviour. The controller only decides; everything it decides is
+## executed through the same paths a user action would take.
+var behavior := BehaviorController.new()
+var _behavior_cooldown := 0.0
+var _walk_request := -1
+## Window x offset from the soles anchor, frozen when a walk starts.
+##
+## Recomputing this per frame from `_subject_rect()` would make the window
+## shiver: the skeleton's bounding box changes every frame as the legs swing,
+## so its centre moves a few pixels even though the feet are planted.
+var _walk_center_offset := 0.0
+var _walk_active := false
+## Cycles the clip has wrapped through in the current segment. Counted by the
+## adapter, which sees the animation position; the window only relays it.
+var _walk_cycles_done := 0
+## True once the behaviour chain has been switched on. Kept separate from
+## `_behavior_cooldown` so a test or a future menu toggle can disable it without
+## having to fake a timer.
+var behavior_enabled := true
 
 func _ready() -> void:
 	_parse_options()
@@ -253,6 +274,8 @@ func _process(delta: float) -> void:
 		_check_screen()
 	if not hidden:
 		_update_motion(delta)
+		_update_walk()
+		_update_behavior(delta)
 		_constrain_window()
 		_update_regions()
 		if bridge:
@@ -265,6 +288,8 @@ func _process(delta: float) -> void:
 				status = "下落"
 			elif _recovering:
 				status = "恢复"
+			elif _walk_active:
+				status = "行走"
 			status_label.text = "Godette · %s\n%s" % [current_action, status]
 	if options.has("capture") and elapsed > float(options.get("capture-at", "3")) and not captured_image:
 		captured_image = true
@@ -324,6 +349,8 @@ func _update_input() -> void:
 		if _hold_pending:
 			_hold_pending = false
 			print("[stage0] CLICK position=", get_window().position)
+			# A click is a user instruction: stop walking and answer it.
+			_finish_walk(false)
 			_play_action("wave")
 		else:
 			print("[stage0] DRAG end position=", get_window().position)
@@ -337,17 +364,33 @@ func _update_input() -> void:
 # its velocity and falls until the soles reach the work area's bottom edge.
 
 func _ensure_motion_bounds() -> void:
-	var work := DisplayServer.screen_get_usable_rect(screen)
+	# Go through `_work_area()` so the headless override (and any future
+	# synthetic desktop) reaches the motion controller too. Asking DisplayServer
+	# directly here would silently replace a test's bounds with the 0x0 headless
+	# rect and clamp the anchor into a corner.
+	var work := _work_area()
 	_last_work_area = work
 	var subject := _subject_rect()
 	motion.set_bounds(work, subject.size)
-	if not _motion_active and not motion.is_held() and not motion.is_falling():
-		# First placement: align the controller with where the pet already is.
-		var soles := Vector2(get_window().position) + Vector2(subject.get_center().x, subject.end.y)
-		motion.settle_at(soles.x)
+	_sync_motion_anchor(subject)
+
+
+## Aligns the controller with where the window already is. Only valid when
+## nothing owns the anchor: a walk or a fall must never be reset onto the
+## window, because the window follows the anchor and not the other way round.
+func _sync_motion_anchor(subject: Rect2) -> void:
+	if _motion_active or _walk_active:
+		return
+	if motion.is_held() or motion.is_falling():
+		return
+	var soles := Vector2(get_window().position) + Vector2(subject.get_center().x, subject.end.y)
+	motion.settle_at(soles.x)
 
 
 func _begin_hold(cursor: Vector2i) -> void:
+	# Grabbing outranks everything: stop any autonomous walk before the body
+	# leaves the ground, or the plan would keep writing anchor.x mid-air.
+	_finish_walk(false)
 	_ensure_motion_bounds()
 	var subject := _subject_rect()
 	var soles := Vector2(get_window().position) + Vector2(subject.get_center().x, subject.end.y)
@@ -414,6 +457,215 @@ func _update_motion(delta: float) -> void:
 	# a held pet and a just-released one both report zero velocity for a frame.
 	if motion.is_grounded() and motion.is_resting() and not _recovering:
 		_motion_active = false
+
+
+## --- Walking ------------------------------------------------------------------
+#
+# The window translates; the clip only steps in place. Position comes from the
+# animation's own playback progress, so the ground speed is exactly the clip's
+# stride rate and the soles do not skate.
+
+## Ground distance one gait cycle covers, in physical pixels.
+##
+## `meters_per_cycle` is authored in the character contract and was already
+## present but unused. The world-to-pixel factor comes from the window itself
+## (`window.size.y / camera.size`), which already includes the display DPI and
+## the user's 0.5-2.0 scale — scaling it by `dpi_scale` again would double-count.
+func _walk_stride_px() -> float:
+	if camera == null or not is_instance_valid(actor):
+		return 0.0
+	var meters := 0.0
+	if actor.get("config") is Dictionary:
+		var locomotion: Variant = (actor.config as Dictionary).get("locomotion", {})
+		if locomotion is Dictionary:
+			meters = float(locomotion.get("meters_per_cycle", 0.0))
+	if meters <= 0.0:
+		return 0.0
+	var px_per_unit := float(get_window().size.y) / maxf(0.001, camera.size)
+	return meters * px_per_unit
+
+
+## Begins a walk segment in `direction`. Returns false when it cannot start.
+func _begin_walk(direction: int, cycles: int) -> bool:
+	if not is_instance_valid(actor) or not actor.has_method("begin_walk_tracking"):
+		return false
+	if motion.is_held() or motion.is_falling() or _motion_active:
+		return false
+	if not motion.is_grounded():
+		return false
+	# The walk clip replaces whatever is playing; only start from idle so an
+	# ambient action is never cut off mid-pose.
+	if current_action != "idle":
+		return false
+	# Refresh the bounds but deliberately do NOT resync the anchor: the walk is
+	# about to start from wherever the soles currently are, and `settle_at` would
+	# snap them onto the window's centre instead.
+	var work := _work_area()
+	_last_work_area = work
+	motion.set_bounds(work, _subject_rect().size)
+	var stride := _walk_stride_px()
+	var cycle_seconds := float(actor.walk_cycle_length())
+	if stride <= 0.0 or cycle_seconds <= 0.0:
+		return false
+	var plan: Dictionary = motion.begin_walk(direction, cycles, stride, cycle_seconds)
+	if plan.is_empty():
+		return false
+	# Foot planting fights a moving body: the ankles would be locked to the
+	# ground while the hips travel. Let the clip carry the feet instead.
+	if actor.has_method("set_ground_contact"):
+		actor.set_ground_contact(false)
+	actor.begin_walk_tracking()
+	if actor.has_method("face_direction"):
+		actor.face_direction(direction)
+	_walk_cycles_done = 0
+	_walk_active = true
+	# Freeze the window-to-soles offset for the whole segment. The subject box
+	# breathes with the gait, and following it would shake the window.
+	var subject := _subject_rect()
+	_walk_center_offset = subject.get_center().x
+	_walk_request = _request_body_action("walk", "autonomous", 1.0, 1, false)
+	if _walk_request < 0:
+		# Without the clip there is no progress to drive, so there is no walk.
+		_finish_walk(false)
+		return false
+	print("[stage0] WALK begin dir=", direction, " cycles=", plan.cycles, " stride=", stride, " length=", cycle_seconds)
+	return true
+
+
+## Advances a running walk from the clip's own position.
+func _update_walk() -> void:
+	if not _walk_active:
+		return
+	# Anything that takes the body over ends the walk immediately: the plan would
+	# otherwise keep writing anchor.x while a drag or a fall owns the soles.
+	if motion.is_held() or motion.is_falling() or not motion.is_grounded():
+		_finish_walk(false)
+		return
+	if not is_instance_valid(actor) or not actor.has_method("walk_cycles_advanced"):
+		_finish_walk(false)
+		return
+	if current_action != "walk":
+		# A user action outranks the autonomous walk; the controller already
+		# replaced the clip, so stop driving the position.
+		_finish_walk(false)
+		return
+	_walk_cycles_done += int(actor.walk_cycles_advanced())
+	# A hitch can let the clip wrap more than once worth of frames between two
+	# updates; the adapter reports one wrap per call, but a slow frame can also
+	# arrive after the segment already ended. Never let the counter run past the
+	# plan, or `advance_walk` would clamp the position and the body would stop
+	# short of the target.
+	_walk_cycles_done = mini(_walk_cycles_done, int(motion.walk_cycles_total()))
+	var length := float(actor.walk_cycle_length())
+	var position := float(actor.walk_cycle_position())
+	if length <= 0.0 or position < 0.0:
+		_finish_walk(false)
+		return
+	var intra := clampf(position / length, 0.0, 1.0)
+	if motion.advance_walk(_walk_cycles_done, intra):
+		_apply_walk_to_window()
+		_finish_walk(true)
+		return
+	_apply_walk_to_window()
+
+
+## Places the window from the walk anchor using the frozen centre offset.
+func _apply_walk_to_window() -> void:
+	if DisplayServer.get_name() == "headless" or camera == null:
+		return
+	var subject := _subject_rect()
+	var top_left := Vector2(motion.anchor.x - _walk_center_offset, motion.anchor.y - subject.end.y)
+	get_window().position = ScreenMath.clamp_subject(Vector2i(top_left.round()), subject, _work_area())
+
+
+## Ends a walk segment. `completed` false means it was interrupted.
+func _finish_walk(completed: bool) -> void:
+	if not _walk_active:
+		motion.cancel_walk()
+		return
+	_walk_active = false
+	motion.cancel_walk()
+	_walk_request = -1
+	if is_instance_valid(actor):
+		if actor.has_method("release_walk_facing"):
+			actor.release_walk_facing()
+		if actor.has_method("set_ground_contact"):
+			# Re-plant the feet only once the pose is upright again; the settle
+			# helper already enforces that delay on the next frames.
+			_ground_contact_delay = 0.2
+	_attached_edges = ScreenMath.edge_flags(get_window().position, _subject_rect(), _work_area())
+	print("[stage0] WALK end completed=", completed, " position=", get_window().position)
+	if completed:
+		_request_body_action("idle", "recovery", 1.0, 1, false)
+		# Subclasses persist the position; the stage-0 base has nowhere to save.
+		if has_method("_queue_position_save"):
+			call("_queue_position_save")
+
+
+## --- Autonomous behaviour -----------------------------------------------------
+#
+# The controller decides; this only enforces when a decision may be made and
+# then routes it through the normal action / walk paths.
+
+func _update_behavior(delta: float) -> void:
+	if not behavior_enabled:
+		return
+	if _behavior_cooldown > 0.0:
+		_behavior_cooldown -= delta
+		return
+	# A held, falling, walking or recovering pet is already busy. Deciding now
+	# would either be discarded or cut an action off mid-clip.
+	if _walk_active or _motion_active or _recovering:
+		return
+	if motion.is_held() or motion.is_falling():
+		return
+	if current_action != "idle":
+		return
+	var available := _behavior_action_table()
+	var stride := _walk_stride_px()
+	var room := _walk_room()
+	var decision: Dictionary = behavior.decide(available, float(room.left), float(room.right), stride)
+	_behavior_cooldown = maxf(0.1, float(decision.get("cooldown", 3.0)))
+	match str(decision.get("kind", BehaviorController.KIND_IDLE)):
+		BehaviorController.KIND_ACTION:
+			_play_action(str(decision.get("action", "")))
+		BehaviorController.KIND_WALK:
+			if not _begin_walk(int(decision.get("direction", 0)), int(decision.get("cycles", 0))):
+				# The plan could not be realised (no clip, no stride, clamped to
+				# zero); wait out the cooldown rather than retrying every frame.
+				pass
+
+
+## Action metadata the behaviour chain needs: mode plus clip length.
+##
+## `humanoid_core.json` carries the mode but not the length, which lives in the
+## baked AnimationLibrary, so the two sources are merged here.
+func _behavior_action_table() -> Dictionary:
+	var table := {}
+	for name in action_library.keys():
+		var entry: Variant = action_library[name]
+		if not (entry is Dictionary):
+			continue
+		var info := (entry as Dictionary).duplicate()
+		info["length"] = _action_length(str(name))
+		table[str(name)] = info
+	return table
+
+
+## Free room from the body's centre to each wall of the work area, in pixels.
+##
+## Measured from the soles anchor, not the window: the transparent border is not
+## part of the body, and the anchor is what the walk plan actually moves.
+func _walk_room() -> Dictionary:
+	var area := _work_area()
+	var subject := _subject_rect()
+	var half_width := subject.size.x * 0.5
+	var center := motion.anchor.x if motion.is_grounded() else Vector2(get_window().position).x + subject.get_center().x
+	var area_right := float(area.position.x) + float(area.size.x)
+	return {
+		"left": maxf(0.0, center - half_width - float(area.position.x)),
+		"right": maxf(0.0, area_right - (center + half_width)),
+	}
 
 
 ## Re-enables foot planting after landing, but only once the pose has had time to
@@ -538,6 +790,11 @@ func _handle_tray(action: int) -> void:
 			_quit()
 
 func _play_action(action: String) -> void:
+	# Any action request replaces the walk clip, so the plan must stop driving
+	# the position in the same frame. The behaviour chain only ever asks for an
+	# action while standing idle, so this cannot cut a walk short from inside.
+	if _walk_active and action != "walk":
+		_finish_walk(false)
 	if actor and actor.has_method("play_action"):
 		actor.play_action(action)
 	else:
@@ -598,9 +855,10 @@ func _subject_rect() -> Rect2:
 func _constrain_window() -> void:
 	if DisplayServer.get_name() == "headless" or camera == null:
 		return
-	# While the motion controller owns the vertical position, pinning the subject
-	# to an edge every frame would fight gravity and cancel the fall.
-	if _motion_active:
+	# While the motion controller owns the position — a fall, or a walk driving
+	# `anchor.x` — pinning the subject to an edge every frame would fight it and
+	# drag the character back to where it started.
+	if _motion_active or _walk_active:
 		return
 	var work := DisplayServer.screen_get_usable_rect(screen)
 	var subject := _subject_rect()

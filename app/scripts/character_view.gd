@@ -25,6 +25,16 @@ var vrm_instances: Array[Node] = []
 var _spring_inertia := Vector3.ZERO
 var _spring_inertia_target := Vector3.ZERO
 var loco_speed_scale := 1.0
+## Yaw the body returns to when it stops walking sideways. `turn` owns the body
+## yaw and can leave it at ±PI; forgetting that here would silently undo a
+## manual turn the first time the pet walks.
+var _rest_yaw := 0.0
+## Target yaw while walking sideways, and the smoothing rate towards it.
+var _walk_yaw := 0.0
+var _walk_yaw_active := false
+const WALK_YAW_RATE := 5.0
+## Animation position seen last frame, for gait-cycle wrap detection.
+var _last_walk_position := -1.0
 
 var config := {}
 var model: Node3D
@@ -233,6 +243,87 @@ func sync_turn_heading() -> void:
 		var ratio := clampf(player.current_animation_position / player.current_animation_length, 0, 1)
 		rotation.y = _turn_start + _turn_delta * smoothstep(0, 1, ratio)
 
+
+## --- Walking ------------------------------------------------------------------
+#
+# The walk clip is baked with its horizontal root motion frozen, so the body
+# steps in place and the window supplies the travel. This adapter exposes the
+# clip's own playback position as the authority on how far the feet have moved.
+
+## Position inside the current walk clip, in seconds. -1 when not playing it.
+func walk_cycle_position() -> float:
+	if player == null or not player.has_animation("shared/walk"):
+		return -1.0
+	if player.current_animation != "shared/walk" or not player.is_playing():
+		return -1.0
+	return player.current_animation_position
+
+
+## Length of the walk clip, or 0 when the library has none.
+func walk_cycle_length() -> float:
+	if player == null or not player.has_animation("shared/walk"):
+		return 0.0
+	var animation: Animation = player.get_animation("shared/walk")
+	return animation.length if animation != null else 0.0
+
+
+## Resets the wrap detector. Called when a walk segment starts, so a clip that
+## was already playing cannot report a phantom cycle.
+func begin_walk_tracking() -> void:
+	_last_walk_position = -1.0
+
+
+## Advances the gait-cycle counter from the clip's own position.
+##
+## Returns the number of complete cycles the clip has wrapped through since the
+## last call. The guard window is what makes this safe: `walk` is a loop clip,
+## so after a wrap the position jumps from near the end to near zero, and
+## nothing else in the clip produces that shape. Requiring the old value to be
+## past the midpoint and the new one to be near the start rejects re-plays
+## (which restart from 0 anywhere), cross-fades that briefly reset the position,
+## and ordinary playback.
+func walk_cycles_advanced() -> int:
+	var position := walk_cycle_position()
+	if position < 0.0:
+		return 0
+	var length := walk_cycle_length()
+	if length <= 0.0:
+		return 0
+	var previous := _last_walk_position
+	_last_walk_position = position
+	if previous < 0.0:
+		return 0
+	if previous > length * 0.5 and position < length * 0.2:
+		return 1
+	return 0
+
+
+## Turns the body to face a walking direction, or back towards the viewer.
+##
+## The walk clip faces the camera, so a sideways walk needs a quarter turn. The
+## `turn` animation is not usable for this: it is authored as a 180° about-face
+## and always leaves the character looking away. `_turn_active` therefore wins
+## every conflict, and a `turn` that completes updates the yaw the body returns
+## to — otherwise walking once would undo a manual turn.
+func face_direction(direction: int) -> void:
+	if _turn_active:
+		return
+	_walk_yaw = 0.0 if direction == 0 else (PI * 0.5 if direction > 0 else -PI * 0.5)
+	_walk_yaw_active = direction != 0
+
+
+## Ends sideways facing. The body keeps smoothing back towards `_rest_yaw` on
+## its own; `_apply_walk_yaw` stops targeting the walk yaw but the lerp target
+## becomes the resting one, so the turn back is visible rather than a pop.
+func release_walk_facing() -> void:
+	_walk_yaw_active = false
+	_walk_yaw = _rest_yaw
+
+
+## Yaw the body returns to when a sideways walk ends.
+func rest_yaw() -> float:
+	return _rest_yaw
+
 func release_action(request_id: int) -> void:
 	if action_controller:
 		action_controller.release_action(request_id)
@@ -243,6 +334,9 @@ func _animation_finished(name_: StringName) -> void:
 	if _turn_active:
 		rotation.y = _turn_start + _turn_delta
 		_turn_active = false
+		# Remember where the turn left the body: a sideways walk must return
+		# here, not to the model's original forward direction.
+		_rest_yaw = rotation.y
 	action_controller.complete(action_controller.current_request)
 
 func set_emotion(name_: String, weight := 1.0) -> bool:
@@ -321,8 +415,30 @@ func _process(delta: float) -> void:
 	if not paused:
 		face_clock += delta
 		sync_turn_heading()
+		_apply_walk_yaw(delta)
 		_update_spring_inertia(delta)
 	update_face()
+
+
+## Smooths the body towards its yaw target. `turn` keeps exclusive ownership of
+## the yaw while it plays, so this yields instead of fighting it.
+##
+## The target is `_walk_yaw` while a sideways walk is active and `_rest_yaw`
+## afterwards, so the body turns back on its own when the walk ends. Returning
+## early once `_walk_yaw_active` is false would freeze a just-finished walk
+## mid-turn, facing the wall.
+func _apply_walk_yaw(delta: float) -> void:
+	if _turn_active:
+		# The turn clip writes the yaw every frame; adopting its target here would
+		# make the body snap back as soon as the clip ended.
+		return
+	if delta <= 0.0:
+		return
+	var target := _walk_yaw if _walk_yaw_active else _rest_yaw
+	if is_equal_approx(rotation.y, target):
+		rotation.y = target
+		return
+	rotation.y = lerp_angle(rotation.y, target, clampf(WALK_YAW_RATE * delta, 0.0, 1.0))
 
 func update_face() -> void:
 	if not is_instance_valid(model):

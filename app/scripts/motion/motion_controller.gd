@@ -8,6 +8,13 @@ extends RefCounted
 ## (hold, release, fall, land) is integrated here and the window position is
 ## derived from `anchor` afterwards. Keeping this arithmetic out of the window
 ## class makes it testable without a display server.
+##
+## Walking is a sub-mode of GROUNDED, not a fourth state: the soles stay on the
+## ground, only `anchor.x` moves. It is driven by the caller with an animation
+## progress value rather than a velocity, because the clip — not a physics
+## integrator — is the authority on how fast the feet are planting.
+
+const WalkPlan = preload("res://scripts/behavior/walk_plan.gd")
 
 enum State { GROUNDED, HELD, FALLING }
 
@@ -46,6 +53,10 @@ var _started_falling := false
 var _previous_velocity := Vector2.ZERO
 var _last_landing_speed := 0.0
 var _pending_recovery := false
+## Current walk segment, or an empty dictionary when the pet is standing.
+var _walk := {}
+var _walk_cycles_done := 0
+var _walk_intra_value := 0.0
 
 
 func set_bounds(p_work_area: Rect2i, p_subject_size: Vector2) -> void:
@@ -96,6 +107,7 @@ func settle_at(x: float) -> void:
 	_grab_offset = Vector2.ZERO
 	_landed = false
 	_started_falling = false
+	cancel_walk()
 
 
 ## Starts a hold. The grab offset keeps the body from snapping to the cursor.
@@ -108,6 +120,9 @@ func settle_at(x: float) -> void:
 func begin_hold(cursor: Vector2, grab_height := 0.0) -> void:
 	if state == State.HELD:
 		return
+	# Grabbing cancels a walk outright. The pet is in the air a frame later, but
+	# the walk plan would otherwise still own `anchor.x` and snap it back.
+	cancel_walk()
 	_grab_offset = Vector2(anchor.x - cursor.x, grab_height)
 	state = State.HELD
 	velocity = Vector2.ZERO
@@ -142,6 +157,7 @@ func steer(cursor: Vector2) -> void:
 func release() -> void:
 	if state != State.HELD:
 		return
+	cancel_walk()
 	state = State.FALLING
 	velocity.y = maxf(velocity.y, 0.0)
 	_started_falling = true
@@ -166,6 +182,8 @@ func update(delta: float) -> void:
 		_track_acceleration(delta)
 		return
 	if state != State.FALLING:
+		# GROUNDED. A walk owns `anchor.x` and advances through `advance_walk`,
+		# so this integrator must not also write it or the two would fight.
 		velocity = Vector2.ZERO
 		_track_acceleration(delta)
 		return
@@ -189,6 +207,105 @@ func _track_acceleration(delta: float) -> void:
 	_previous_velocity = velocity
 	# Smoothing keeps a single hitch from throwing the spring bones around.
 	acceleration = acceleration.lerp(raw, clampf(12.0 * delta, 0.0, 1.0))
+
+
+## --- Walking ------------------------------------------------------------------
+#
+# A walk is a whole number of gait cycles along the ground. The caller owns the
+# clock: it reports the animation's own progress each frame, so the window moves
+# exactly as fast as the feet plant and the soles never skate. Nothing here
+# integrates a velocity, because there is no velocity to honour — the clip's
+# stride and duration define the speed.
+
+## Starts a walk segment. Ignored unless the pet is standing on the ground.
+##
+## `stride_px` is the ground distance one gait cycle covers. Returns the plan
+## actually used (with `cycles` lowered to fit the room available), or an empty
+## dictionary when walking is not possible right now.
+func begin_walk(direction: int, cycles: int, stride_px: float, cycle_seconds: float) -> Dictionary:
+	if state != State.GROUNDED:
+		return {}
+	if direction == 0:
+		return {}
+	if stride_px <= 0.0 or cycle_seconds <= 0.0:
+		return {}
+	# A walk always starts from the ground line, even if a previous segment or a
+	# restore left the anchor a fraction off it.
+	anchor.y = ground_y()
+	var plan := WalkPlan.plan(anchor.x, direction, cycles, stride_px, cycle_seconds)
+	if is_equal_approx(plan.target_x, plan.start_x):
+		return {}
+	_walk = plan
+	_walk_cycles_done = 0
+	_walk_intra_value = 0.0
+	velocity = Vector2.ZERO
+	acceleration = Vector2.ZERO
+	return _walk.duplicate()
+
+
+## Fraction of the current segment that is complete, 0 when not walking.
+func walk_progress() -> float:
+	if _walk.is_empty():
+		return 0.0
+	return WalkPlan.progress_at(_walk, _walk_cycles_done, _walk_intra_value)
+
+
+## Advances the walk to the given animation state.
+##
+## `cycles_done` counts completed gait cycles, `intra_progress` is 0..1 through
+## the current one. Returns true when the segment just finished; the caller is
+## then responsible for playing the idle clip and letting go of the window. The
+## anchor is left exactly on `target_x` on the finishing call.
+##
+## Completion is decided by the cycle count alone, not by the intra-cycle
+## fraction: the wrap detector reports whole cycles, so waiting for
+## `intra_progress >= 1` would never fire — the fraction resets to zero exactly
+## when the last cycle ends.
+func advance_walk(cycles_done: int, intra_progress: float) -> bool:
+	if _walk.is_empty():
+		return false
+	var total := int(_walk.cycles)
+	_walk_cycles_done = clampi(cycles_done, 0, total)
+	var intra := clampf(intra_progress, 0.0, 1.0)
+	_walk_intra_value = intra
+	# y stays pinned to the ground: this stage only walks along the bottom edge.
+	anchor = Vector2(WalkPlan.position_at(_walk, _walk_cycles_done, intra), ground_y())
+	anchor = _clamp_anchor(anchor)
+	return _walk_cycles_done >= total
+
+
+## True while a walk segment owns the horizontal anchor.
+func is_walking() -> bool:
+	return not _walk.is_empty()
+
+
+## Drops the current walk without moving the body. The window keeps whatever
+## position the last `advance_walk` left it at, which is where the feet are.
+func cancel_walk() -> void:
+	_walk = {}
+	_walk_cycles_done = 0
+	_walk_intra_value = 0.0
+
+
+## Remaining gait cycles in the current segment, 0 when not walking.
+func walk_cycles_left() -> int:
+	if _walk.is_empty():
+		return 0
+	return maxi(0, int(_walk.cycles) - _walk_cycles_done)
+
+
+## Total cycles the current segment was planned for, 0 when not walking.
+func walk_cycles_total() -> int:
+	if _walk.is_empty():
+		return 0
+	return int(_walk.cycles)
+
+
+## Distance one more gait cycle would cover, 0 when not walking.
+func walk_stride() -> float:
+	if _walk.is_empty():
+		return 0.0
+	return float(_walk.stride_px)
 
 
 ## Returns true once per landing and clears the flag. The impact speed is frozen

@@ -10,6 +10,8 @@ const COMMAND_BASE := 1000
 
 var _flat: Array[String] = []
 var _labels: Dictionary = {}
+## Internal action name -> text shown in the native menu.
+var _display: Dictionary = {}
 
 
 static func load_table(path := "res://assets_data/action_menu.json") -> Dictionary:
@@ -20,14 +22,18 @@ static func load_table(path := "res://assets_data/action_menu.json") -> Dictiona
 
 
 ## Build from the menu table plus the runtime action library.
-## Returns {groups: [[label, [action names]]], flat: [action names]}.
+## Returns {groups: [[label, [action names]]], flat: [action names],
+##          labels: {action name: display label}}.
 ## Actions missing from the library are dropped; unknown ones never reach native.
+## The display label comes from the library entry, so the native menu can show
+## Chinese text while the flat order stays keyed by the internal action name.
 static func build(table: Dictionary, library: Dictionary) -> Dictionary:
 	var groups: Array = []
 	var flat: Array[String] = []
+	var labels: Dictionary = {}
 	var categories: Variant = table.get("categories", [])
 	if not (categories is Array):
-		return {"groups": groups, "flat": flat}
+		return {"groups": groups, "flat": flat, "labels": labels}
 	for entry: Variant in categories:
 		if not (entry is Dictionary):
 			continue
@@ -41,14 +47,18 @@ static func build(table: Dictionary, library: Dictionary) -> Dictionary:
 			if library.has(action) and not flat.has(action):
 				names.append(action)
 				flat.append(action)
+				var info: Variant = library[action]
+				var shown := str(info.get("label", "")) if info is Dictionary else ""
+				labels[action] = action if shown.is_empty() else shown
 		if not names.is_empty():
 			groups.append([label, names])
-	return {"groups": groups, "flat": flat}
+	return {"groups": groups, "flat": flat, "labels": labels}
 
 
-func configure(groups: Array, flat: Array) -> void:
+func configure(groups: Array, flat: Array, labels := {}) -> void:
 	_flat.clear()
 	_labels.clear()
+	_display.clear()
 	for name: String in flat:
 		_flat.append(name)
 	for entry: Array in groups:
@@ -57,16 +67,24 @@ func configure(groups: Array, flat: Array) -> void:
 		var names: Array = entry[1]
 		for name: Variant in names:
 			_labels[str(name)] = str(entry[0])
+	for name: Variant in labels:
+		_display[str(name)] = str(labels[name])
 
 
-## One line per group: "label|action|action". Labels and names are display text.
+## One line per group: "label|item|item". Items are the display text the native
+## menu shows; the command index maps back to the flat position, so the text is
+## free-form. It is the action's Chinese label, falling back to the internal name
+## when the library has none, because the native parser drops empty fields and a
+## dropped item would shift every later index.
 func native_payload() -> String:
 	var lines: PackedStringArray = PackedStringArray()
 	for label: String in _ordered_labels():
 		var items: PackedStringArray = PackedStringArray()
 		for action: String in _flat:
-			if str(_labels.get(action, "")) == label:
-				items.append(action)
+			if str(_labels.get(action, "")) != label:
+				continue
+			var shown := str(_display.get(action, ""))
+			items.append(action if shown.is_empty() else shown)
 		if not items.is_empty():
 			lines.append(label + "|" + "|".join(items))
 	return "\n".join(lines)

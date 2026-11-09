@@ -88,7 +88,7 @@ func _configure_action_menu() -> void:
 	if action_library.is_empty():
 		return
 	var built := ActionMenu.build(ActionMenu.load_table(), action_library)
-	action_menu.configure(built.groups, built.flat)
+	action_menu.configure(built.groups, built.flat, built.get("labels", {}))
 	if bridge and bridge.has_method("set_menu_actions"):
 		if not bridge.set_menu_actions(action_menu.native_payload()):
 			push_error("Action menu payload rejected")

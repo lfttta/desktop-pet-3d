@@ -1,0 +1,182 @@
+# 阶段三：桌面行为与物理
+
+更新日期：2026-11-09。状态：设计已定，实现未开始。本文件是阶段三的执行依据，接续 [阶段二计划](stage-2-plan.md) 第 91 行指定的下一步：先建立行为状态机和沿底边行走，再接拖放速度、重力与落地恢复。
+
+## 1. 当前状态与阶段目标
+
+阶段二已完成并通过验收：Godette 单角色七动作、neutral/happy/sad 表情、自动眨眼、本地音频口型、拖拽与贴边、透明区域穿透、无焦点抢占、托盘与热键、多屏与 DPI、单实例与后台服务。交付入口为 `dist/stage-2-godette/Pet3D.exe`，验收记录见 [2026-11-03 单角色验收](reports/stage-2/2026-11-03-godette-completion.md)。
+
+`feat/motion-physics` 分支另有已实测通过的拖拽弹簧、重力下落、落地恢复与脚底接触（`app/scripts/motion/motion_controller.gd`、`app/scripts/motion/leg_ik.gd`），尚未合入 `main`。
+
+本阶段目标：让角色能自主地在桌面底边走动，并在待机时自主挑选环境动作，形成最小可用的行为闭环。
+
+## 2. 范围
+
+### 本阶段做
+
+- 沿工作区底边自主行走，含朝向与步态同步
+- 行为掷骰链：待机 / 环境动作 / 移动
+- 边缘可达性闸门：空间不足时不产生移动计划
+- 行走被拖拽、下落、用户动作、点击打断
+
+### 本阶段不做
+
+- **行走开关**：需要 settings schema v5→v6 加迁移与界面，会改动 v3-core 相关代码，本轮刻意避开
+- 沿上边或任意高度的漫游
+- 攀爬、跑动换动作（`running`、`old_man_walk` 等留作后续）
+- 主动合并 v3-core（该分支已存在，单独排一轮）
+
+## 3. 已核实的技术前提
+
+以下均为读代码核实，尚未运行测试：
+
+| 事实 | 出处 |
+|---|---|
+| `locomotion: {meters_per_cycle: 1.15, nominal_speed: 0.9}` 已存在但零消费者 | `app/assets_data/godette.json:342-345` |
+| `walk` 动画 length 1.0333s、`loop_mode = 1`、32 帧 @30fps | `app/resources/animations/godette.tres:19903` |
+| `vertical_only` 语义把 Hips 的 X/Z 冻结到首帧，walk 是纯原地动画 | `tools/assets/convert_stage2.py:80-87` |
+| `loco_speed_scale` 写入后无人读取（死变量） | `app/scripts/character_view.gd:198-199` |
+| 本分支父提交为 `e945e8b`（= `feat/v3-core-actions` tip），因此**包含 v3-core** | `3D-pet-gtpdo/.git/refs/heads/feat/motion-physics` |
+
+行注释：第 3 条是本阶段最关键的约束——walk 骨架里没有水平位移，若不驱动窗口平移，角色只会原地踏步。
+
+## 4. 设计
+
+### 4.1 位移口径
+
+位移恒等于 `cycles × stride_px`，即位移必须凑成整数个步态周期；位置由动画播放进度推进，而非墙钟或按帧号插值。
+
+```
+px_per_unit = window.size.y / camera.size
+stride_px   = locomotion.meters_per_cycle × px_per_unit
+cycle_seconds = walk 动画 length
+intra_progress = animation_position / cycle_length
+```
+
+`px_per_unit` 不乘 `dpi_scale`：窗口尺寸本身已包含 DPI 与 0.5–2.0 显示缩放，再乘一次会在 150% 缩放下失准。这与 `feat/motion-physics` 已确立的「所有交互相关计算统一使用物理像素」一致。
+
+只有整数圈量化才能保证窗口线速度恒等于动画步态速度，从而脚底不打滑。
+
+### 4.2 新增文件
+
+**`app/scripts/behavior/walk_plan.gd`**（纯逻辑，可 headless 测）
+
+- `plan(start_x, direction, cycles) -> Dictionary`：返回 `{start_x, target_x, cycles, cycle_seconds}`
+- `position_at(plan, cycles_done, intra_progress) -> float`：全程单调，端点精确落在 `start_x` 与 `target_x`
+
+设计原则参照 `dsh-pet-indesktop/pet/movement.py:103-159`（MIT, Copyright (c) 2026 Merzlin）的「整圈量化 + 帧驱动位置」思路，本实现自行编写，不移植其代码。
+
+**`app/scripts/behavior/behavior_controller.gd`**（纯逻辑）
+
+- 掷骰链：30% 待机 / 40% 环境动作 / 30% 移动。随机源可注入，测试可钉死分支。
+- **环境动作白名单**：只收单次（`mode == "once"`）、非物理、`length ≤ 10s` 的动作。候选：`looking_around`、`thinking`、`yawn`、`neck_stretching`、`happy`、`bored`、`bashful`、`surprised`、`agreeing`、`shrugging`、`clapping`、`cheering`。
+- **明确排除**：
+  - `pickup` / `fall` / `recover` —— 由物理状态机接管
+  - `walk` / `running` / `old_man_walk` / `holding_walk` —— 由位移接管
+  - `male_sitting_pose` —— length 0.033s，一帧闪过
+  - `dancing`(21.4s) / `salsa_dancing`(21.6s) / `angry`(19.2s) —— 超过 10s 上限
+- **边缘可达性闸门**：先算左右剩余空间，只有 ≥ 1 圈步长才允许往该方向走；两侧都不够则回待机，不掷骰。
+- **行走圈数**：2–8 圈，再按可用空间向下夹到整数圈；夹到 0 则取消本次移动。
+- 动作与移动之间插入待机间隔，避免无缝连播显得抽搐。
+
+### 4.3 修改文件
+
+**`app/scripts/motion/motion_controller.gd`**
+
+在 `GROUNDED` 下增加水平行走子模式：
+
+- `begin_walk(cycle_seconds, stride_px, direction, cycles)` / `walk_progress()` / `end_walk()`
+- 行走时 `anchor.x` 由 walk plan 赋值，`anchor.y` 恒为 `ground_y()`（本阶段只沿底边）
+- 保持既有不变量：`HELD` / `FALLING` 期间行走立即作废；落地后不自动续走；仍走 `_clamp_anchor()` 兜底
+
+**`app/scripts/character_view.gd`**
+
+- `walk_cycle_position() -> float`：读 `player.current_animation_position`，作为位移权威
+- **圈数绕回检测**：每帧比较新旧位置，`new < old` 判定绕回并累加。护栏：仅当 `old > 0.5 × cycle && new < 0.2 × cycle` 才计数，防止重播或动画混合把位置归零时误判
+- `face_direction(dir: int)`：`rotation.y` 平滑趋近 `dir > 0 ? +PI/2 : -PI/2`（约 0.2s）。仅在 `not _turn_active and action != "turn"` 时生效
+  - 理由：`turn` 动作是 180° 翻面（`humanoid_core.json` 中 `heading_degrees: 180`），用于背对观众，不能当侧身行走的朝向使用
+  - 行走结束回到「面向观众」的 yaw 时，须记住上一次 `turn` 的结果（±PI），不能粗暴归零，否则手动翻面后再走一次会丢失朝向
+
+**`app/scripts/pet_window.gd`**
+
+- `_process()` 在 `_update_motion(delta)` 之后加 `_update_walk(delta)`：读动画进度 → 更新 `anchor.x` → 圈数走满则 `end_walk()` + 请求 `idle` + 重算 `_attached_edges` + `_queue_position_save()`
+- **窗口 x 用起步时冻结的 `_walk_center_offset`**，不每帧从 `_subject_rect()` 反推。走路时腿部摆动会让骨骼包围盒中心抖动几像素，逐帧反推会导致窗口左右发抖。行走结束后刷新一次，用于落位存档
+- 中断优先级沿用 `app/scripts/animation/action_controller.gd:6-9` 的既有表，不改数字：
+
+  | 事件 | 源优先级 | 对行走的影响 |
+  |---|---|---|
+  | 拖拽按下 / 拖动 | 80 | 立即作废行走 |
+  | 下落 | 75 | 行走作废 |
+  | 恢复 | 70 | 行走作废 |
+  | 用户点动作 | 50 | 行走作废，播放该动作 |
+  | 单击（未拖动） | — | 取消行走并挥手 |
+  | 自主行走 | 10 | 可被以上任意一项打断 |
+
+- 行走开始时若当前动作非 `idle`，等其结束再起走，不切断环境动作
+- `Engine.max_fps` 行走期间先保持 30（与阶段二实测口径一致）；若目视卡顿再提 60，并补一次 CPU 实测
+
+### 4.4 三个已定位的碰撞点
+
+均为读代码得出，实现时必须处理：
+
+1. **贴边钳制与行走抢位置**
+   `pet_window.gd:598-608` 有一段 `if _motion_active: return` 的早退，专为防贴边逻辑跟重力打架而设。行走若不加同样闸门，每帧的钳制会把 `anchor.x` 拽回去。处理：早退条件改为 `_motion_active or _walk_active`。
+
+2. **`visible_bounds_changed` 高频触发钳制**
+   `main.gd:114-117` 将该信号直连 `_constrain_window`。走路时腿部摆动使骨骼包围盒每帧变化，会高频触发钳制。处理：同上闸门覆盖，且行走期间不刷新 `_walk_center_offset`。
+
+3. **`face_direction` 与 `turn` 抢 `rotation.y`**
+   `character_view.gd:231-234` 在 `_turn_active` 时每帧写 `rotation.y`，`:243-245` 在动作结束时定格到 `_turn_start + _turn_delta`（±180°）。若 `face_direction` 无条件插值，两者会互相拉扯。处理见 4.3。
+
+### 4.5 已知小瑕疵
+
+行走中被强制结束时，存档位置仍是起步前的位置（只在走完时存一次）。不会造成错位，仅表现为「少走一段」，本阶段接受。
+
+## 5. 验收门槛
+
+### 5.1 自动化测试
+
+```bat
+"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe" --headless --path app --script res://tests/test_walk_plan.gd
+"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe" --headless --path app --script res://tests/test_behavior_controller.gd
+"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe" --headless --path app --script res://tests/test_motion_physics.gd
+"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe" --headless --path app --script res://tests/test_motion_wiring.gd
+.venv\Scripts\python.exe -B -m pytest tests/service tests/assets -q
+```
+
+新增断言：
+
+- `test_walk_plan.gd`：整圈量化、端点精确、单调不越界、夹到 0 圈时取消、`cycles` 边界（2 与 8）
+- `test_behavior_controller.gd`：注入 RNG 后各分支可钉死复现；两侧无空间时不产生移动；白名单严格过滤 `male_sitting_pose` / `pickup` / `fall`
+
+**回归硬闸门**：`test_motion_physics.gd` 与 `test_motion_wiring.gd` 必须全绿，拖拽、下落、落地行为不得变化。
+
+### 5.2 桌面人工验收
+
+1. 待机 30 秒内至少自主行走一次，且脚底不打滑（盯脚踝与屏幕底边的相对位置）
+2. 走到左右边缘 1 圈步长内自动停在边界，不越界、不抖动
+3. 行走中拖拽 → 立即被抓取，松手正常下落；落地后不自动续走
+4. 行走中单击 → 停下并挥手
+5. 走完后重启程序，角色回到走完的位置（`_attached_edges` 与 placement 已更新），不弹回原处
+6. 0.5 / 1 / 1.5 / 2 倍缩放下各走一段，确认步速视觉一致、无窗口抖动
+7. 多屏切换与 DPI 变化时行走中不崩溃，位置正确夹回工作区
+
+## 6. 后续阶段
+
+以下已评估并排序，本阶段不实施：
+
+| 阶段 | 内容 | 参考项目对应 | 判断 |
+|---|---|---|---|
+| 3-B | 聊天气泡 + 头顶快捷输入 | `speech_bubble.py` 1810 行 + `speech_bubble_text.py` 纯函数 | 真缺口，投入产出比最高 |
+| 3-C | Agent 状态联动 | `agent_link` 6303 行，本地 JSONL 总线 | 真缺口，纯本地不联网 |
+| 3-D | TTS | `tts/{edge,sapi,mimo,doubao}` 声明式注册表 | 真缺口，`tts.synthesize` 当前返回 `not_available` |
+| 3-E | 截屏视觉 + 主动识屏 | `vision.py`、`proactive/` | 真缺口 |
+| 3-F | 分档降载 | `tick_governor.py` 四档 + 800ms 滞回 + AC 感知 | 打磨项 |
+
+**已优于参考项目、不再引入**：LLM 对话编排（`service/ai/orchestrator.py` 657 行，含熔断、预算账本、schema 修复重试）、记忆系统（`service/memory/*` 2863 行）、人格与提示词、拖拽抛掷物理、逐像素穿透。
+
+**参考项目的渲染层不可移植**：其为 Python + PySide6 的 2D 视频精灵（WebM/ffmpeg），本项目是 Godot 4.7.2 + VRM，UI 与渲染均不通用。可借鉴的只有纯算法、Win32 ctypes 段与实机实测常量。
+
+## 7. 事实与推断的边界
+
+本文件中的技术前提（第 3 节）与碰撞点（第 4.4 节）全部来自读取源码，**尚未运行任何测试**。实现完成后须以第 5 节的实测结果为准；若实测与本文件冲突，以实测修正本文件并记录差异。

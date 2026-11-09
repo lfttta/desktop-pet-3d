@@ -99,8 +99,8 @@ intra_progress = animation_position / cycle_length
 
 **`app/scripts/pet_window.gd`**
 
-- `_process()` 在 `_update_motion(delta)` 之后加 `_update_walk(delta)`：读动画进度 → 更新 `anchor.x` → 圈数走满则 `end_walk()` + 请求 `idle` + 重算 `_attached_edges` + `_queue_position_save()`
-- **窗口 x 用起步时冻结的 `_walk_center_offset`**，不每帧从 `_subject_rect()` 反推。走路时腿部摆动会让骨骼包围盒中心抖动几像素，逐帧反推会导致窗口左右发抖。行走结束后刷新一次，用于落位存档
+- `_process()` 在 `_update_motion(delta)` 之后加 `_update_walk()` 与 `_update_behavior(delta)`：读动画进度 → 更新 `anchor.x` → 圈数走满则 `_finish_walk(true)` + 请求 `idle` + 重算 `_attached_edges` + 存档
+- **窗口 x 用起步时冻结的 `_walk_center_offset`**，不每帧从 `_subject_rect()` 反推。走路时腿部摆动会让骨骼包围盒中心抖动几像素，逐帧反推会导致窗口左右发抖
 - 中断优先级沿用 `app/scripts/animation/action_controller.gd:6-9` 的既有表，不改数字：
 
   | 事件 | 源优先级 | 对行走的影响 |
@@ -112,23 +112,32 @@ intra_progress = animation_position / cycle_length
   | 单击（未拖动） | — | 取消行走并挥手 |
   | 自主行走 | 10 | 可被以上任意一项打断 |
 
-- 行走开始时若当前动作非 `idle`，等其结束再起走，不切断环境动作
+- 行走开始时若当前动作非 `idle`，直接拒绝起走（不在中途切断环境动作）
 - `Engine.max_fps` 行走期间先保持 30（与阶段二实测口径一致）；若目视卡顿再提 60，并补一次 CPU 实测
 
 ### 4.4 三个已定位的碰撞点
 
-均为读代码得出，实现时必须处理：
+均为读代码得出，实现时逐条处理：
 
 1. **贴边钳制与行走抢位置**
-   `pet_window.gd:598-608` 有一段 `if _motion_active: return` 的早退，专为防贴边逻辑跟重力打架而设。行走若不加同样闸门，每帧的钳制会把 `anchor.x` 拽回去。处理：早退条件改为 `_motion_active or _walk_active`。
+   `_constrain_window()` 原有 `if _motion_active: return` 的早退，专为防贴边逻辑跟重力打架而设。行走若不加同样闸门，每帧的钳制会把 `anchor.x` 拽回去。**处理**：早退条件改为 `_motion_active or _walk_active`。
 
 2. **`visible_bounds_changed` 高频触发钳制**
-   `main.gd:114-117` 将该信号直连 `_constrain_window`。走路时腿部摆动使骨骼包围盒每帧变化，会高频触发钳制。处理：同上闸门覆盖，且行走期间不刷新 `_walk_center_offset`。
+   `main.gd:114-117` 将该信号直连 `_constrain_window`。走路时腿部摆动使骨骼包围盒每帧变化，会高频触发钳制。**处理**：同上闸门覆盖；`_walk_center_offset` 在整段行走期间不刷新。
 
 3. **`face_direction` 与 `turn` 抢 `rotation.y`**
-   `character_view.gd:231-234` 在 `_turn_active` 时每帧写 `rotation.y`，`:243-245` 在动作结束时定格到 `_turn_start + _turn_delta`（±180°）。若 `face_direction` 无条件插值，两者会互相拉扯。处理见 4.3。
+   `_turn_active` 时 `sync_turn_heading()` 每帧写 `rotation.y`，动作结束时定格到 `_turn_start + _turn_delta`（±180°）。**处理**：`_apply_walk_yaw()` 在 `_turn_active` 时直接返回；`_animation_finished()` 把 turn 的最终朝向记入 `_rest_yaw`，侧身行走结束后平滑回到该朝向，不会丢失手动翻面状态。
 
-### 4.5 已知小瑕疵
+### 4.5 实现中额外发现并修正的问题
+
+以下不在原设计里，是在写测试时暴露出来的：
+
+1. **`_ensure_motion_bounds()` 会重置 anchor** —— 它原本每次都调 `motion.settle_at(窗口位置)`。`_begin_walk` 若调用它，行走起点会被拉回窗口中心，实测中把 anchor 从 960 拽到 31。**处理**：拆出 `_sync_motion_anchor()`，在 `_motion_active or _walk_active` 或 `is_held()/is_falling()` 时直接返回；`_begin_walk` 只更新 bounds、不碰 anchor。
+2. **`_ensure_motion_bounds()` 绕过 `_work_area()`** —— 直接问 `DisplayServer.screen_get_usable_rect()`，让 headless 的 `work_area_override` 失效。**处理**：改走 `_work_area()`。
+3. **圈数会超过计划总数** —— 慢帧时动画可能多绕回，`_walk_cycles_done` 越过 `cycles` 后位置被 clamp，角色停在目标之前。**处理**：累加后夹到 `motion.walk_cycles_total()`。
+4. **`advance_walk` 的完成判定不能依赖 `intra_progress >= 1`** —— 绕回检测按整圈上报，最后一圈结束时小数进度恰好归零，那个条件永远不会成立。**处理**：改为仅由圈数判定。
+
+### 4.6 已知小瑕疵
 
 行走中被强制结束时，存档位置仍是起步前的位置（只在走完时存一次）。不会造成错位，仅表现为「少走一段」，本阶段接受。
 
@@ -139,6 +148,7 @@ intra_progress = animation_position / cycle_length
 ```bat
 "D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe" --headless --path app --script res://tests/test_walk_plan.gd
 "D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe" --headless --path app --script res://tests/test_behavior_controller.gd
+"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe" --headless --path app --script res://tests/test_walk_wiring.gd
 "D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe" --headless --path app --script res://tests/test_motion_physics.gd
 "D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe" --headless --path app --script res://tests/test_motion_wiring.gd
 .venv\Scripts\python.exe -B -m pytest tests/service tests/assets -q
@@ -146,10 +156,27 @@ intra_progress = animation_position / cycle_length
 
 新增断言：
 
-- `test_walk_plan.gd`：整圈量化、端点精确、单调不越界、夹到 0 圈时取消、`cycles` 边界（2 与 8）
-- `test_behavior_controller.gd`：注入 RNG 后各分支可钉死复现；两侧无空间时不产生移动；白名单严格过滤 `male_sitting_pose` / `pickup` / `fall`
+- `test_walk_plan.gd`：整圈量化、端点精确、单调不越界、夹到 0 圈时取消、`cycles` 边界；以及 `MotionController` 的行走子模式（起点贴地、整圈推进、精确落点、被拖拽/下落取消、空中不能起走）
+- `test_behavior_controller.gd`：每个掷骰区间可钉死复现；两侧无空间时不产生移动；白名单严格过滤 `male_sitting_pose` / `pickup` / `fall` / 循环动作 / 超时动作；行走圈数永不超出可用空间
+- `test_walk_wiring.gd`：真实窗口上的端到端行走 —— 步长来自契约、整段走完后距离恰为整数圈、拖拽与用户动作都能打断、行为链在忙碌时不决策
 
 **回归硬闸门**：`test_motion_physics.gd` 与 `test_motion_wiring.gd` 必须全绿，拖拽、下落、落地行为不得变化。
+
+### 5.2 已执行的验证结果
+
+全部通过（2026-11-09）：
+
+| 测试 | 结果 |
+|---|---|
+| `test_walk_plan.gd` | 202 项，0 失败 |
+| `test_behavior_controller.gd` | 200 项，0 失败 |
+| `test_walk_wiring.gd` | 34 项，0 失败 |
+| `test_motion_physics.gd` | 53 项，0 失败（回归） |
+| `test_motion_wiring.gd` | 41 项，0 失败（回归） |
+| `pytest tests/service tests/assets` | 531 passed, 2 skipped |
+| 其余 Godot 套件（controllers / character_view / libraries / action_menu / action_wiring / lifecycle / catalog） | 全部 0 失败 |
+
+**尚未执行**：以下桌面人工验收需要真实显示器，本轮未做。
 
 ### 5.2 桌面人工验收
 
@@ -179,4 +206,6 @@ intra_progress = animation_position / cycle_length
 
 ## 7. 事实与推断的边界
 
-本文件中的技术前提（第 3 节）与碰撞点（第 4.4 节）全部来自读取源码，**尚未运行任何测试**。实现完成后须以第 5 节的实测结果为准；若实测与本文件冲突，以实测修正本文件并记录差异。
+第 3 节的技术前提来自读取源码；第 4.4 节的碰撞点在实现时逐条处理，第 4.5 节记录的是**写测试时才暴露出来的四个问题**，均已修正并有测试覆盖。第 5.2 节是实际执行结果，不是预期。
+
+仍待实测的部分：桌面人工验收 7 条。其中「脚底是否打滑」和「窗口是否发抖」只能由肉眼判断，headless 测试只能保证位移是整数圈、窗口偏移在整段行走期间冻结。

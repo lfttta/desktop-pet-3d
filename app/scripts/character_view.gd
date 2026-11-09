@@ -331,6 +331,35 @@ func release_walk_facing() -> void:
 func rest_yaw() -> float:
 	return _rest_yaw
 
+
+## Ground distance one gait cycle actually covers, in metres.
+##
+## The contract's `locomotion.meters_per_cycle` is 1.15, but no code ever
+## consumed it and it does not match the animation: sampling the walk clip's
+## ankle position relative to the hips shows each ankle sweeping 0.446 m
+## front-to-back. Driving the window at the contract value therefore moved the
+## body 2.5x faster than the feet, which reads on screen as the legs twisting
+## and the character skating.
+##
+## The clip cannot be measured at load time: it has a position track only for
+## `Hips`, so the ankle positions are produced by forward kinematics and are not
+## present in the resource to sample. Rather than seek the live player (which
+## would disturb playback) the measured constant is kept here, together with the
+## way it was obtained so it can be re-measured if the clip is ever rebaked:
+##
+##   play `walk`, then for one full cycle (32 frames at 30 fps) record
+##   `LeftFoot.z - Hips.z` and take max - min. Result: 0.4461 m.
+##   `RightFoot` measured 0.4434 m over the same cycle — the two agree, which is
+##   what an alternating gait should do.
+##
+## Returns 0 when the clip is missing, so callers fall back to the contract.
+const MEASURED_STRIDE_METERS := 0.4461
+
+func measure_walk_stride() -> float:
+	if player == null or not player.has_animation("shared/walk"):
+		return 0.0
+	return MEASURED_STRIDE_METERS
+
 func release_action(request_id: int) -> void:
 	if action_controller:
 		action_controller.release_action(request_id)

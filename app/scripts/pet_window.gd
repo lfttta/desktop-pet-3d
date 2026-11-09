@@ -472,18 +472,27 @@ func _update_motion(delta: float) -> void:
 
 ## Ground distance one gait cycle covers, in physical pixels.
 ##
-## `meters_per_cycle` is authored in the character contract and was already
-## present but unused. The world-to-pixel factor comes from the window itself
+## Measured from the walk clip itself, not from the contract. The contract's
+## `locomotion.meters_per_cycle` is 1.15 but the animation's ankles only sweep
+## 0.446 m, so using the authored value made the window travel 2.5x faster than
+## the feet and the character visibly skated. The clip is the authority.
+##
+## The world-to-pixel factor comes from the window itself
 ## (`window.size.y / camera.size`), which already includes the display DPI and
 ## the user's 0.5-2.0 scale — scaling it by `dpi_scale` again would double-count.
 func _walk_stride_px() -> float:
 	if camera == null or not is_instance_valid(actor):
 		return 0.0
 	var meters := 0.0
-	if actor.get("config") is Dictionary:
-		var locomotion: Variant = (actor.config as Dictionary).get("locomotion", {})
-		if locomotion is Dictionary:
-			meters = float(locomotion.get("meters_per_cycle", 0.0))
+	if actor.has_method("measure_walk_stride"):
+		meters = float(actor.measure_walk_stride())
+	if meters <= 0.0:
+		# Fall back to the contract only when the clip cannot be measured, so a
+		# character without a skeleton still walks instead of freezing.
+		if actor.get("config") is Dictionary:
+			var locomotion: Variant = (actor.config as Dictionary).get("locomotion", {})
+			if locomotion is Dictionary:
+				meters = float(locomotion.get("meters_per_cycle", 0.0))
 	if meters <= 0.0:
 		return 0.0
 	var px_per_unit := float(get_window().size.y) / maxf(0.001, camera.size)
@@ -707,8 +716,14 @@ func _settle_ground_contact(delta: float) -> void:
 
 
 ## True while the current pose is close enough to standing for ankle locking.
+##
+## `walk` is deliberately absent. The correction only rotates the upper and
+## lower leg to pull the ankle to a target height, so applying it mid-stride
+## fights the clip: the shin is bent away from the pose the animation authored
+## and the foot, which is a child of the shin, ends up twisted. While walking the
+## clip owns the legs.
 func _upright_action() -> bool:
-	return current_action in ["idle", "walk", "run", "turn", "wave", "agreeing", "angry", "bashful", "bored"]
+	return current_action in ["idle", "run", "turn", "wave", "agreeing", "angry", "bashful", "bored"]
 
 
 func _apply_motion_to_window() -> void:

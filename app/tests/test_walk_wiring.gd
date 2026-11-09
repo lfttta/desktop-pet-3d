@@ -64,12 +64,20 @@ func run() -> void:
 	quit(1 if failures else 0)
 
 
-## The stride must come from the authored contract, scaled by the window.
+## The stride must come from the clip, not from the contract.
+##
+## `locomotion.meters_per_cycle` is 1.15 but the animation's ankles only sweep
+## 0.446 m. Driving the window at the contract value moved the body 2.5x faster
+## than the feet, which is what made the legs look twisted while walking.
 func _test_stride(window, view) -> void:
 	var stride: float = window._walk_stride_px()
-	check(stride > 0.0, "a stride is derived from the contract, got %f" % stride)
-	var meters := float((view.config.get("locomotion", {}) as Dictionary).get("meters_per_cycle", 0.0))
-	check(meters > 0.0, "the contract carries meters_per_cycle")
+	check(stride > 0.0, "a stride is derived from the clip, got %f" % stride)
+	var measured := float(view.measure_walk_stride())
+	check(measured > 0.0, "the clip reports a stride")
+	check(absf(measured - 0.4461) < 0.01, "the stride is the measured ankle sweep, got %f" % measured)
+	var contract := float((view.config.get("locomotion", {}) as Dictionary).get("meters_per_cycle", 0.0))
+	check(contract > 0.0, "the contract still carries meters_per_cycle")
+	check(measured < contract * 0.6, "the clip stride is much shorter than the contract value, got %f vs %f" % [measured, contract])
 	var cycle_length: float = view.walk_cycle_length()
 	check(absf(cycle_length - 1.0333333) < 0.001, "the walk clip length is the authored one, got %f" % cycle_length)
 

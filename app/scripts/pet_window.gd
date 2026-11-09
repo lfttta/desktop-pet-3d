@@ -5,6 +5,7 @@ const DragState = preload("res://scripts/drag_state.gd")
 const HitRegions = preload("res://scripts/hit_regions.gd")
 const ScreenMath = preload("res://scripts/screen_math.gd")
 const ActionMenu = preload("res://scripts/action_menu.gd")
+const MotionController = preload("res://scripts/motion/motion_controller.gd")
 
 var camera: Camera3D
 var actor: Node3D
@@ -30,6 +31,15 @@ var _last_work_area := Rect2i()
 var _screen_timer := 0.0
 var _geometry := false
 var _attached_edges := Vector2i(1, 1)
+## Vertical motion lives here: a transparent HWND that moves does not make the
+## character fall, so gravity and landing are integrated in screen pixels.
+var motion := MotionController.new()
+var _motion_active := false
+var _held_request := -1
+var _fall_request := -1
+var _recovering := false
+var _recovery_remaining := 0.0
+var _ground_contact_delay := 0.0
 
 func _ready() -> void:
 	_parse_options()
@@ -236,12 +246,20 @@ func _process(delta: float) -> void:
 		_screen_timer = 0.0
 		_check_screen()
 	if not hidden:
+		_update_motion(delta)
 		_constrain_window()
 		_update_regions()
 		if bridge:
 			_update_input()
 		if status_label:
-			status_label.text = "Godette · %s\n%s" % [current_action, "拖动中" if drag.dragging else "待机"]
+			var status := "待机"
+			if motion.is_held():
+				status = "拖动中"
+			elif motion.is_falling():
+				status = "下落"
+			elif _recovering:
+				status = "恢复"
+			status_label.text = "Godette · %s\n%s" % [current_action, status]
 	if options.has("capture") and elapsed > float(options.get("capture-at", "3")) and not captured_image:
 		captured_image = true
 		_capture.call_deferred()
@@ -274,17 +292,191 @@ func _update_input() -> void:
 		else:
 			Engine.max_fps = 60
 			print("[stage0] DRAG begin")
+			_begin_hold(cursor)
 	if state.moved:
-		var work := DisplayServer.screen_get_usable_rect(screen)
-		var subject := _subject_rect()
-		get_window().position = ScreenMath.clamp_subject(state.position, subject, work)
-		_attached_edges = ScreenMath.edge_flags(get_window().position, subject, work)
+		_hold_to(cursor)
 	if state.end:
 		bridge.end_capture()
 		Engine.max_fps = 30
 		print("[stage0] DRAG end click=", state.click, " position=", get_window().position)
+		_end_hold(state.click)
 	if state.click:
 		_play_action("wave")
+
+
+## --- Hold / fall / land -------------------------------------------------------
+#
+# The window follows the motion controller instead of the cursor: while held the
+# character swings after the cursor with follow + damping, on release it keeps
+# its velocity and falls until the soles reach the work area's bottom edge.
+
+func _ensure_motion_bounds() -> void:
+	var work := DisplayServer.screen_get_usable_rect(screen)
+	_last_work_area = work
+	var subject := _subject_rect()
+	motion.set_bounds(work, subject.size)
+	if not _motion_active and not motion.is_held() and not motion.is_falling():
+		# First placement: align the controller with where the pet already is.
+		var soles := Vector2(get_window().position) + Vector2(subject.get_center().x, subject.end.y)
+		motion.settle_at(soles.x)
+
+
+func _begin_hold(cursor: Vector2i) -> void:
+	_ensure_motion_bounds()
+	var subject := _subject_rect()
+	var soles := Vector2(get_window().position) + Vector2(subject.get_center().x, subject.end.y)
+	# Grab height is how far the soles sit below the point clicked on the body.
+	var grab_height := clampf(soles.y - float(cursor.y), 0.0, maxf(0.0, subject.size.y))
+	motion.begin_hold(Vector2(cursor), grab_height)
+	_motion_active = true
+	_recovering = false
+	if is_instance_valid(actor) and actor.has_method("set_ground_contact"):
+		actor.set_ground_contact(false)
+	_held_request = _request_body_action("pickup", "drag", 1.0, 1, true)
+	print("[stage0] HOLD begin soles=", soles, " grab_height=", grab_height, " request=", _held_request)
+
+
+func _hold_to(cursor: Vector2i) -> void:
+	# Only the cursor target is passed here. Integration stays in `_process`, so a
+	# frame with several input samples cannot advance the spring more than once.
+	if not motion.is_held():
+		return
+	motion.steer(Vector2(cursor))
+	_apply_motion_to_window()
+
+
+func _end_hold(_was_click: bool) -> void:
+	if not motion.is_held():
+		return
+	motion.release()
+	# The hold action outranks the fall in the priority table, so it must be
+	# released first; otherwise the fall request is rejected and the pet drops
+	# with its lifted pose still latched.
+	if _held_request > 0 and is_instance_valid(actor) and actor.has_method("release_action"):
+		actor.release_action(_held_request)
+	_held_request = -1
+	var falling_requested := _request_body_action("fall", "fall", 1.0, 1, true)
+	if falling_requested < 0:
+		print("[stage0] FALL action unavailable; physics only")
+	_fall_request = falling_requested
+	print("[stage0] HOLD release -> FALL speed=", motion.velocity, " request=", _fall_request)
+
+
+## Requests an action and returns its request id (-1 when it was rejected).
+func _request_body_action(name_: String, source: String, speed := 1.0, direction := 1, hold := false) -> int:
+	if not is_instance_valid(actor) or not actor.has_method("request_action"):
+		return -1
+	return int(actor.request_action(name_, source, speed, direction, hold))
+
+
+## Drives the released character down to the desktop and hands control back.
+func _update_motion(delta: float) -> void:
+	if not _motion_active:
+		return
+	motion.update(delta)
+	_apply_motion_to_window()
+	_update_body_feedback(delta)
+	if motion.take_landing():
+		_on_landed()
+	if _recovering:
+		_recovery_remaining -= delta
+		if _recovery_remaining <= 0.0:
+			_recovering = false
+	_settle_ground_contact(delta)
+	# Hand the window back to the pinning logic only once the pet is standing on
+	# the ground with the recovery done. Checking velocity alone is not enough:
+	# a held pet and a just-released one both report zero velocity for a frame.
+	if motion.is_grounded() and motion.is_resting() and not _recovering:
+		_motion_active = false
+
+
+## Re-enables foot planting after landing, but only once the pose has had time to
+## come back upright; locking the ankles during the fall or recovery pose drags
+## the body flat.
+func _settle_ground_contact(delta: float) -> void:
+	if not is_instance_valid(actor) or not actor.has_method("set_ground_contact"):
+		return
+	if motion.is_held() or motion.is_falling():
+		return
+	if _ground_contact_delay > 0.0:
+		_ground_contact_delay -= delta
+		return
+	# Only upright actions keep their feet planted. A crouched recovery, a fall
+	# crouch or any other bent pose has its ankles nowhere near the idle height,
+	# and forcing them there folds the legs inside out.
+	if not _upright_action():
+		if actor.ground_contact_enabled():
+			actor.set_ground_contact(false)
+		return
+	if not actor.ground_contact_enabled():
+		actor.set_ground_contact(true, 1.0)
+
+
+## True while the current pose is close enough to standing for ankle locking.
+func _upright_action() -> bool:
+	return current_action in ["idle", "walk", "run", "turn", "wave", "agreeing", "angry", "bashful", "bored"]
+
+
+func _apply_motion_to_window() -> void:
+	if DisplayServer.get_name() == "headless" or camera == null:
+		return
+	var subject := _subject_rect()
+	# anchor is the soles point; convert it back into a window top-left.
+	var top_left := Vector2(motion.anchor.x - subject.get_center().x, motion.anchor.y - subject.end.y)
+	get_window().position = ScreenMath.clamp_subject(Vector2i(top_left.round()), subject, DisplayServer.screen_get_usable_rect(screen))
+
+
+## Feeds the visible shove to the spring bones and matches the step cycle speed.
+func _update_body_feedback(_delta: float) -> void:
+	if not is_instance_valid(actor):
+		return
+	if actor.has_method("set_body_inertia"):
+		var inertia: Vector3 = motion.inertia()
+		# While airborne the character is rotating in the world, not being pushed;
+		# only the drag phase is a body shove.
+		if motion.is_falling():
+			inertia = Vector3.ZERO
+		actor.set_body_inertia(inertia)
+	if actor.has_method("apply_locomotion_speed"):
+		var horizontal: float = absf(motion.velocity.x)
+		var nominal := 1.0
+		var locomotion: Dictionary = actor.config.get("locomotion", {}) if actor.get("config") != null else {}
+		if locomotion.get("nominal_speed") is float and float(locomotion.get("nominal_speed")) > 0.1:
+			nominal = float(locomotion.get("nominal_speed"))
+		actor.apply_locomotion_speed(clampf(horizontal / maxf(1.0, nominal * 30.0), 0.6, 2.0))
+
+
+func _on_landed() -> void:
+	print("[stage0] LANDED speed=", motion.last_landing_speed(), " soles=", motion.anchor)
+	# The motion controller keeps ownership until the recovery finishes; only then
+	# does window pinning get the position back, so a landing cannot be snapped
+	# away mid-cushion.
+	_attached_edges = Vector2i(1, 1)
+	# The fall holds its pose until released; release it before asking for the
+	# recovery or idle, or the higher-priority fall keeps the request rejected.
+	if _fall_request > 0 and is_instance_valid(actor) and actor.has_method("release_action"):
+		actor.release_action(_fall_request)
+	_fall_request = -1
+	if motion.needs_recovery():
+		var request := _request_body_action("recover", "recovery", 1.0, 1, false)
+		_recovering = request >= 0
+		_recovery_remaining = 0.0 if request < 0 else _action_length("recover")
+	else:
+		_recovering = false
+		_request_body_action("idle", "recovery", 1.0, 1, false)
+	# Foot planting only makes sense once the body is upright. Enabling it while
+	# the fall/recover pose is still bent over would pull the ankles to the idle
+	# height and flatten the whole body. `_settle_ground_contact` fades it in as
+	# the pose returns to standing.
+	_ground_contact_delay = 0.0 if _recovering else 0.25
+
+
+func _action_length(name_: String) -> float:
+	if not is_instance_valid(actor) or not actor.get("player"):
+		return 0.3
+	var animation: Animation = actor.player.get_animation("shared/" + name_)
+	return animation.length if animation != null else 0.3
+
 
 func _handle_tray(action: int) -> void:
 	var chosen := action_menu.action_for_command(action)
@@ -366,6 +558,10 @@ func _subject_rect() -> Rect2:
 func _constrain_window() -> void:
 	if DisplayServer.get_name() == "headless" or camera == null:
 		return
+	# While the motion controller owns the vertical position, pinning the subject
+	# to an edge every frame would fight gravity and cancel the fall.
+	if _motion_active:
+		return
 	var work := DisplayServer.screen_get_usable_rect(screen)
 	var subject := _subject_rect()
 	var edges := Vector2i.ZERO if drag.active else _attached_edges
@@ -374,7 +570,12 @@ func _constrain_window() -> void:
 		get_window().position = desired
 
 func _cancel_drag() -> void:
+	var was_held := motion.is_held()
 	drag.cancel()
+	if was_held:
+		# A cancelled drag must not leave the pet hanging in mid-air.
+		motion.release()
+		_motion_active = true
 	if bridge:
 		bridge.end_capture()
 	Engine.max_fps = 5 if hidden else 30

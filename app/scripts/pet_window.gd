@@ -40,6 +40,10 @@ var _fall_request := -1
 var _recovering := false
 var _recovery_remaining := 0.0
 var _ground_contact_delay := 0.0
+## A press that has not yet travelled far enough to count as a drag. The pet is
+## only lifted once `drag.update` reports movement, so a click cannot start one.
+var _hold_pending := false
+var _press_cursor := Vector2i.ZERO
 
 func _ready() -> void:
 	_parse_options()
@@ -302,17 +306,26 @@ func _update_input() -> void:
 			drag.cancel()
 		else:
 			Engine.max_fps = 60
-			print("[stage0] DRAG begin")
-			_begin_hold(cursor)
+			# A press is not a grab yet. Only travel past the drag threshold turns
+			# it into one, so a plain click never lifts the pet and drops it.
+			_press_cursor = cursor
+			_hold_pending = true
 	if state.moved:
+		if _hold_pending:
+			_hold_pending = false
+			print("[stage0] DRAG begin")
+			_begin_hold(_press_cursor)
 		_hold_to(cursor)
 	if state.end:
 		bridge.end_capture()
 		Engine.max_fps = 30
-		print("[stage0] DRAG end click=", state.click, " position=", get_window().position)
-		_end_hold(state.click)
-	if state.click:
-		_play_action("wave")
+		if _hold_pending:
+			_hold_pending = false
+			print("[stage0] CLICK position=", get_window().position)
+			_play_action("wave")
+		else:
+			print("[stage0] DRAG end position=", get_window().position)
+			_end_hold()
 
 
 ## --- Hold / fall / land -------------------------------------------------------
@@ -356,7 +369,7 @@ func _hold_to(cursor: Vector2i) -> void:
 	_apply_motion_to_window()
 
 
-func _end_hold(_was_click: bool) -> void:
+func _end_hold() -> void:
 	if not motion.is_held():
 		return
 	motion.release()
@@ -592,6 +605,9 @@ func _constrain_window() -> void:
 func _cancel_drag() -> void:
 	var was_held := motion.is_held()
 	drag.cancel()
+	# A press that never travelled is dropped with the capture; leaving the flag
+	# set would turn the next unrelated release into a click.
+	_hold_pending = false
 	if was_held:
 		# A cancelled drag must not leave the pet hanging in mid-air.
 		motion.release()

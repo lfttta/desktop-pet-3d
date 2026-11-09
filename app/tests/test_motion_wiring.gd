@@ -61,7 +61,7 @@ func run() -> void:
 	check(window.motion.anchor.y < 1000.0, "held pet is above the ground")
 
 	# Releasing starts a fall and switches the action.
-	window._end_hold(false)
+	window._end_hold()
 	check(window.motion.is_falling(), "release starts a fall")
 	check(view.action == "fall", "release plays fall, got %s" % view.action)
 
@@ -101,7 +101,7 @@ func run() -> void:
 	window.motion.begin_hold(Vector2(960, 990), 10.0)
 	window._motion_active = true
 	window.motion.hold(Vector2(960, 990), 1.0 / 60.0)
-	window._end_hold(false)
+	window._end_hold()
 	for i in 60:
 		window._update_motion(1.0 / 60.0)
 	check(not window._recovering, "a tiny drop does not enter recovery")
@@ -117,6 +117,48 @@ func run() -> void:
 	window._on_action_changed("recover")
 	window._settle_ground_contact(1.0 / 60.0)
 	check(not view.ground_contact_enabled(), "a crouched action frees the feet")
+
+	# A click must never lift the pet. DragState reports `begin` on press but only
+	# `moved` once the pointer travels past its threshold, and the window arms a
+	# pending hold instead of grabbing immediately.
+	var probe := window.drag
+	probe.cancel()
+	var press := Vector2i(960, 950)
+	var down_state: Dictionary = probe.update(true, true, press, Vector2i(640, 300), true, true)
+	check(down_state.begin, "a press reports begin")
+	check(not down_state.moved, "a press alone reports no movement")
+	var still: Dictionary = probe.update(true, true, press + Vector2i(1, 1), Vector2i(640, 300), true, true)
+	check(not still.moved, "a 1px jitter is still not a drag")
+	var lifted: Dictionary = probe.update(true, true, press + Vector2i(30, -40), Vector2i(640, 300), true, true)
+	check(lifted.moved, "travel past the threshold reports movement")
+	probe.cancel()
+
+	# And a click leaves the pet standing: arming pending and releasing it must
+	# not touch the motion controller at all.
+	window.motion.settle_at(960.0)
+	window._motion_active = false
+	var rest_anchor: Vector2 = window.motion.anchor
+	window._hold_pending = true
+	window._press_cursor = press
+	check(not window.motion.is_held(), "a press on its own does not start a hold")
+	check(window.motion.anchor == rest_anchor, "a press on its own does not move the body")
+	window._hold_pending = false
+	check(not window.motion.is_held() and window.motion.is_grounded(),
+			"a click leaves the pet standing")
+
+	# The same press becomes a drag once the pointer moves.
+	window._hold_pending = true
+	window._press_cursor = press
+	if window._hold_pending:
+		window._hold_pending = false
+		window._begin_hold(window._press_cursor)
+	check(window.motion.is_held(), "travel past the threshold starts the hold")
+	window._end_hold()
+	for i in 400:
+		window._update_motion(1.0 / 60.0)
+		if window.motion.is_grounded():
+			break
+	check(window.motion.is_grounded(), "the drag still lands")
 
 	print("MOTION_WIRING_TESTS checks=", checks, " failures=", failures)
 	quit(1 if failures else 0)

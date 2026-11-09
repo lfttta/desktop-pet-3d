@@ -1,6 +1,11 @@
 extends RefCounted
 ## Pure drag state. Platform capture is acquired/released by the caller.
 
+## Movement needed before a press counts as a drag. Everything here is in screen
+## physical pixels, and at 150% display scaling Windows' own drag threshold of
+## 4 DIPs is 6 physical pixels; 8 keeps a shaky click from lifting the pet.
+const DRAG_THRESHOLD := 8.0
+
 var active := false
 var dragging := false
 var _previous_down := false
@@ -12,7 +17,7 @@ func update(down: bool, hit: bool, cursor: Vector2i, window_position: Vector2i, 
 	var rising := down and not _previous_down
 	_previous_down = down
 	if active:
-		if Vector2(cursor - _press).length() >= 4.0:
+		if Vector2(cursor - _press).length() >= DRAG_THRESHOLD:
 			dragging = true
 		if not enabled or not captured or not down:
 			result.end = true

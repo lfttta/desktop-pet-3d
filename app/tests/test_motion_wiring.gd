@@ -41,15 +41,21 @@ func run() -> void:
 	# A real drag lifts the body and switches to the pickup hold.
 	var soles_before: Vector2 = window.motion.anchor
 	window._held_request = int(view.request_action("pickup", "drag", 1.0, 1, true))
-	window.motion.begin_hold(Vector2(960, 750), 200.0)
+	# The grab point is on the body, 200 px above the soles. Pressing the mouse
+	# must not move the pet at all: the soles stay exactly where they were, or
+	# the character visibly jumps the moment the button goes down.
+	window.motion.begin_hold(Vector2(soles_before.x, soles_before.y - 200.0), 200.0)
 	window._motion_active = true
 	view.set_ground_contact(false)
 	check(window.motion.is_held(), "drag begins a hold")
 	check(view.action == "pickup", "drag plays pickup, got %s" % view.action)
+	for i in 10:
+		window.motion.update(1.0 / 60.0)
+	check(absf(window.motion.anchor.y - soles_before.y) < 1.0, "grabbing does not move the body, y=%f" % window.motion.anchor.y)
 
 	# Holding above the ground keeps the pet up and does not sink it.
 	for i in 120:
-		window.motion.hold(Vector2(960, 750), 1.0 / 60.0)
+		window.motion.steer(Vector2(soles_before.x, 550.0))
 		window.motion.update(1.0 / 60.0)
 	check(window.motion.anchor.y < soles_before.y - 100.0, "hold lifts the body, y=%f" % window.motion.anchor.y)
 	check(window.motion.anchor.y < 1000.0, "held pet is above the ground")

@@ -100,13 +100,15 @@ func settle_at(x: float) -> void:
 
 ## Starts a hold. The grab offset keeps the body from snapping to the cursor.
 ## The anchor is the soles, but the character is grabbed by the body, so the
-## offset is measured from the grab point, not from the soles: otherwise the
-## first clamped update would pin the pet to the ground and the drag would do
-## nothing. `grab_height` is how far above the soles the pet was grabbed.
+## horizontal offset is taken from the current anchor and the vertical one is
+## `grab_height`: the point clicked on the body sits `grab_height` above the
+## soles, so the soles must stay that far below the cursor. Subtracting the
+## current anchor height here as well would cancel `grab_height` out and pull
+## the soles up to the cursor the instant the mouse is pressed.
 func begin_hold(cursor: Vector2, grab_height := 0.0) -> void:
 	if state == State.HELD:
 		return
-	_grab_offset = Vector2(anchor.x - cursor.x, anchor.y - grab_height - cursor.y)
+	_grab_offset = Vector2(anchor.x - cursor.x, grab_height)
 	state = State.HELD
 	velocity = Vector2.ZERO
 	acceleration = Vector2.ZERO

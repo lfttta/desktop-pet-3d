@@ -448,10 +448,10 @@ func _update_body_feedback(_delta: float) -> void:
 
 func _on_landed() -> void:
 	print("[stage0] LANDED speed=", motion.last_landing_speed(), " soles=", motion.anchor)
-	# The motion controller keeps ownership until the recovery finishes; only then
-	# does window pinning get the position back, so a landing cannot be snapped
-	# away mid-cushion.
-	_attached_edges = Vector2i(1, 1)
+	# Recompute the edge attachment from where the pet actually landed. Forcing a
+	# fixed edge here used to snap every landing back to the bottom-right corner,
+	# which made a drag look like it had been undone.
+	_attached_edges = ScreenMath.edge_flags(get_window().position, _subject_rect(), DisplayServer.screen_get_usable_rect(screen))
 	# The fall holds its pose until released; release it before asking for the
 	# recovery or idle, or the higher-priority fall keeps the request rejected.
 	if _fall_request > 0 and is_instance_valid(actor) and actor.has_method("release_action"):

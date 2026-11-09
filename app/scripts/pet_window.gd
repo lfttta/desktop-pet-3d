@@ -44,6 +44,8 @@ var _ground_contact_delay := 0.0
 ## only lifted once `drag.update` reports movement, so a click cannot start one.
 var _hold_pending := false
 var _press_cursor := Vector2i.ZERO
+## Replaces the real desktop rect in headless tests, which report a 0x0 area.
+var work_area_override := Rect2i()
 
 func _ready() -> void:
 	_parse_options()
@@ -290,7 +292,7 @@ func _update_input() -> void:
 	# dpi_scale breaks the hit test at 150% display scaling.
 	var cursor: Vector2i = bridge.get_cursor_position()
 	var down: bool = bridge.is_left_button_down()
-	var work_area := DisplayServer.screen_get_usable_rect(screen)
+	var work_area := _work_area()
 	var window_position := get_window().position
 	var subject := _subject_rect()
 	var inside := ScreenMath.pointer_in_subject(cursor, window_position, subject, work_area)
@@ -567,6 +569,14 @@ func _recover_position() -> void:
 	# into the bottom-right corner where the body can sit off-screen.
 	get_window().position = ScreenMath.clamp_subject(get_window().position, _subject_rect(), work)
 	_attached_edges = ScreenMath.edge_flags(get_window().position, _subject_rect(), work)
+
+## The desktop area the pet may occupy, in physical pixels. Headless has no
+## display, so `work_area_override` lets tests exercise the hit test.
+func _work_area() -> Rect2i:
+	if work_area_override.size.x > 0 and work_area_override.size.y > 0:
+		return work_area_override
+	return DisplayServer.screen_get_usable_rect(screen)
+
 
 func _subject_rect() -> Rect2:
 	# Viewport pixels. The cursor, the window position and this rect all live in

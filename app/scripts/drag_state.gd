@@ -1,5 +1,9 @@
 extends RefCounted
 ## Pure drag state. Platform capture is acquired/released by the caller.
+##
+## `update` reports `begin` on press and `moved` only once the pointer has
+## travelled past DRAG_THRESHOLD, so the caller can keep a press and a drag
+## apart without keeping its own copy of the threshold.
 
 ## Movement needed before a press counts as a drag. Everything here is in screen
 ## physical pixels, and at 150% display scaling Windows' own drag threshold of
@@ -13,7 +17,7 @@ var _press := Vector2i.ZERO
 var _offset := Vector2i.ZERO
 
 func update(down: bool, hit: bool, cursor: Vector2i, window_position: Vector2i, captured: bool, enabled: bool) -> Dictionary:
-	var result := {"begin": false, "end": false, "click": false, "moved": false, "position": window_position}
+	var result := {"begin": false, "end": false, "moved": false, "position": window_position}
 	var rising := down and not _previous_down
 	_previous_down = down
 	if active:
@@ -23,7 +27,6 @@ func update(down: bool, hit: bool, cursor: Vector2i, window_position: Vector2i, 
 			result.end = true
 			# Godot/Win32 may release capture while dispatching mouse-up, before
 			# this polling tick. Only a loss while still held is cancellation.
-			result.click = enabled and not down and not dragging
 			if enabled and not down and dragging:
 				result.moved = true
 				result.position = cursor - _offset

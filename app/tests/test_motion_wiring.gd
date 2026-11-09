@@ -4,6 +4,7 @@ extends SceneTree
 ## uses; the native bridge is absent, which the code paths tolerate.
 
 const PetWindow = preload("res://scripts/pet_window.gd")
+const FakeBridge = preload("res://tests/fake_bridge.gd")
 
 var checks := 0
 var failures := 0
@@ -159,6 +160,65 @@ func run() -> void:
 		if window.motion.is_grounded():
 			break
 	check(window.motion.is_grounded(), "the drag still lands")
+
+	# Now the real input loop, with a stand-in bridge: a click must reach the
+	# `CLICK` branch and a moved press must reach `DRAG begin`. Driving
+	# `_update_input` is what proves the split, not re-setting the flags by hand.
+	# Headless has no camera projection, so a hit region covering the click point
+	# stands in for the character's body, and the window origin makes the point
+	# land inside the subject rect.
+	var fake = FakeBridge.new()
+	window.bridge = fake
+	window.drag.cancel()
+	window.motion.settle_at(960.0)
+	window._motion_active = false
+	window._hold_pending = false
+
+	var origin: Vector2i = root.position
+	# Headless renders a tiny 15x37 subject rect, so the click point has to sit
+	# inside it; the hit region below is stated generously to cover the body.
+	# Headless also reports a 0x0 work area, which would fail every hit test.
+	var chest: Vector2i = origin + Vector2i(30, 30)
+	window.work_area_override = Rect2i(0, 0, 1920, 1000)
+	window.regions = [{"a": Vector2(0, 0), "b": Vector2(400, 400), "radius": 400.0}]
+	fake.cursor = chest
+	fake.down = false
+	window._update_input()
+	fake.down = true
+	window._update_input()
+	check(window._hold_pending, "the input loop arms a pending hold on press")
+	check(not window.motion.is_held(), "the input loop does not grab on press")
+	check(not window._motion_active, "the input loop leaves the body alone on press")
+	fake.down = false
+	window._update_input()
+	check(not window._hold_pending, "releasing clears the pending hold")
+	check(not window.motion.is_held(), "a click through the input loop never starts a hold")
+	check(window.motion.is_grounded(), "a click through the input loop leaves the pet grounded")
+	check(window.current_action == "wave", "a click plays wave, got %s" % window.current_action)
+
+	# Same press, but the pointer travels first.
+	window._on_action_changed("idle")
+	window.drag.cancel()
+	window._hold_pending = false
+	fake.cursor = chest
+	fake.down = false
+	window._update_input()
+	fake.down = true
+	window._update_input()
+	fake.cursor = chest + Vector2i(60, -80)
+	window._update_input()
+	check(window.motion.is_held(), "the input loop starts the hold once the pointer moves")
+	check(window._motion_active, "the input loop hands the body to the motion controller")
+	fake.down = false
+	window._update_input()
+	check(not window.motion.is_held(), "releasing ends the hold")
+	check(window.motion.is_falling(), "releasing starts a fall")
+	for i in 400:
+		window._update_motion(1.0 / 60.0)
+		if window.motion.is_grounded():
+			break
+	check(window.motion.is_grounded(), "the input-driven drag lands")
+	window.bridge = null
 
 	print("MOTION_WIRING_TESTS checks=", checks, " failures=", failures)
 	quit(1 if failures else 0)

@@ -267,6 +267,10 @@ func _process(delta: float) -> void:
 		_quit()
 
 func _update_regions() -> void:
+	# Camera projection is in viewport (physical) pixels; the cursor and window
+	# position are in DIPs, so the regions are scaled down to match. Leave them
+	# alone at 100% scaling.
+	var factor := 1.0 if is_equal_approx(dpi_scale, 1.0) else maxf(0.0001, dpi_scale)
 	if actor and actor.has_method("project_hit_regions"):
 		regions = actor.project_hit_regions(camera)
 	else:
@@ -275,12 +279,36 @@ func _update_regions() -> void:
 			{"a": camera.unproject_position(Vector3(0, 0.3, 0)), "b": camera.unproject_position(Vector3(0, 1.0, 0)), "radius": px * 0.23},
 			{"a": camera.unproject_position(Vector3(0, 1.42, 0)), "b": camera.unproject_position(Vector3(0, 1.42, 0)), "radius": px * 0.19}
 		]
+	if not is_equal_approx(factor, 1.0):
+		for region in regions:
+			region["a"] = region.a / factor
+			region["b"] = region.b / factor
+			region["radius"] = float(region.radius) / factor
+
+
+func _to_logical(point: Vector2i) -> Vector2i:
+	## Converts a native (physical pixel) point into Godot's DIP space. The bridge
+	## reads the cursor with GetPhysicalCursorPos while the window geometry is in
+	## DIPs, so a 150% display scale needs the division or hit testing misses.
+	var factor := maxf(0.0001, dpi_scale)
+	if is_equal_approx(factor, 1.0):
+		return point
+	return Vector2i((Vector2(point) / factor).round())
+
 
 func _update_input() -> void:
-	var cursor: Vector2i = bridge.get_cursor_position()
+	# Units differ: the bridge returns GetPhysicalCursorPos (physical pixels),
+	# while get_window().position and the viewport rects are in DIPs. Measured on
+	# a 150% desktop: clicking DIP 760 produced raw 1140 for a window at DIP 413.
+	# Convert the cursor before any comparison, or every hit test is 1.5x off.
+	var cursor: Vector2i = _to_logical(bridge.get_cursor_position())
 	var down: bool = bridge.is_left_button_down()
 	var work_area := DisplayServer.screen_get_usable_rect(screen)
-	var hit := ScreenMath.pointer_in_subject(cursor, get_window().position, _subject_rect(), work_area) and HitRegions.contains(Vector2(cursor - get_window().position), regions)
+	var window_position := get_window().position
+	var subject := _subject_rect()
+	var inside := ScreenMath.pointer_in_subject(cursor, window_position, subject, work_area)
+	var on_body := HitRegions.contains(Vector2(cursor - window_position), regions)
+	var hit := inside and on_body
 	var state: Dictionary = drag.update(down, hit, cursor, get_window().position, bridge.has_capture(), true)
 	var interactive: bool = hit or drag.active
 	if interactive != previous_interactive:
@@ -537,10 +565,24 @@ func _recover_position() -> void:
 	_cancel_drag()
 	var work := DisplayServer.screen_get_usable_rect(screen)
 	_last_work_area = work
-	_attached_edges = Vector2i(1, 1)
-	get_window().position = ScreenMath.pin_edges(get_window().position, _subject_rect(), work, _attached_edges)
+	# Keep the character inside the work area without snapping it to an edge: a
+	# blank recovery is what should happen on "restore position", not a teleport
+	# into the bottom-right corner where the body can sit off-screen.
+	get_window().position = ScreenMath.clamp_subject(get_window().position, _subject_rect(), work)
+	_attached_edges = ScreenMath.edge_flags(get_window().position, _subject_rect(), work)
 
 func _subject_rect() -> Rect2:
+	# Camera projection yields viewport pixels, which are physical while the window
+	# position is in DIPs. Dividing here is what makes every clamp meaningful on a
+	# scaled display; at 100% it is a no-op.
+	var raw := _subject_rect_raw()
+	if is_equal_approx(dpi_scale, 1.0):
+		return raw
+	var factor := maxf(0.0001, dpi_scale)
+	return Rect2(raw.position / factor, raw.size / factor)
+
+
+func _subject_rect_raw() -> Rect2:
 	if camera == null or not is_instance_valid(actor):
 		return Rect2(Vector2.ZERO, Vector2(get_window().size))
 	if actor.has_method("project_visible_rect"):
@@ -564,10 +606,13 @@ func _constrain_window() -> void:
 		return
 	var work := DisplayServer.screen_get_usable_rect(screen)
 	var subject := _subject_rect()
-	var edges := Vector2i.ZERO if drag.active else _attached_edges
-	var desired := ScreenMath.pin_edges(get_window().position, subject, work, edges)
-	if desired != get_window().position:
-		get_window().position = desired
+	# Only keep the character reachable: clamp it inside the work area, but never
+	# pull it toward an edge it is not already touching. Re-pinning every frame
+	# against a moving idle bounds box made the window drift on its own.
+	var clamped := ScreenMath.clamp_subject(get_window().position, subject, work)
+	if clamped != get_window().position:
+		get_window().position = clamped
+		_attached_edges = ScreenMath.edge_flags(clamped, subject, work)
 
 func _cancel_drag() -> void:
 	var was_held := motion.is_held()

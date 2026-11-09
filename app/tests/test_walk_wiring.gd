@@ -86,13 +86,40 @@ func _test_walk_runs(window, view) -> void:
 	var stride: float = window.motion.walk_stride()
 	check(stride > 0.0, "the running plan exposes its stride")
 
+	# The window must not bob while the legs swing. `walk` moves the visible box
+	# several pixels vertically across a cycle, so any per-frame recomputation of
+	# the window's y shows up as a visible shiver.
+	var frozen_rect: Rect2 = window._walk_subject
+	check(frozen_rect.size.y > 0.0, "the walk freezes a subject rect")
+	var y_samples: Array[float] = []
+	var rect_span := 0.0
+	var rect_low := INF
+	var rect_high := -INF
+
 	# Drive the segment as the frame loop would, from the clip's own position.
 	var guard := 0
 	while window._walk_active and guard < 600:
 		guard += 1
 		window._update_walk()
+		y_samples.append(window.motion.anchor.y)
+		var live: Rect2 = window._subject_rect()
+		rect_low = minf(rect_low, live.end.y)
+		rect_high = maxf(rect_high, live.end.y)
 		await process_frame
+	rect_span = rect_high - rect_low
 	check(not window._walk_active, "the walk ends on its own")
+	# The anchor's y must be pinned to the ground line for the whole segment.
+	var y_span := 0.0
+	if y_samples.size() > 1:
+		var y_low: float = y_samples[0]
+		var y_high: float = y_samples[0]
+		for value in y_samples:
+			y_low = minf(y_low, value)
+			y_high = maxf(y_high, value)
+		y_span = y_high - y_low
+	check(y_span < 0.5, "the anchor stays on the ground line while walking, span %f" % y_span)
+	# And the live box must actually be moving, or this test proves nothing.
+	check(rect_span > 0.1, "the visible box really does move during a walk (span %f)" % rect_span)
 	var travelled: float = window.motion.anchor.x - start
 	check(travelled > 0.0, "the walk moved the body right, moved %f" % travelled)
 	# Whole cycles only: the distance must be an integer multiple of the stride.

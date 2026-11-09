@@ -53,12 +53,14 @@ var work_area_override := Rect2i()
 var behavior := BehaviorController.new()
 var _behavior_cooldown := 0.0
 var _walk_request := -1
-## Window x offset from the soles anchor, frozen when a walk starts.
+## Window offset from the soles anchor, frozen when a walk starts.
 ##
 ## Recomputing this per frame from `_subject_rect()` would make the window
 ## shiver: the skeleton's bounding box changes every frame as the legs swing,
-## so its centre moves a few pixels even though the feet are planted.
-var _walk_center_offset := 0.0
+## so both its centre and its bottom edge move a few pixels even though the feet
+## are planted. The whole subject rect is frozen, not just x, because `top_left`
+## derives from both edges and the clamp below needs a stable rectangle.
+var _walk_subject := Rect2()
 var _walk_active := false
 ## Cycles the clip has wrapped through in the current segment. Counted by the
 ## adapter, which sees the animation position; the window only relays it.
@@ -522,10 +524,10 @@ func _begin_walk(direction: int, cycles: int) -> bool:
 		actor.face_direction(direction)
 	_walk_cycles_done = 0
 	_walk_active = true
-	# Freeze the window-to-soles offset for the whole segment. The subject box
-	# breathes with the gait, and following it would shake the window.
-	var subject := _subject_rect()
-	_walk_center_offset = subject.get_center().x
+	# Freeze the subject rect for the whole segment: its bottom edge feeds the
+	# window y and its centre feeds the window x, so a breathing gait box would
+	# move the window up and down every frame.
+	_walk_subject = _subject_rect()
 	_walk_request = _request_body_action("walk", "autonomous", 1.0, 1, false)
 	if _walk_request < 0:
 		# Without the clip there is no progress to drive, so there is no walk.
@@ -572,13 +574,17 @@ func _update_walk() -> void:
 	_apply_walk_to_window()
 
 
-## Places the window from the walk anchor using the frozen centre offset.
+## Places the window from the walk anchor using the frozen subject rect.
+##
+## Both axes come from the same frozen rect. Deriving y from a live
+## `_subject_rect()` made the window bob with the gait, which is exactly the
+## shiver the frozen offset was supposed to prevent.
 func _apply_walk_to_window() -> void:
 	if DisplayServer.get_name() == "headless" or camera == null:
 		return
-	var subject := _subject_rect()
-	var top_left := Vector2(motion.anchor.x - _walk_center_offset, motion.anchor.y - subject.end.y)
-	get_window().position = ScreenMath.clamp_subject(Vector2i(top_left.round()), subject, _work_area())
+	var frozen := _walk_subject
+	var top_left := Vector2(motion.anchor.x - frozen.get_center().x, motion.anchor.y - frozen.end.y)
+	get_window().position = ScreenMath.clamp_subject(Vector2i(top_left.round()), frozen, _work_area())
 
 
 ## Ends a walk segment. `completed` false means it was interrupted.
@@ -870,7 +876,7 @@ func _constrain_window() -> void:
 	# drag the character back to where it started.
 	if _motion_active or _walk_active:
 		return
-	var work := DisplayServer.screen_get_usable_rect(screen)
+	var work := _work_area()
 	var subject := _subject_rect()
 	# Only keep the character reachable: clamp it inside the work area, but never
 	# pull it toward an edge it is not already touching. Re-pinning every frame

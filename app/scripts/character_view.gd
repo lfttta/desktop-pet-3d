@@ -7,6 +7,7 @@ const ActionController = preload("res://scripts/animation/action_controller.gd")
 const MouthDriver = preload("res://scripts/animation/mouth_driver.gd")
 const TestAudio = preload("res://scripts/animation/test_audio.gd")
 const LegIK = preload("res://scripts/motion/leg_ik.gd")
+const WalkGait = preload("res://scripts/behavior/walk_gait.gd")
 signal visible_bounds_changed
 
 var action_controller
@@ -35,6 +36,8 @@ var _walk_yaw_active := false
 const WALK_YAW_RATE := 5.0
 ## Animation position seen last frame, for gait-cycle wrap detection.
 var _last_walk_position := -1.0
+var _walk_stride_meters := 0.0
+var _model_forward := Vector3.FORWARD
 
 var config := {}
 var model: Node3D
@@ -108,6 +111,8 @@ func load_character(entry: Dictionary) -> bool:
 	# the viewer the first time it walked and never bring it back.
 	_rest_yaw = rotation.y
 	_walk_yaw = _rest_yaw
+	_model_forward = Vector3.FORWARD if str(display.get("model_forward", "-Z")) == "-Z" else Vector3.BACK
+	_walk_stride_meters = WalkGait.measure(skeleton, library.get_animation("walk"), _model_forward)
 	var head_in_model := global_transform.affine_inverse() * _bone_position("Head")
 	_head_height = clampf((float(maximum[1]) - head_in_model.y) * factor, 0.16, 0.6)
 	player = AnimationPlayer.new()
@@ -313,9 +318,8 @@ func walk_cycles_advanced() -> int:
 func face_direction(direction: int) -> void:
 	if _turn_active:
 		return
-	# Relative to the authored yaw, not to zero: the model's own base rotation is
-	# part of its facing, and the walk turn is a quarter turn away from it.
-	_walk_yaw = _rest_yaw + (0.0 if direction == 0 else (PI * 0.5 if direction > 0 else -PI * 0.5))
+	# Face the requested screen direction even after the user has turned around.
+	_walk_yaw = _rest_yaw if direction == 0 else atan2(float(direction), 0.0) - atan2(_model_forward.x, _model_forward.z)
 	_walk_yaw_active = direction != 0
 
 
@@ -332,33 +336,11 @@ func rest_yaw() -> float:
 	return _rest_yaw
 
 
-## Ground distance one gait cycle actually covers, in metres.
-##
-## The contract's `locomotion.meters_per_cycle` is 1.15, but no code ever
-## consumed it and it does not match the animation: sampling the walk clip's
-## ankle position relative to the hips shows each ankle sweeping 0.446 m
-## front-to-back. Driving the window at the contract value therefore moved the
-## body 2.5x faster than the feet, which reads on screen as the legs twisting
-## and the character skating.
-##
-## The clip cannot be measured at load time: it has a position track only for
-## `Hips`, so the ankle positions are produced by forward kinematics and are not
-## present in the resource to sample. Rather than seek the live player (which
-## would disturb playback) the measured constant is kept here, together with the
-## way it was obtained so it can be re-measured if the clip is ever rebaked:
-##
-##   play `walk`, then for one full cycle (32 frames at 30 fps) record
-##   `LeftFoot.z - Hips.z` and take max - min. Result: 0.4461 m.
-##   `RightFoot` measured 0.4434 m over the same cycle — the two agree, which is
-##   what an alternating gait should do.
-##
-## Returns 0 when the clip is missing, so callers fall back to the contract.
-const MEASURED_STRIDE_METERS := 0.4461
-
+## Travel per full cycle, estimated from ankle velocity during ground contact.
+## An ankle's front-to-back sweep alone is not a full-cycle stride: stance only
+## occupies part of the cycle. Cache the FK measurement without seeking playback.
 func measure_walk_stride() -> float:
-	if player == null or not player.has_animation("shared/walk"):
-		return 0.0
-	return MEASURED_STRIDE_METERS
+	return _walk_stride_meters
 
 func release_action(request_id: int) -> void:
 	if action_controller:

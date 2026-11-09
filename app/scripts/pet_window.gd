@@ -470,16 +470,9 @@ func _update_motion(delta: float) -> void:
 # animation's own playback progress, so the ground speed is exactly the clip's
 # stride rate and the soles do not skate.
 
-## Ground distance one gait cycle covers, in physical pixels.
-##
-## Measured from the walk clip itself, not from the contract. The contract's
-## `locomotion.meters_per_cycle` is 1.15 but the animation's ankles only sweep
-## 0.446 m, so using the authored value made the window travel 2.5x faster than
-## the feet and the character visibly skated. The clip is the authority.
-##
-## The world-to-pixel factor comes from the window itself
-## (`window.size.y / camera.size`), which already includes the display DPI and
-## the user's 0.5-2.0 scale — scaling it by `dpi_scale` again would double-count.
+## Ground travel per animation cycle, converted with the camera projection.
+## Measuring the projection also respects Camera3D's keep-aspect setting; its
+## `size` is not necessarily the vertical span of the window.
 func _walk_stride_px() -> float:
 	if camera == null or not is_instance_valid(actor):
 		return 0.0
@@ -495,7 +488,8 @@ func _walk_stride_px() -> float:
 				meters = float(locomotion.get("meters_per_cycle", 0.0))
 	if meters <= 0.0:
 		return 0.0
-	var px_per_unit := float(get_window().size.y) / maxf(0.001, camera.size)
+	var origin: Vector3 = actor.global_position
+	var px_per_unit := camera.unproject_position(origin + Vector3.RIGHT).distance_to(camera.unproject_position(origin))
 	return meters * px_per_unit
 
 
@@ -511,11 +505,12 @@ func _begin_walk(direction: int, cycles: int) -> bool:
 	# ambient action is never cut off mid-pose.
 	if current_action != "idle":
 		return false
-	# Refresh the bounds but deliberately do NOT resync the anchor: the walk is
-	# about to start from wherever the soles currently are, and `settle_at` would
-	# snap them onto the window's centre instead.
+	# Placement/scale changes move the window before the motion controller runs.
+	# Sync that actual starting point; headless tests supply the anchor explicitly.
 	var work := _work_area()
 	_last_work_area = work
+	if DisplayServer.get_name() != "headless":
+		_sync_motion_anchor(_subject_rect())
 	motion.set_bounds(work, _subject_rect().size)
 	var stride := _walk_stride_px()
 	var cycle_seconds := float(actor.walk_cycle_length())
@@ -678,7 +673,9 @@ func _walk_room() -> Dictionary:
 	var area := _work_area()
 	var subject := _subject_rect()
 	var half_width := subject.size.x * 0.5
-	var center := motion.anchor.x if motion.is_grounded() else Vector2(get_window().position).x + subject.get_center().x
+	var center := Vector2(get_window().position).x + subject.get_center().x
+	if DisplayServer.get_name() == "headless":
+		center = motion.anchor.x
 	var area_right := float(area.position.x) + float(area.size.x)
 	return {
 		"left": maxf(0.0, center - half_width - float(area.position.x)),

@@ -16,7 +16,7 @@ const Solver = preload("res://scripts/motion/two_bone_solver.gd")
 
 var skeleton: Skeleton3D
 
-## side -> {upper, lower, foot, pole}; bone indices resolved from the contract.
+## side -> {upper, lower, foot}; bone indices resolved from the contract.
 var _chains := {}
 ## side -> {active, y, weight}: a foot request in world space.
 var _targets := {}
@@ -39,10 +39,6 @@ func configure(skel: Skeleton3D, bone_map: Dictionary, character_scale := 1.0) -
 			"upper": upper,
 			"lower": lower,
 			"foot": foot,
-			# Knees bend forward; the model's forward axis is +Z after the
-			# adapter's display rotation, which is also the pole convention used
-			# by the shared action bake.
-			"pole": Vector3(0.0, 0.0, 1.0),
 		}
 		_targets[side] = {"active": false, "y": 0.0, "weight": 0.0}
 
@@ -65,6 +61,8 @@ func chain_count() -> int:
 ## and out so a landing does not pop.
 func set_weight(value: float) -> void:
 	_weight = clampf(value, 0.0, 1.0)
+	if _weight <= 0.0:
+		reset_overrides()
 
 
 func get_weight() -> float:
@@ -82,11 +80,14 @@ func set_foot_floor(side: String, world_y: float, weight := 1.0) -> void:
 func clear_foot(side: String) -> void:
 	if _targets.has(side):
 		_targets[side] = {"active": false, "y": 0.0, "weight": 0.0}
+		if skeleton != null and _chains.has(side):
+			for bone in [_chains[side].upper, _chains[side].lower, _chains[side].foot]:
+				_clear_override(bone)
 
 
 func clear_feet() -> void:
 	for side in _targets:
-		_targets[side] = {"active": false, "y": 0.0, "weight": 0.0}
+		clear_foot(side)
 
 
 func is_foot_locked(side: String) -> bool:
@@ -148,42 +149,40 @@ func _solve_side(chain: Dictionary, goal_y: float, weight: float) -> void:
 	var upper: int = chain.upper
 	var lower: int = chain.lower
 	var foot: int = chain.foot
-	var space := skeleton.global_transform
-	# Global pose overrides persist into the next evaluation, so the base for
-	# this frame must be the animation pose. Clearing first keeps the solve
-	# idempotent; without it the correction compounds frame after frame.
 	_clear_override(upper)
 	_clear_override(lower)
-	var root_world := space * skeleton.get_bone_global_pose(upper).origin
-	var mid_world := space * skeleton.get_bone_global_pose(lower).origin
-	var end_world := space * skeleton.get_bone_global_pose(foot).origin
-
-	# Only the height is corrected; the animated horizontal placement is kept so
-	# the step cycle still moves the foot forward and back.
-	var goal := Vector3(end_world.x, goal_y, end_world.z)
-	var result: Dictionary = Solver.solve(root_world, mid_world, end_world, goal, _pole_world(chain))
-	if not result.has("mid"):
+	_clear_override(foot)
+	var upper_pose := skeleton.get_bone_global_pose(upper)
+	var lower_pose := skeleton.get_bone_global_pose(lower)
+	var foot_pose := skeleton.get_bone_global_pose(foot)
+	var space := skeleton.global_transform
+	var end_world := space * foot_pose.origin
+	if absf(end_world.y - goal_y) < 0.00001:
 		return
 
-	# The fade is applied in rotation space, not by blending target positions:
-	# a blended position cannot be reached by a fixed-length chain, so blending
-	# positions makes the visible motion fall off non-linearly with weight.
-	var upper_xform := skeleton.get_bone_global_pose(upper)
-	var delta_upper: Quaternion = Solver.rotation_between(mid_world - root_world, result.mid - root_world)
+	# Bone global poses are skeleton-local, not world-space. Solve in that same
+	# space so a rotated/scaled character receives the same leg correction.
+	var goal := space.affine_inverse() * Vector3(end_world.x, goal_y, end_world.z)
+	var knee := lower_pose.origin - upper_pose.origin
+	var result := Solver.solve(upper_pose.origin, lower_pose.origin, foot_pose.origin, goal, knee)
+	if not result.has("mid"):
+		return
+	var delta_upper: Quaternion = Solver.rotation_between(knee, result.mid - upper_pose.origin)
 	if weight < 0.999:
 		delta_upper = Quaternion.IDENTITY.slerp(delta_upper, weight)
-	var upper_basis := Basis(delta_upper) * upper_xform.basis.orthonormalized()
-	skeleton.set_bone_global_pose_override(upper, Transform3D(upper_basis, upper_xform.origin), 1.0, true)
+	var upper_basis := Basis(delta_upper) * upper_pose.basis.orthonormalized()
+	skeleton.set_bone_global_pose_override(upper, Transform3D(upper_basis, upper_pose.origin), 1.0, true)
 
-	# The lower bone moved with its parent; re-read before aiming the ankle.
-	mid_world = space * skeleton.get_bone_global_pose(lower).origin
-	end_world = space * skeleton.get_bone_global_pose(foot).origin
-	var lower_xform := skeleton.get_bone_global_pose(lower)
-	var delta_lower: Quaternion = Solver.rotation_between(end_world - mid_world, result.end - mid_world)
+	lower_pose = skeleton.get_bone_global_pose(lower)
+	var end_pose := skeleton.get_bone_global_pose(foot)
+	var delta_lower: Quaternion = Solver.rotation_between(end_pose.origin - lower_pose.origin, result.end - lower_pose.origin)
 	if weight < 0.999:
 		delta_lower = Quaternion.IDENTITY.slerp(delta_lower, weight)
-	var lower_basis := Basis(delta_lower) * lower_xform.basis.orthonormalized()
-	skeleton.set_bone_global_pose_override(lower, Transform3D(lower_basis, lower_xform.origin), 1.0, true)
+	var lower_basis := Basis(delta_lower) * lower_pose.basis.orthonormalized()
+	skeleton.set_bone_global_pose_override(lower, Transform3D(lower_basis, lower_pose.origin), 1.0, true)
+	# Moving the ankle must not rotate the shoe with the shin's correction.
+	end_pose = skeleton.get_bone_global_pose(foot)
+	skeleton.set_bone_global_pose_override(foot, Transform3D(foot_pose.basis, end_pose.origin), 1.0, true)
 
 
 func _clear_override(bone: int) -> void:
@@ -200,16 +199,8 @@ func reset_overrides() -> void:
 		var chain: Dictionary = _chains[side]
 		_clear_override(chain.upper)
 		_clear_override(chain.lower)
+		_clear_override(chain.foot)
 	_targets.clear()
 	for side in ["Left", "Right"]:
 		if _chains.has(side):
 			_targets[side] = {"active": false, "y": 0.0, "weight": 0.0}
-
-
-func _pole_world(chain: Dictionary) -> Vector3:
-	# The character may be yaw-rotated; push the pole through its basis.
-	var pole: Vector3 = chain.pole
-	var direction := skeleton.global_transform.basis * pole
-	if direction.length_squared() < 0.000001:
-		return Vector3(0.0, 0.0, 1.0)
-	return direction.normalized()

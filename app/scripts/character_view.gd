@@ -6,6 +6,8 @@ const SkinBounds = preload("res://scripts/skin_bounds.gd")
 const ActionController = preload("res://scripts/animation/action_controller.gd")
 const MouthDriver = preload("res://scripts/animation/mouth_driver.gd")
 const TestAudio = preload("res://scripts/animation/test_audio.gd")
+const LegIK = preload("res://scripts/motion/leg_ik.gd")
+const WalkGait = preload("res://scripts/behavior/walk_gait.gd")
 signal visible_bounds_changed
 
 var action_controller
@@ -19,6 +21,23 @@ var _turn_start := 0.0
 var _turn_delta := 0.0
 var _test_audio := {}
 var _mouth_controls_vowels := false
+var leg_ik
+var vrm_instances: Array[Node] = []
+var _spring_inertia := Vector3.ZERO
+var _spring_inertia_target := Vector3.ZERO
+var loco_speed_scale := 1.0
+## Yaw the body returns to when it stops walking sideways. `turn` owns the body
+## yaw and can leave it at ±PI; forgetting that here would silently undo a
+## manual turn the first time the pet walks.
+var _rest_yaw := 0.0
+## Target yaw while walking sideways, and the smoothing rate towards it.
+var _walk_yaw := 0.0
+var _walk_yaw_active := false
+const WALK_YAW_RATE := 5.0
+## Animation position seen last frame, for gait-cycle wrap detection.
+var _last_walk_position := -1.0
+var _walk_stride_meters := 0.0
+var _model_forward := Vector3.FORWARD
 
 var config := {}
 var model: Node3D
@@ -87,6 +106,13 @@ func load_character(entry: Dictionary) -> bool:
 	position.y = float(display.get("ground_offset_y", 0)) * factor
 	var angles: Array = display.get("rotation_degrees", [0, 0, 0])
 	rotation_degrees = Vector3(float(angles[0]), float(angles[1]), float(angles[2]))
+	# The authored yaw is the pose the body must return to. Godette is authored
+	# facing 180°, so treating "rest" as zero would spin the character away from
+	# the viewer the first time it walked and never bring it back.
+	_rest_yaw = rotation.y
+	_walk_yaw = _rest_yaw
+	_model_forward = Vector3.FORWARD if str(display.get("model_forward", "-Z")) == "-Z" else Vector3.BACK
+	_walk_stride_meters = WalkGait.measure(skeleton, library.get_animation("walk"), _model_forward)
 	var head_in_model := global_transform.affine_inverse() * _bone_position("Head")
 	_head_height = clampf((float(maximum[1]) - head_in_model.y) * factor, 0.16, 0.6)
 	player = AnimationPlayer.new()
@@ -113,6 +139,7 @@ func load_character(entry: Dictionary) -> bool:
 	audio_player.name = "LocalAudio"
 	audio_player.finished.connect(stop_audio)
 	add_child(audio_player)
+	_setup_leg_ik()
 	request_action("idle", "idle")
 	player.advance(0)
 	_skin_bounds.configure(meshes, skeleton)
@@ -127,10 +154,84 @@ func _collect(root: Node) -> void:
 	if root is MeshInstance3D:
 		meshes.append(root)
 	var script: Variant = root.get_script()
-	if script is Script and script.get_global_name() == "VRMSpringBoneController":
-		spring_controllers.append(root)
+	if script is Script:
+		var global_name := ""
+		if script.has_method("get_global_name"):
+			global_name = str(script.get_global_name())
+		if global_name == "VRMSpringBoneController":
+			spring_controllers.append(root)
+		elif global_name == "VRMInstance":
+			vrm_instances.append(root)
 	for child in root.get_children():
 		_collect(child)
+
+
+## Installs the leg correction below the skeleton, where SkeletonModifier3D
+## nodes are evaluated. The honest-answer capability check is separate: this
+## only prepares the modifier, and `set_ground_contact` decides whether it acts.
+func _setup_leg_ik() -> void:
+	if skeleton == null:
+		return
+	var ik = LegIK.new()
+	ik.name = "PetLegIK"
+	skeleton.add_child(ik)
+	ik.configure(skeleton, bone_map, scale.y)
+	# The model's own pose must be the base, so the correction starts disabled.
+	ik.set_weight(0.0)
+	ik.active = true
+	leg_ik = ik
+	print("[character] leg_ik chains=", ik.chain_count())
+
+
+## Feet stay planted while the character is standing or walking, and are freed
+## while airborne. `enabled` false leaves the animation pose untouched.
+##
+## The lock target is the *current* ankle height, not a fixed idle height: the
+## correction exists to stop the soles sinking or floating as the pelvis moves,
+## so it holds whatever height the animation put them at. Locking to a stored
+## idle height would fold the legs whenever a different action is playing.
+func set_ground_contact(enabled: bool, weight := 1.0) -> void:
+	if leg_ik == null:
+		return
+	if not enabled:
+		leg_ik.clear_feet()
+		leg_ik.set_weight(0.0)
+		return
+	leg_ik.set_weight(weight)
+	leg_ik.lock_current_height()
+
+
+func ground_contact_enabled() -> bool:
+	return leg_ik != null and leg_ik.get_weight() > 0.0
+
+
+## Inertia from the window's motion, in character space. The spring bones treat
+## it as an external shove, so hair and skirt trail a drag instead of freezing.
+func set_body_inertia(value: Vector3) -> void:
+	_spring_inertia_target = value
+
+
+func body_inertia() -> Vector3:
+	return _spring_inertia
+
+
+func apply_locomotion_speed(speed: float) -> void:
+	loco_speed_scale = maxf(0.25, speed)
+
+
+func _update_spring_inertia(delta: float) -> void:
+	# Smooth the shove so a single frame hitch cannot fling the sim.
+	_spring_inertia = _spring_inertia.lerp(_spring_inertia_target, clampf(10.0 * delta, 0.0, 1.0))
+	if spring_controllers.is_empty():
+		return
+	for instance in vrm_instances:
+		var settings = instance.get("settings")
+		if settings == null:
+			continue
+		if not is_instance_valid(settings):
+			continue
+		# VRMSettings is a Resource shared by the whole VRM instance.
+		settings.set("springbone_add_force", _spring_inertia)
 
 func play_action(name_: String) -> void:
 	request_action(name_)
@@ -152,6 +253,95 @@ func sync_turn_heading() -> void:
 		var ratio := clampf(player.current_animation_position / player.current_animation_length, 0, 1)
 		rotation.y = _turn_start + _turn_delta * smoothstep(0, 1, ratio)
 
+
+## --- Walking ------------------------------------------------------------------
+#
+# The walk clip is baked with its horizontal root motion frozen, so the body
+# steps in place and the window supplies the travel. This adapter exposes the
+# clip's own playback position as the authority on how far the feet have moved.
+
+## Position inside the current walk clip, in seconds. -1 when not playing it.
+func walk_cycle_position() -> float:
+	if player == null or not player.has_animation("shared/walk"):
+		return -1.0
+	if player.current_animation != "shared/walk" or not player.is_playing():
+		return -1.0
+	return player.current_animation_position
+
+
+## Length of the walk clip, or 0 when the library has none.
+func walk_cycle_length() -> float:
+	if player == null or not player.has_animation("shared/walk"):
+		return 0.0
+	var animation: Animation = player.get_animation("shared/walk")
+	return animation.length if animation != null else 0.0
+
+
+## Resets the wrap detector. Called when a walk segment starts, so a clip that
+## was already playing cannot report a phantom cycle.
+func begin_walk_tracking() -> void:
+	_last_walk_position = -1.0
+
+
+## Advances the gait-cycle counter from the clip's own position.
+##
+## Returns the number of complete cycles the clip has wrapped through since the
+## last call. The guard window is what makes this safe: `walk` is a loop clip,
+## so after a wrap the position jumps from near the end to near zero, and
+## nothing else in the clip produces that shape. Requiring the old value to be
+## past the midpoint and the new one to be near the start rejects re-plays
+## (which restart from 0 anywhere), cross-fades that briefly reset the position,
+## and ordinary playback.
+func walk_cycles_advanced() -> int:
+	var position := walk_cycle_position()
+	if position < 0.0:
+		return 0
+	var length := walk_cycle_length()
+	if length <= 0.0:
+		return 0
+	var previous := _last_walk_position
+	_last_walk_position = position
+	if previous < 0.0:
+		return 0
+	if previous > length * 0.5 and position < length * 0.2:
+		return 1
+	return 0
+
+
+## Turns the body to face a walking direction, or back towards the viewer.
+##
+## The walk clip faces the camera, so a sideways walk needs a quarter turn. The
+## `turn` animation is not usable for this: it is authored as a 180° about-face
+## and always leaves the character looking away. `_turn_active` therefore wins
+## every conflict, and a `turn` that completes updates the yaw the body returns
+## to — otherwise walking once would undo a manual turn.
+func face_direction(direction: int) -> void:
+	if _turn_active:
+		return
+	# Face the requested screen direction even after the user has turned around.
+	_walk_yaw = _rest_yaw if direction == 0 else atan2(float(direction), 0.0) - atan2(_model_forward.x, _model_forward.z)
+	_walk_yaw_active = direction != 0
+
+
+## Ends sideways facing. The body keeps smoothing back towards `_rest_yaw` on
+## its own; `_apply_walk_yaw` stops targeting the walk yaw but the lerp target
+## becomes the resting one, so the turn back is visible rather than a pop.
+func release_walk_facing() -> void:
+	_walk_yaw_active = false
+	_walk_yaw = _rest_yaw
+
+
+## Yaw the body returns to when a sideways walk ends.
+func rest_yaw() -> float:
+	return _rest_yaw
+
+
+## Travel per full cycle, estimated from ankle velocity during ground contact.
+## An ankle's front-to-back sweep alone is not a full-cycle stride: stance only
+## occupies part of the cycle. Cache the FK measurement without seeking playback.
+func measure_walk_stride() -> float:
+	return _walk_stride_meters
+
 func release_action(request_id: int) -> void:
 	if action_controller:
 		action_controller.release_action(request_id)
@@ -162,6 +352,9 @@ func _animation_finished(name_: StringName) -> void:
 	if _turn_active:
 		rotation.y = _turn_start + _turn_delta
 		_turn_active = false
+		# Remember where the turn left the body: a sideways walk must return
+		# here, not to the model's original forward direction.
+		_rest_yaw = rotation.y
 	action_controller.complete(action_controller.current_request)
 
 func set_emotion(name_: String, weight := 1.0) -> bool:
@@ -240,7 +433,30 @@ func _process(delta: float) -> void:
 	if not paused:
 		face_clock += delta
 		sync_turn_heading()
+		_apply_walk_yaw(delta)
+		_update_spring_inertia(delta)
 	update_face()
+
+
+## Smooths the body towards its yaw target. `turn` keeps exclusive ownership of
+## the yaw while it plays, so this yields instead of fighting it.
+##
+## The target is `_walk_yaw` while a sideways walk is active and `_rest_yaw`
+## afterwards, so the body turns back on its own when the walk ends. Returning
+## early once `_walk_yaw_active` is false would freeze a just-finished walk
+## mid-turn, facing the wall.
+func _apply_walk_yaw(delta: float) -> void:
+	if _turn_active:
+		# The turn clip writes the yaw every frame; adopting its target here would
+		# make the body snap back as soon as the clip ended.
+		return
+	if delta <= 0.0:
+		return
+	var target := _walk_yaw if _walk_yaw_active else _rest_yaw
+	if is_equal_approx(rotation.y, target):
+		rotation.y = target
+		return
+	rotation.y = lerp_angle(rotation.y, target, clampf(WALK_YAW_RATE * delta, 0.0, 1.0))
 
 func update_face() -> void:
 	if not is_instance_valid(model):
@@ -337,4 +553,4 @@ func describe() -> Dictionary:
 		for profile in ["Hips", "Head", "LeftHand", "RightHand", "LeftFoot", "RightFoot"]:
 			var point := _bone_position(profile)
 			positions[profile] = [point.x, point.y, point.z]
-	return {"id": config.get("id"), "bone_count": skeleton.get_bone_count() if skeleton else 0, "action": action, "animation_time": player.current_animation_position if player and player.is_playing() else 0.0, "expressions": config.get("expressions", {}).keys(), "spring_controllers": spring_controllers.size(), "observed_secondary_rotation_radians": spring_motion_max, "positions": positions, "bounds_samples": _skin_bounds.samples, "bounds_mean_usec": float(_skin_bounds.total_sample_usec) / maxi(1, _skin_bounds.samples)}
+	return {"id": config.get("id"), "bone_count": skeleton.get_bone_count() if skeleton else 0, "action": action, "animation_time": player.current_animation_position if player and player.is_playing() else 0.0, "expressions": config.get("expressions", {}).keys(), "spring_controllers": spring_controllers.size(), "observed_secondary_rotation_radians": spring_motion_max, "positions": positions, "bounds_samples": _skin_bounds.samples, "bounds_mean_usec": float(_skin_bounds.total_sample_usec) / maxi(1, _skin_bounds.samples), "leg_ik_chains": leg_ik.chain_count() if leg_ik else 0, "leg_ik_weight": leg_ik.get_weight() if leg_ik else 0.0, "spring_inertia": [_spring_inertia.x, _spring_inertia.y, _spring_inertia.z]}

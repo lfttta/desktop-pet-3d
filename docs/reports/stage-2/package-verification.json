@@ -1,9 +1,0 @@
-{
-  "package": "D:\\danjigame\\3D-pet-gtpdo\\dist\\stage-2",
-  "resource_check": "pass",
-  "character_count": 3,
-  "excluded_character": "swordsman",
-  "chinese_space_path": "pass",
-  "saved_character_restore": "man",
-  "service_cleanup": "pass"
-}

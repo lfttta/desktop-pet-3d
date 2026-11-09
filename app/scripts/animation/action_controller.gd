@@ -37,7 +37,9 @@ func request_action(name: String, source := "user", speed := 1.0, direction := 1
 	current_action = name
 	current_source = source
 	_current_priority = priority
-	_held = hold or str(_actions[name].get("mode", "once")) == "hold"
+	# Manifest "hold" latches only for state-machine sources (drag, fall, ...).
+	# A user/menu selection is documented as "play once", so it must complete.
+	_held = hold or (str(_actions[name].get("mode", "once")) == "hold" and source != "user")
 	if _player:
 		var animation_name := _prefix + name
 		if _player.has_animation(animation_name):
@@ -53,7 +55,7 @@ func request_action(name: String, source := "user", speed := 1.0, direction := 1
 func complete(request_id: int) -> void:
 	if request_id != current_request or _held:
 		return
-	if str(_actions.get(current_action, {}).get("mode", "once")) == "once":
+	if str(_actions.get(current_action, {}).get("mode", "once")) != "loop":
 		_start_idle()
 
 

@@ -37,6 +37,7 @@ public:
     void end_capture();
     bool has_capture();
     int64_t poll_tray_action();
+    bool set_menu_actions(const std::string &groups);
     void shutdown();
     int64_t acquire_instance(const std::string &key);
     bool adopt_service_process(int64_t pid);

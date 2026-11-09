@@ -1,4 +1,4 @@
-extends SceneTree
+﻿extends SceneTree
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -29,7 +29,7 @@ static func verify_package(tree: SceneTree) -> int:
 	if script == null:
 		failures.append("Runtime adapter missing from package")
 	else:
-		for id in ["godette", "swordsman"]:
+		for id in ["godette"]:
 			var view: Node3D = script.new()
 			tree.root.add_child(view)
 			if not view.load_character({"config": "res://assets_data/%s.json" % id}):

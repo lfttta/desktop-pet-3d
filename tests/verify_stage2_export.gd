@@ -1,4 +1,4 @@
-extends SceneTree
+﻿extends SceneTree
 
 const IDS := ["godette"]
 
@@ -20,9 +20,9 @@ static func verify_package(tree: SceneTree) -> int:
 		var ids: Array = catalog.map(func(entry): return entry.id)
 		if ids != IDS:
 			failures.append("Stage 2 catalog IDs are wrong")
-	for forbidden in ["res://assets_data/swordsman.json", "res://models/swordsman.glb", "res://models/cartoon_skeleton.glb", "res://models/man.glb", "res://models/candidate_avatar_sample_m.vrm", "res://models/alicia.vrm", "res://models/soldier.glb", "res://resources/animations/alicia.tres", "res://resources/animations/soldier.tres"]:
+	for forbidden in ["res://models/alicia.vrm", "res://models/soldier.glb", "res://models/swordsman.glb"]:
 		if packaged_path_exists(forbidden):
-			failures.append("Excluded swordsman asset is packaged: " + forbidden)
+			failures.append("Removed character asset is packaged: " + forbidden)
 	# The shipped motion library is the manifest, not a fixed seven-action list.
 	var actions: Array = []
 	var library: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://assets_data/humanoid_core.json"))

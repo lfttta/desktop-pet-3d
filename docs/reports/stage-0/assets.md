@@ -2,7 +2,7 @@
 
 Date: 2026-11-01. Workspace: `D:\danjigame\3D-pet-gtpdo`.
 
-Delivered two runtime models, two normalized motion sources, two runtime AnimationLibrary caches, and an external-only VRM1 technical sample configuration/cache. Asset tests ran in `tests/assets`; this agent did not launch/import the shared stage-0 project, use Git, spawn subagents, operate a visible application, or change the user's live Blender scene. The final desktop interaction matrix remains **pending**, as requested by the parent.
+Delivered one runtime model (Godette), two normalized motion sources and its runtime AnimationLibrary cache. The Swordsman/VRM1 sample entries below are historical notes recorded before those assets were removed from the repository. Asset tests ran in `tests/assets`; this agent did not launch/import the shared stage-0 project, use Git, spawn subagents, operate a visible application, or change the user's live Blender scene. The final desktop interaction matrix remains **pending**, as requested by the parent.
 
 ## Runtime interface — ready
 

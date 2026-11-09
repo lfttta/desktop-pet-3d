@@ -44,4 +44,14 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    # The reader thread is a daemon blocked on stdin. A normal interpreter
+    # shutdown can race with it holding the buffered-stdin lock and print a
+    # "Fatal Python error: _enter_buffered_busy" after a clean stop. Flush the
+    # protocol stream and leave without joining interpreter finalization.
+    exit_code = main()
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except (OSError, ValueError, AttributeError):
+        pass
+    os._exit(exit_code)

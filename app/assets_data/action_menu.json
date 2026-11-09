@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "library": "humanoid_core",
+  "note": "右键/托盘菜单的动作分类。动作名必须存在于 app/assets_data/humanoid_core.json。core 组沿用现有状态机语义，手动点选按 user 优先级播放一次。",
+  "categories": [
+    {
+      "id": "core",
+      "label": "基础动作",
+      "actions": ["idle", "walk", "turn", "wave", "pickup", "fall", "recover"]
+    },
+    {
+      "id": "dance",
+      "label": "跳舞",
+      "actions": ["dancing", "breakdance_swipes", "dancing_twerk", "gangnam_style", "hip_hop_dancing", "macarena_dance", "salsa_dancing", "spinning"]
+    },
+    {
+      "id": "emotion",
+      "label": "情绪",
+      "actions": ["happy", "laughing", "excited", "cheering", "crying", "sad_idle", "angry", "scared", "surprised", "bored", "bashful", "dizzy_idle"]
+    },
+    {
+      "id": "social",
+      "label": "互动",
+      "actions": ["agreeing", "clapping", "kiss", "salute", "standing_greeting", "pointing", "shrugging", "taunt", "yelling", "swinging"]
+    },
+    {
+      "id": "daily",
+      "label": "日常",
+      "actions": ["drinking", "sitting", "male_sitting_pose", "sleeping_idle", "yawn", "thinking", "praying", "neck_stretching", "looking_around", "nervously_look_around", "singing", "jump"]
+    },
+    {
+      "id": "move",
+      "label": "行走移动",
+      "actions": ["running", "running_tired", "old_man_walk", "holding_walk", "box_walk_arc", "climbing", "climbing_ladder", "climbing_up_wall", "climbing_down_wall"]
+    },
+    {
+      "id": "prop",
+      "label": "道具动作",
+      "actions": ["carrying", "box_idle", "holding_down", "standing_equip_bow"]
+    },
+    {
+      "id": "pose",
+      "label": "姿态",
+      "actions": ["laying_nodding", "laying_severe_cough", "victory"]
+    }
+  ]
+}

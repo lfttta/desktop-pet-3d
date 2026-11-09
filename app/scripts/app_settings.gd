@@ -2,7 +2,7 @@ extends RefCounted
 ## Serializable placement uses the visible sole point, independent of window padding.
 
 static func defaults() -> Dictionary:
-	return {"schema_version": 1, "character_id": "godette", "scale": 1.0, "screen_id": "", "user_name": "你", "placement": {"x": 1.0, "y": 1.0, "edge_x": 1, "edge_y": 1}}
+	return {"schema_version": 2, "character_id": "godette", "persona_id": "godette", "scale": 1.0, "screen_id": "", "user_name": "你", "placement": {"x": 1.0, "y": 1.0, "edge_x": 1, "edge_y": 1}}
 
 static func placement(position: Vector2i, subject: Rect2, work: Rect2i, edges: Vector2i) -> Dictionary:
 	var foot := Vector2(position) + Vector2(subject.get_center().x, subject.end.y)

@@ -1,6 +1,6 @@
 Stage 0 asset review — 2026-11-01
 
-**Spec verdict: passes the authorized local asset scope.** The same user-supplied Idle.fbx and Waving.fbx produce the two shared motion sources and target-specific AnimationLibrary caches for Godette (VRM0), Swordsman (GLB), and the external-only VRM1 technical sample. The default character list contains only the two runtime models. This verdict does not select a formal character, approve public distribution, or declare overall Stage 0 acceptance.
+**Spec verdict: passes the authorized local asset scope.** The same user-supplied Idle.fbx and Waving.fbx produce the two shared motion sources; only the Godette (VRM0) cache remains in the repository. The Swordsman (GLB) and external-only VRM1 sample are historical records of a scope that has since been removed. This verdict does not select a formal character, approve public distribution, or declare overall Stage 0 acceptance.
 
 **Quality verdict: acceptable for these inspected targets. No actionable high-impact retarget, unit, root-motion, cache, or provenance defect was found in the frozen asset snapshot.** The pending visual matrix is not blocking this local asset artifact. Shoe-sole contact, materials, motion transitions and secondary-motion collision quality remain unaccepted visually.
 

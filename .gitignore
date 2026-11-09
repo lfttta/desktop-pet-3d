@@ -11,7 +11,20 @@ tools/runtime/
 tests/package_guard/build-output/
 
 # ========== 测试运行残留 ==========
+.pytest-tmp/
+.pytest_cache/
 .tmp-*/
+tests/stage1/
+tests/service/打包验证*/
+docs/reports/stage-2/captures*/
+docs/reports/stage-2/visual-*-data/
+
+# ========== 操作系统杂项 ==========
+.DS_Store
+Thumbs.db
+
+# ========== 本机启动器覆盖（含本机路径，不入库） ==========
+run-dev.local.cmd
 
 # ========== Python ==========
 __pycache__/

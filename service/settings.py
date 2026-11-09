@@ -4,6 +4,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 import os
 from pathlib import Path
+import re
 import shutil
 import tempfile
 import time
@@ -11,15 +12,124 @@ import uuid
 
 from service.jsonutil import MAX_FRAME_BYTES, dumps, loads
 from service.character_catalog import ALLOWED_CHARACTER_IDS
+from service.persona import ALLOWED_PERSONA_IDS, DEFAULT_PERSONA_ID
 
-DEFAULTS = {
+SCHEMA_VERSION = 5
+DEFAULTS_V1 = {
     'schema_version': 1, 'character_id': 'godette', 'scale': 1.0,
     'screen_id': '', 'user_name': '你',
     'placement': {'x': 1.0, 'y': 1.0, 'edge_x': 1, 'edge_y': 1},
 }
+DEFAULTS_V2 = {
+    'schema_version': 2, 'character_id': 'godette',
+    'persona_id': DEFAULT_PERSONA_ID, 'scale': 1.0,
+    'screen_id': '', 'user_name': '你',
+    'placement': {'x': 1.0, 'y': 1.0, 'edge_x': 1, 'edge_y': 1},
+}
+AI_EMBEDDING_DEFAULTS = {
+    'enabled': False,
+    'model': '',
+    'dimensions': 0,
+}
+AI_DEFAULTS = {
+    'provider': 'deepseek',
+    'base_url': 'https://api.deepseek.com',
+    'chat_path': '/v1/chat/completions',
+    'model': 'deepseek-chat',
+    'temperature': 0.8,
+    'max_tokens': 800,
+    'connect_timeout_ms': 5000,
+    'request_timeout_ms': 30000,
+    'max_retries': 1,
+    'daily_token_budget': 120000,
+    'monthly_cost_budget': 15.0,
+    'currency': 'USD',
+    'input_price_per_million': 0.0,
+    'output_price_per_million': 0.0,
+    'embedding': deepcopy(AI_EMBEDDING_DEFAULTS),
+}
+MEMORY_COMPACTION_DEFAULTS = {
+    'enabled': False,
+    'model_compress': False,
+    'daily_limit': 20,
+    'min_age_days': 7,
+    'max_per_run': 10,
+    'protect_importance': 0.8,
+}
+MEMORY_ARCHIVE_DEFAULTS = {
+    'enabled': True,
+    'topic_stale_days': 14,
+}
+MEMORY_DEFAULTS = {
+    'enabled': True,
+    'auto_capture': False,
+    'max_injected': 5,
+    'max_entry_chars': 500,
+    'compaction': deepcopy(MEMORY_COMPACTION_DEFAULTS),
+    'archive': deepcopy(MEMORY_ARCHIVE_DEFAULTS),
+}
+STYLE_DEFAULTS = {
+    'casualness': 0.5,
+    'warmth': 0.5,
+    'directness': 0.5,
+    'playfulness': 0.5,
+    'sentence_length': 0.5,
+    'emoji_frequency': 0.5,
+}
+EXPRESSION_DEFAULTS = {
+    'enabled': True,
+    'phrases_enabled': True,
+    'style': deepcopy(STYLE_DEFAULTS),
+}
+AUTONOMY_DEFAULTS = {
+    'enabled': False,
+    'quiet_start': '23:00',
+    'quiet_end': '08:00',
+    'min_seconds_between': 1800,
+    'max_per_hour': 2,
+    'manual_quiet_until': '',
+    'cloud_enabled': True,
+}
+DESKTOP_DEFAULTS = {
+    'enabled': True,
+    'poll_seconds': 3,
+    'idle_after_seconds': 300,
+    'fullscreen_policy': 'silent',
+    'dnd_policy': 'silent',
+    'work_focus_policy': 'minimal',
+    'idle_policy': 'gentle',
+}
+PRIVACY_DEFAULTS = {
+    'log_prompts': False,
+}
+GROWTH_DEFAULTS = {
+    'enabled': False,
+    'min_sessions': 3,
+    'min_memories': 2,
+    'max_step': 0.05,
+    'cooldown_days': 7,
+    'locked_traits': [],
+}
+GROUP_DEFAULTS = {
+    'ai': AI_DEFAULTS,
+    'memory': MEMORY_DEFAULTS,
+    'expression': EXPRESSION_DEFAULTS,
+    'autonomy': AUTONOMY_DEFAULTS,
+    'privacy': PRIVACY_DEFAULTS,
+    'growth': GROWTH_DEFAULTS,
+    'desktop': DESKTOP_DEFAULTS,
+}
+DEFAULTS = {
+    'schema_version': SCHEMA_VERSION, 'character_id': 'godette',
+    'persona_id': DEFAULT_PERSONA_ID, 'scale': 1.0,
+    'screen_id': '', 'user_name': '你',
+    'placement': {'x': 1.0, 'y': 1.0, 'edge_x': 1, 'edge_y': 1},
+    **deepcopy(GROUP_DEFAULTS),
+}
 PATCH_KEYS = DEFAULTS.keys() - {'schema_version'}
 REPLACE_ATTEMPTS = 4
 LEGACY_CHARACTERS = {'swordsman', 'alicia', 'soldier', 'cartoon_skeleton', 'man'}
+TIME_OF_DAY = re.compile(r'^([01][0-9]|2[0-3]):[0-5][0-9]$')
 
 
 class ValidationError(ValueError):
@@ -32,52 +142,384 @@ def _number(value, low, high):
     return float(value)
 
 
-def _string(value):
+def _integer(value, low, high):
+    if type(value) is not int or not low <= value <= high:
+        raise ValidationError('integer outside allowed range or invalid type')
+    return value
+
+
+def _boolean(value):
+    if type(value) is not bool:
+        raise ValidationError('expected a boolean')
+    return value
+
+
+def _string(value, max_length=None, allow_empty=True):
     if type(value) is not str:
         raise ValidationError('expected a string')
     try:
         value.encode('utf-8')
     except UnicodeError as exc:
         raise ValidationError('invalid Unicode string') from exc
+    if not allow_empty and not value:
+        raise ValidationError('expected a non-empty string')
+    if max_length is not None and len(value) > max_length:
+        raise ValidationError('string exceeds allowed length')
     return value
+
+
+def _url(value):
+    value = _string(value, 2048, allow_empty=False)
+    if not (value.startswith('https://') or value.startswith('http://')):
+        raise ValidationError('base_url must be an http or https URL')
+    return value
+
+
+def _time_of_day(value):
+    value = _string(value, 5, allow_empty=False)
+    if not TIME_OF_DAY.match(value):
+        raise ValidationError('time must use HH:MM in 24-hour form')
+    return value
+
+
+def _optional_timestamp(value):
+    value = _string(value, 64)
+    if not value:
+        return value
+    try:
+        datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except ValueError as exc:
+        raise ValidationError('manual_quiet_until must be empty or ISO 8601') from exc
+    return value
+
+
+def _nested_mapping(value, defaults, label, partial):
+    if type(value) is not dict or value.keys() - defaults.keys():
+        raise ValidationError(f'{label} contains unsupported fields')
+    if not partial and value.keys() != defaults.keys():
+        raise ValidationError(f'{label} settings are incomplete')
+    return value
+
+
+def _style(value, partial):
+    _nested_mapping(value, STYLE_DEFAULTS, 'expression.style', partial)
+    return {key: _number(item, 0.0, 1.0) for key, item in value.items()}
+
+
+def _compaction(value, partial):
+    _nested_mapping(value, MEMORY_COMPACTION_DEFAULTS, 'memory.compaction', partial)
+    result = {}
+    for key, item in value.items():
+        if key in ('enabled', 'model_compress'):
+            result[key] = _boolean(item)
+        elif key == 'daily_limit':
+            result[key] = _integer(item, 0, 10000)
+        elif key == 'min_age_days':
+            result[key] = _integer(item, 0, 3650)
+        elif key == 'max_per_run':
+            result[key] = _integer(item, 1, 100)
+        elif key == 'protect_importance':
+            result[key] = _number(item, 0.0, 1.0)
+    return result
+
+
+def _archive(value, partial):
+    _nested_mapping(value, MEMORY_ARCHIVE_DEFAULTS, 'memory.archive', partial)
+    result = {}
+    for key, item in value.items():
+        if key == 'enabled':
+            result[key] = _boolean(item)
+        elif key == 'topic_stale_days':
+            result[key] = _integer(item, 1, 3650)
+    return result
+
+
+def _embedding(value, partial):
+    _nested_mapping(value, AI_EMBEDDING_DEFAULTS, 'ai.embedding', partial)
+    result = {}
+    for key, item in value.items():
+        if key == 'enabled':
+            result[key] = _boolean(item)
+        elif key == 'model':
+            result[key] = _string(item, 200)
+        elif key == 'dimensions':
+            result[key] = _integer(item, 0, 4096)
+    return result
+
+
+def _traits(value):
+    if type(value) is not list or len(value) > 64:
+        raise ValidationError('growth.locked_traits must be a list of at most 64 traits')
+    return [_string(item, 64, allow_empty=False) for item in value]
+
+
+def _group(name, value, partial):
+    defaults = GROUP_DEFAULTS[name]
+    if type(value) is not dict or value.keys() - defaults.keys():
+        raise ValidationError(f'{name} contains unsupported fields')
+    if not partial and value.keys() != defaults.keys():
+        raise ValidationError(f'{name} settings are incomplete')
+    result = {}
+    for key, item in value.items():
+        if name == 'ai':
+            result[key] = _validate_ai(key, item, partial)
+        elif name == 'memory':
+            result[key] = _validate_memory(key, item, partial)
+        elif name == 'expression':
+            result[key] = _validate_expression(key, item, partial)
+        elif name == 'autonomy':
+            result[key] = _validate_autonomy(key, item)
+        elif name == 'growth':
+            result[key] = _validate_growth(key, item)
+        elif name == 'desktop':
+            result[key] = _validate_desktop(key, item)
+        else:
+            result[key] = _boolean(item)
+    return result
+
+
+def _validate_ai(key, value, partial):
+    if key == 'provider':
+        return _string(value, 64, allow_empty=False)
+    if key == 'base_url':
+        return _url(value)
+    if key == 'chat_path':
+        path = _string(value, 512, allow_empty=False)
+        if not path.startswith('/'):
+            raise ValidationError('chat_path must start with /')
+        return path
+    if key == 'model':
+        return _string(value, 200, allow_empty=False)
+    if key == 'temperature':
+        return _number(value, 0.0, 2.0)
+    if key == 'max_tokens':
+        return _integer(value, 1, 1000000)
+    if key in ('connect_timeout_ms', 'request_timeout_ms'):
+        return _integer(value, 1, 600000)
+    if key == 'max_retries':
+        return _integer(value, 0, 10)
+    if key == 'daily_token_budget':
+        return _integer(value, 0, 100000000)
+    if key == 'monthly_cost_budget':
+        return _number(value, 0.0, 1000000000.0)
+    if key == 'currency':
+        currency = _string(value, 3, allow_empty=False)
+        if len(currency) != 3 or not currency.isalpha() or not currency.isupper():
+            raise ValidationError('currency must be a three-letter uppercase code')
+        return currency
+    if key in ('input_price_per_million', 'output_price_per_million'):
+        return _number(value, 0.0, 1000000.0)
+    if key == 'embedding':
+        return _embedding(value, partial)
+    raise ValidationError('unsupported ai setting')
+
+
+def _validate_memory(key, value, partial):
+    if key in ('enabled', 'auto_capture'):
+        return _boolean(value)
+    if key == 'max_injected':
+        return _integer(value, 0, 50)
+    if key == 'max_entry_chars':
+        return _integer(value, 1, 100000)
+    if key == 'compaction':
+        return _compaction(value, partial)
+    if key == 'archive':
+        return _archive(value, partial)
+    raise ValidationError('unsupported memory setting')
+
+
+def _validate_growth(key, value):
+    if key == 'enabled':
+        return _boolean(value)
+    if key == 'min_sessions':
+        return _integer(value, 1, 1000)
+    if key == 'min_memories':
+        return _integer(value, 1, 1000)
+    if key == 'max_step':
+        return _number(value, 0.001, 0.2)
+    if key == 'cooldown_days':
+        return _integer(value, 0, 365)
+    if key == 'locked_traits':
+        return _traits(value)
+    raise ValidationError('unsupported growth setting')
+
+
+def _validate_expression(key, value, partial):
+    if key in ('enabled', 'phrases_enabled'):
+        return _boolean(value)
+    if key == 'style':
+        return _style(value, partial)
+    raise ValidationError('unsupported expression setting')
+
+
+def _validate_autonomy(key, value):
+    if key in ('enabled', 'cloud_enabled'):
+        return _boolean(value)
+    if key in ('quiet_start', 'quiet_end'):
+        return _time_of_day(value)
+    if key == 'min_seconds_between':
+        return _integer(value, 0, 86400)
+    if key == 'max_per_hour':
+        return _integer(value, 0, 1000)
+    if key == 'manual_quiet_until':
+        return _optional_timestamp(value)
+    raise ValidationError('unsupported autonomy setting')
+
+
+DESKTOP_POLICY_CHOICES = {
+    'fullscreen_policy': ('silent', 'minimal'),
+    'dnd_policy': ('silent', 'minimal'),
+    'work_focus_policy': ('silent', 'minimal', 'normal'),
+    'idle_policy': ('silent', 'gentle', 'normal'),
+}
+
+
+def _validate_desktop(key, value):
+    if key == 'enabled':
+        return _boolean(value)
+    if key == 'poll_seconds':
+        return _integer(value, 1, 60)
+    if key == 'idle_after_seconds':
+        return _integer(value, 30, 86400)
+    if key in DESKTOP_POLICY_CHOICES:
+        return _choice(value, DESKTOP_POLICY_CHOICES[key], f'desktop.{key}')
+    raise ValidationError('unsupported desktop setting')
+
+
+def _choice(value, choices, label):
+    if type(value) is not str or value not in choices:
+        raise ValidationError(f'{label} must be one of ' + ', '.join(choices))
+    return value
+
+
+def _scalar(key, value):
+    if key == 'character_id':
+        if type(value) is not str or value not in ALLOWED_CHARACTER_IDS:
+            raise ValidationError('unknown character_id')
+        return value
+    if key == 'persona_id':
+        if type(value) is not str or value not in ALLOWED_PERSONA_IDS:
+            raise ValidationError('unknown persona_id')
+        return value
+    if key == 'scale':
+        return _number(value, 0.5, 2.0)
+    if key in ('screen_id', 'user_name'):
+        _string(value, 80 if key == 'user_name' else None)
+        return value
+    if key == 'placement':
+        if type(value) is not dict or value.keys() != {'x', 'y', 'edge_x', 'edge_y'}:
+            raise ValidationError('placement requires x,y,edge_x,edge_y')
+        result = {}
+        for axis in ('x', 'y'):
+            result[axis] = _number(value[axis], 0.0, 1.0)
+        for edge in ('edge_x', 'edge_y'):
+            if type(value[edge]) is not int or not -1 <= value[edge] <= 1:
+                raise ValidationError('placement edges must be integers from -1 to 1')
+            result[edge] = value[edge]
+        return result
+    raise ValidationError('unsupported setting')
 
 
 def validate_patch(patch):
     if type(patch) is not dict or patch.keys() - PATCH_KEYS:
         raise ValidationError('settings patch contains unsupported fields')
-    result = deepcopy(patch)
+    result = {}
     for key, value in patch.items():
-        if key == 'character_id':
-            if type(value) is not str or value not in ALLOWED_CHARACTER_IDS:
-                raise ValidationError('unknown character_id')
-        elif key == 'scale':
-            result[key] = _number(value, 0.5, 2.0)
-        elif key in ('screen_id', 'user_name'):
-            _string(value)
-            if key == 'user_name' and len(value) > 80:
-                raise ValidationError('user_name exceeds 80 characters')
-        elif key == 'placement':
-            if type(value) is not dict or value.keys() != {'x', 'y', 'edge_x', 'edge_y'}:
-                raise ValidationError('placement requires x,y,edge_x,edge_y')
-            for axis in ('x', 'y'):
-                result[key][axis] = _number(value[axis], 0.0, 1.0)
-            for edge in ('edge_x', 'edge_y'):
-                if type(value[edge]) is not int or not -1 <= value[edge] <= 1:
-                    raise ValidationError('placement edges must be integers from -1 to 1')
+        if key in GROUP_DEFAULTS:
+            result[key] = _group(key, value, partial=True)
+        else:
+            result[key] = _scalar(key, value)
     return result
 
 
 def validate_document(document):
     if (type(document) is not dict or document.keys() != DEFAULTS.keys()
             or type(document.get('schema_version')) is not int
-            or document['schema_version'] != 1):
+            or document['schema_version'] != SCHEMA_VERSION):
         raise ValidationError('unsupported or incomplete settings schema')
-    patch = {key: value for key, value in document.items() if key != 'schema_version'}
-    normalized = {'schema_version': 1, **validate_patch(patch)}
+    normalized = {'schema_version': SCHEMA_VERSION}
+    for key, value in document.items():
+        if key == 'schema_version':
+            continue
+        if key in GROUP_DEFAULTS:
+            normalized[key] = _group(key, value, partial=False)
+        else:
+            normalized[key] = _scalar(key, value)
     # Leave room for the ready/result envelope, request ID and recovery warnings.
     if len(dumps(normalized)) > MAX_FRAME_BYTES - 8192:
         raise ValidationError('settings exceed the protocol response budget')
     return normalized
+
+
+def _add_v5_groups(document):
+    """Fill every settings group from defaults; used by the v1/v2 paths."""
+    document['schema_version'] = SCHEMA_VERSION
+    for key, value in GROUP_DEFAULTS.items():
+        document[key] = deepcopy(value)
+    return document
+
+
+# v3 had every group except growth and desktop.
+V3_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'growth', 'desktop'}
+# v4 added growth but neither the desktop group nor autonomy.cloud_enabled.
+V4_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'desktop'}
+V4_AUTONOMY_KEYS = frozenset({
+    'enabled', 'quiet_start', 'quiet_end', 'min_seconds_between',
+    'max_per_hour', 'manual_quiet_until',
+})
+
+
+def _upgrade_v3(document):
+    """Add v4/v5 fields while preserving every value already stored in v3."""
+    migrated = deepcopy(document)
+    migrated['schema_version'] = SCHEMA_VERSION
+    migrated.setdefault('growth', deepcopy(GROWTH_DEFAULTS))
+    migrated.setdefault('desktop', deepcopy(DESKTOP_DEFAULTS))
+    memory = migrated.get('memory')
+    if type(memory) is dict:
+        memory.setdefault('compaction', deepcopy(MEMORY_COMPACTION_DEFAULTS))
+        memory.setdefault('archive', deepcopy(MEMORY_ARCHIVE_DEFAULTS))
+    ai = migrated.get('ai')
+    if type(ai) is dict:
+        ai.setdefault('embedding', deepcopy(AI_EMBEDDING_DEFAULTS))
+    autonomy = migrated.get('autonomy')
+    if type(autonomy) is dict:
+        autonomy.setdefault('cloud_enabled', AUTONOMY_DEFAULTS['cloud_enabled'])
+    return migrated
+
+
+def _upgrade_v4(document):
+    """Add the desktop group and autonomy.cloud_enabled to a v4 document."""
+    migrated = deepcopy(document)
+    migrated['schema_version'] = SCHEMA_VERSION
+    migrated['desktop'] = deepcopy(DESKTOP_DEFAULTS)
+    autonomy = migrated.get('autonomy')
+    if type(autonomy) is dict:
+        autonomy['cloud_enabled'] = AUTONOMY_DEFAULTS['cloud_enabled']
+    return migrated
+
+
+def migrate_document(document):
+    """Upgrade a recognized older schema; return (document, migrated)."""
+    if type(document) is not dict:
+        return document, False
+    if (document.get('schema_version') == 1
+            and document.keys() == DEFAULTS_V1.keys()):
+        migrated = deepcopy(document)
+        migrated['persona_id'] = DEFAULT_PERSONA_ID
+        return _add_v5_groups(migrated), True
+    if (document.get('schema_version') == 2
+            and document.keys() == DEFAULTS_V2.keys()):
+        return _add_v5_groups(deepcopy(document)), True
+    if (document.get('schema_version') == 3
+            and document.keys() == V3_TOP_LEVEL_KEYS):
+        return _upgrade_v3(document), True
+    if (document.get('schema_version') == 4
+            and document.keys() == V4_TOP_LEVEL_KEYS
+            and type(document.get('autonomy')) is dict
+            and document['autonomy'].keys() == V4_AUTONOMY_KEYS):
+        return _upgrade_v4(document), True
+    return document, False
 
 
 def atomic_write(path, content):
@@ -105,6 +547,17 @@ def atomic_write(path, content):
             pass
 
 
+def _deep_merge(base, patch):
+    """Recursively merge partial nested groups without dropping sibling keys."""
+    result = deepcopy(base)
+    for key, value in patch.items():
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = deepcopy(value)
+    return result
+
+
 class SettingsStore:
     def __init__(self, directory):
         self.path = Path(directory) / 'settings.json'
@@ -117,7 +570,8 @@ class SettingsStore:
             self._settings = deepcopy(DEFAULTS)
             atomic_write(self.path, dumps(self._settings) + b'\n')
             return
-        migrated = False
+        migrated_character = False
+        migrated_schema = False
         try:
             if len(raw) > MAX_FRAME_BYTES:
                 raise ValidationError('config too large')
@@ -125,7 +579,8 @@ class SettingsStore:
             if (type(document) is dict and type(document.get('character_id')) is str
                     and document['character_id'] in LEGACY_CHARACTERS):
                 document = {**document, 'character_id': 'godette'}
-                migrated = True
+                migrated_character = True
+            document, migrated_schema = migrate_document(document)
             self._settings = validate_document(document)
         except (ValueError, UnicodeError, RecursionError):
             backup = self._backup()
@@ -134,9 +589,13 @@ class SettingsStore:
             self._settings = defaults
             self.warnings.append('Invalid settings backed up to ' + backup.name + '; defaults restored.')
             return
-        if migrated:
+        if migrated_character or migrated_schema:
             atomic_write(self.path, dumps(self._settings) + b'\n')
+        if migrated_character:
             self.warnings.append('Character changed to Godette; all other settings preserved.')
+        if migrated_schema:
+            self.warnings.append('Settings migrated to schema version 5; '
+                                 'desktop sensing and autonomy.cloud_enabled defaults added.')
 
     def _backup(self):
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')
@@ -153,7 +612,14 @@ class SettingsStore:
         return deepcopy(self._settings)
 
     def update(self, patch):
-        candidate = validate_document({**self._settings, **validate_patch(patch)})
+        validated = validate_patch(patch)
+        merged = deepcopy(self._settings)
+        for key, value in validated.items():
+            if key in GROUP_DEFAULTS:
+                merged[key] = _deep_merge(merged[key], value)
+            else:
+                merged[key] = value
+        candidate = validate_document(merged)
         atomic_write(self.path, dumps(candidate) + b'\n')
         self._settings = candidate
         return self.settings

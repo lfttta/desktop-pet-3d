@@ -103,6 +103,11 @@ func load_character(entry: Dictionary) -> bool:
 	position.y = float(display.get("ground_offset_y", 0)) * factor
 	var angles: Array = display.get("rotation_degrees", [0, 0, 0])
 	rotation_degrees = Vector3(float(angles[0]), float(angles[1]), float(angles[2]))
+	# The authored yaw is the pose the body must return to. Godette is authored
+	# facing 180°, so treating "rest" as zero would spin the character away from
+	# the viewer the first time it walked and never bring it back.
+	_rest_yaw = rotation.y
+	_walk_yaw = _rest_yaw
 	var head_in_model := global_transform.affine_inverse() * _bone_position("Head")
 	_head_height = clampf((float(maximum[1]) - head_in_model.y) * factor, 0.16, 0.6)
 	player = AnimationPlayer.new()
@@ -308,7 +313,9 @@ func walk_cycles_advanced() -> int:
 func face_direction(direction: int) -> void:
 	if _turn_active:
 		return
-	_walk_yaw = 0.0 if direction == 0 else (PI * 0.5 if direction > 0 else -PI * 0.5)
+	# Relative to the authored yaw, not to zero: the model's own base rotation is
+	# part of its facing, and the walk turn is a quarter turn away from it.
+	_walk_yaw = _rest_yaw + (0.0 if direction == 0 else (PI * 0.5 if direction > 0 else -PI * 0.5))
 	_walk_yaw_active = direction != 0
 
 

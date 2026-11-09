@@ -57,7 +57,8 @@ func run() -> void:
 	_test_interrupt_by_grab(window, view)
 	_test_interrupt_by_action(window, view)
 	_test_behavior_gate(window)
-	_test_facing(view)
+	await _test_feet_return_after_walk(window, view)
+	await _test_facing(view)
 
 	print("WALK_WIRING_TESTS checks=", checks, " failures=", failures)
 	quit(1 if failures else 0)
@@ -183,14 +184,39 @@ func _test_behavior_gate(window) -> void:
 
 
 ## Sideways facing must be expressible and must survive a turn.
+##
+## The model's authored base yaw is 180° (`display.rotation_degrees` in the
+## contract), so "rest" is not zero. Assuming zero here turns the character
+## away from the screen and it never comes back — the reported "does not return
+## to normal after stopping".
 func _test_facing(view) -> void:
+	var authored := deg_to_rad(float((view.config.get("display", {}) as Dictionary).get("rotation_degrees", [0, 0, 0])[1]))
+	check(is_equal_approx(view.rest_yaw(), authored), "the resting yaw is the model's authored yaw, got %f vs %f" % [view.rest_yaw(), authored])
 	view.face_direction(1)
-	check(true, "facing right is accepted")
-	view.face_direction(-1)
-	check(true, "facing left is accepted")
 	view.release_walk_facing()
-	check(true, "releasing facing returns to the rest yaw")
-	var before_rest: float = view.rest_yaw()
-	# A completed turn updates the yaw the body returns to; otherwise walking
-	# once would silently undo a manual turn.
-	check(is_equal_approx(before_rest, 0.0), "the resting yaw starts at forward, got %f" % before_rest)
+	# Let the smoothing settle, then assert the body is back to its authored pose.
+	for i in 120:
+		await process_frame
+	check(absf(wrapf(view.rotation.y - authored, -PI, PI)) < 0.05, "the body returns to its authored yaw after walking, got %f vs %f" % [view.rotation.y, authored])
+
+
+## Finishing a walk must re-plant the feet. `_settle_ground_contact` is only
+## reached through `_update_motion`, which returns early once the pet is idle —
+## so a walk that ends without a fall would leave the ankles unlocked forever.
+func _test_feet_return_after_walk(window, view) -> void:
+	window.motion.settle_at(600.0)
+	window._motion_active = false
+	window._play_action("idle")
+	check(window._begin_walk(1, 1), "a short walk starts for the foot test")
+	check(not view.ground_contact_enabled(), "walking frees the feet")
+	for i in 240:
+		window._update_walk()
+		await process_frame
+		if not window._walk_active:
+			break
+	check(not window._walk_active, "the short walk finished")
+	# The frame loop is what restores planting in the real app; drive it here.
+	for i in 40:
+		window._update_motion(1.0 / 60.0)
+		await process_frame
+	check(view.ground_contact_enabled(), "the feet are planted again after walking, got %s" % view.ground_contact_enabled())

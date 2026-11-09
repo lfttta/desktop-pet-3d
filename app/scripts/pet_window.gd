@@ -276,6 +276,10 @@ func _process(delta: float) -> void:
 		_update_motion(delta)
 		_update_walk()
 		_update_behavior(delta)
+		# Foot planting is a standing-state concern, not a falling one. Driving it
+		# from `_update_motion` alone meant it never ran again once the pet
+		# settled — a walk frees the ankles and nothing put them back.
+		_settle_ground_contact(delta)
 		_constrain_window()
 		_update_regions()
 		if bridge:
@@ -451,7 +455,6 @@ func _update_motion(delta: float) -> void:
 		_recovery_remaining -= delta
 		if _recovery_remaining <= 0.0:
 			_recovering = false
-	_settle_ground_contact(delta)
 	# Hand the window back to the pinning logic only once the pet is standing on
 	# the ground with the recovery done. Checking velocity alone is not enough:
 	# a held pet and a just-released one both report zero velocity for a frame.
@@ -675,6 +678,13 @@ func _settle_ground_contact(delta: float) -> void:
 	if not is_instance_valid(actor) or not actor.has_method("set_ground_contact"):
 		return
 	if motion.is_held() or motion.is_falling():
+		return
+	# A travelling body must not have its ankles locked: the hips move while the
+	# plan says the feet are planted, which folds the legs. The walk frees them
+	# on start and this delay covers the hand-back afterwards.
+	if _walk_active:
+		if actor.ground_contact_enabled():
+			actor.set_ground_contact(false)
 		return
 	if _ground_contact_delay > 0.0:
 		_ground_contact_delay -= delta

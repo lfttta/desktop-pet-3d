@@ -267,10 +267,7 @@ func _process(delta: float) -> void:
 		_quit()
 
 func _update_regions() -> void:
-	# Camera projection is in viewport (physical) pixels; the cursor and window
-	# position are in DIPs, so the regions are scaled down to match. Leave them
-	# alone at 100% scaling.
-	var factor := 1.0 if is_equal_approx(dpi_scale, 1.0) else maxf(0.0001, dpi_scale)
+	# Viewport pixels, same space as the cursor and window position.
 	if actor and actor.has_method("project_hit_regions"):
 		regions = actor.project_hit_regions(camera)
 	else:
@@ -279,29 +276,15 @@ func _update_regions() -> void:
 			{"a": camera.unproject_position(Vector3(0, 0.3, 0)), "b": camera.unproject_position(Vector3(0, 1.0, 0)), "radius": px * 0.23},
 			{"a": camera.unproject_position(Vector3(0, 1.42, 0)), "b": camera.unproject_position(Vector3(0, 1.42, 0)), "radius": px * 0.19}
 		]
-	if not is_equal_approx(factor, 1.0):
-		for region in regions:
-			region["a"] = region.a / factor
-			region["b"] = region.b / factor
-			region["radius"] = float(region.radius) / factor
-
-
-func _to_logical(point: Vector2i) -> Vector2i:
-	## Converts a native (physical pixel) point into Godot's DIP space. The bridge
-	## reads the cursor with GetPhysicalCursorPos while the window geometry is in
-	## DIPs, so a 150% display scale needs the division or hit testing misses.
-	var factor := maxf(0.0001, dpi_scale)
-	if is_equal_approx(factor, 1.0):
-		return point
-	return Vector2i((Vector2(point) / factor).round())
 
 
 func _update_input() -> void:
-	# Units differ: the bridge returns GetPhysicalCursorPos (physical pixels),
-	# while get_window().position and the viewport rects are in DIPs. Measured on
-	# a 150% desktop: clicking DIP 760 produced raw 1140 for a window at DIP 413.
-	# Convert the cursor before any comparison, or every hit test is 1.5x off.
-	var cursor: Vector2i = _to_logical(bridge.get_cursor_position())
+	# Every value here is already in the same space: the bridge reads the cursor
+	# with GetPhysicalCursorPos, get_window().position is physical too (verified
+	# with SetWindowPos), and the camera projects to viewport pixels, which are
+	# physical because the viewport is not stretched. Scaling any one of them by
+	# dpi_scale breaks the hit test at 150% display scaling.
+	var cursor: Vector2i = bridge.get_cursor_position()
 	var down: bool = bridge.is_left_button_down()
 	var work_area := DisplayServer.screen_get_usable_rect(screen)
 	var window_position := get_window().position
@@ -451,7 +434,8 @@ func _apply_motion_to_window() -> void:
 	var subject := _subject_rect()
 	# anchor is the soles point; convert it back into a window top-left.
 	var top_left := Vector2(motion.anchor.x - subject.get_center().x, motion.anchor.y - subject.end.y)
-	get_window().position = ScreenMath.clamp_subject(Vector2i(top_left.round()), subject, DisplayServer.screen_get_usable_rect(screen))
+	var clamped := ScreenMath.clamp_subject(Vector2i(top_left.round()), subject, DisplayServer.screen_get_usable_rect(screen))
+	get_window().position = clamped
 
 
 ## Feeds the visible shove to the spring bones and matches the step cycle speed.
@@ -572,17 +556,8 @@ func _recover_position() -> void:
 	_attached_edges = ScreenMath.edge_flags(get_window().position, _subject_rect(), work)
 
 func _subject_rect() -> Rect2:
-	# Camera projection yields viewport pixels, which are physical while the window
-	# position is in DIPs. Dividing here is what makes every clamp meaningful on a
-	# scaled display; at 100% it is a no-op.
-	var raw := _subject_rect_raw()
-	if is_equal_approx(dpi_scale, 1.0):
-		return raw
-	var factor := maxf(0.0001, dpi_scale)
-	return Rect2(raw.position / factor, raw.size / factor)
-
-
-func _subject_rect_raw() -> Rect2:
+	# Viewport pixels. The cursor, the window position and this rect all live in
+	# physical pixels, so nothing here is scaled by dpi_scale.
 	if camera == null or not is_instance_valid(actor):
 		return Rect2(Vector2.ZERO, Vector2(get_window().size))
 	if actor.has_method("project_visible_rect"):

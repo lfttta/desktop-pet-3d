@@ -1,12 +1,12 @@
 # 阶段三：桌面行为与物理
 
-更新日期：2026-11-09。状态：设计已定，实现未开始。本文件是阶段三的执行依据，接续 [阶段二计划](stage-2-plan.md) 第 91 行指定的下一步：先建立行为状态机和沿底边行走，再接拖放速度、重力与落地恢复。
+更新日期：2026-11-10。状态：行走与行为状态机已实现并合入 `main`（merge `bb3f1e9`），自动化测试通过、2026-11-10 11:29 的整包构建通过；桌面人工验收见 §5.3（未逐条执行），完成记录见 [阶段三完成记录](reports/stage-3/2026-11-10-stage-3-completion.md)。本文件是阶段三的执行依据，接续 [阶段二计划](stage-2-plan.md) 第 91 行指定的下一步：先建立行为状态机和沿底边行走，再接拖放速度、重力与落地恢复。
 
 ## 1. 当前状态与阶段目标
 
 阶段二已完成并通过验收：Godette 单角色七动作、neutral/happy/sad 表情、自动眨眼、本地音频口型、拖拽与贴边、透明区域穿透、无焦点抢占、托盘与热键、多屏与 DPI、单实例与后台服务。交付入口为 `dist/stage-2-godette/Pet3D.exe`，验收记录见 [2026-11-03 单角色验收](reports/stage-2/2026-11-03-godette-completion.md)。
 
-`feat/motion-physics` 分支另有已实测通过的拖拽弹簧、重力下落、落地恢复与脚底接触（`app/scripts/motion/motion_controller.gd`、`app/scripts/motion/leg_ik.gd`），尚未合入 `main`。
+`feat/motion-physics` 分支带来的拖拽弹簧、重力下落、落地恢复与脚底接触（`app/scripts/motion/motion_controller.gd`、`app/scripts/motion/leg_ik.gd`）已随本阶段一并合入 `main`。
 
 本阶段目标：让角色能自主地在桌面底边走动，并在待机时自主挑选环境动作，形成最小可用的行为闭环。
 
@@ -162,9 +162,11 @@ intra_progress = animation_position / cycle_length
 
 **回归硬闸门**：`test_motion_physics.gd` 与 `test_motion_wiring.gd` 必须全绿，拖拽、下落、落地行为不得变化。
 
+> 2026-11-10 补充：这两套测试此前**不在** `tools/build_stage2.py` 的门禁列表里，整包构建从未执行过它们。现已补入该列表（连同阶段三的 `walk_plan`、`behavior_controller`、`walk_wiring`、`leg_contact`），并逐项确认测试文件存在、日志含 marker 且无 `SCRIPT ERROR:` / 行首 `ERROR:`。
+
 ### 5.2 已执行的验证结果
 
-全部通过（2026-11-09）：
+2026-11-09 首轮（行走与行为状态机实现时）：
 
 | 测试 | 结果 |
 |---|---|
@@ -176,9 +178,21 @@ intra_progress = animation_position / cycle_length
 | `pytest tests/service tests/assets` | 531 passed, 2 skipped |
 | 其余 Godot 套件（controllers / character_view / libraries / action_menu / action_wiring / lifecycle / catalog） | 全部 0 失败 |
 
-**尚未执行**：以下桌面人工验收需要真实显示器，本轮未做。
+2026-11-10 复验（脚底姿态与悬空放置修复之后，见 [脚掌翻折修复记录](reports/stage-3/foot-pose-repair.md)）：
 
-### 5.2 桌面人工验收
+| 测试 | 结果 |
+|---|---|
+| `test_leg_contact.gd` | 47 项，0 失败（新增，IK 修复的直接回归） |
+| `test_motion_physics.gd` | 58 项，0 失败 |
+| `test_motion_wiring.gd` | 41 项，0 失败 |
+| `test_walk_wiring.gd` | 44 项，0 失败 |
+| `test_stage2_character_view.gd` | 25 项，0 失败 |
+| `test_godette_lifecycle.gd` | 0 失败 |
+| 整包构建 `tools/build_stage2.py` | `GODETTE_STAGE2_BUILD_OK`，CPU 8.45%，pytest 531 passed 2 skipped |
+
+### 5.3 桌面人工验收
+
+状态：**未按条目逐条验收**。2026-11-10 在真实 D3D12 渲染下比较过原动画与多次 IK 切换后的 idle/walk 画面，并截取桌面截图确认站姿正常；测试实例日志记录到拖放落地与一次完整自主行走结束（记录见 [脚掌翻折修复记录](reports/stage-3/foot-pose-repair.md)）。这些是相关现象的观测，**不构成**下列 7 条的逐条验收结论。
 
 1. 待机 30 秒内至少自主行走一次，且脚底不打滑（盯脚踝与屏幕底边的相对位置）
 2. 走到左右边缘 1 圈步长内自动停在边界，不越界、不抖动

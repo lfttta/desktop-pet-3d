@@ -100,10 +100,21 @@ func is_falling() -> bool:
 
 ## Places the pet on the ground with its soles at the work area's bottom edge.
 func settle_at(x: float) -> void:
+	place_at(Vector2(x, ground_y()))
+
+
+## Aligns the controller with a soles position that is already on screen.
+##
+## `settle_at` deliberately snaps to the ground line, which is right for a pet
+## that has just fallen but wrong for one the user placed higher up: restoring a
+## saved placement puts the soles above the bottom edge, and forcing them down
+## to `ground_y()` dropped the pet the instant it was touched. Keeping the given
+## height means grabbing a floating pet does not move it.
+func place_at(soles: Vector2) -> void:
 	velocity = Vector2.ZERO
 	acceleration = Vector2.ZERO
 	state = State.GROUNDED
-	anchor = _clamp_anchor(Vector2(x, ground_y()))
+	anchor = _clamp_anchor(soles)
 	_grab_offset = Vector2.ZERO
 	_landed = false
 	_started_falling = false

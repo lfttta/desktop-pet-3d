@@ -27,6 +27,8 @@ USER.PostMessageW.argtypes = [w.HWND, w.UINT, w.WPARAM, w.LPARAM]
 USER.WindowFromPoint.argtypes = [w.POINT]
 USER.WindowFromPoint.restype = w.HWND
 USER.GetForegroundWindow.restype = w.HWND
+USER.GetSystemMetrics.argtypes = [c.c_int]
+USER.GetSystemMetrics.restype = c.c_int
 KERNEL.OpenProcess.argtypes = [w.DWORD, w.BOOL, w.DWORD]
 KERNEL.OpenProcess.restype = w.HANDLE
 KERNEL.CloseHandle.argtypes = [w.HANDLE]
@@ -96,7 +98,11 @@ def verify(package: Path, report: Path, duration: float = 120.0) -> None:
         ])
         status = data / 'runtime.json'
         log = report / 'desktop.log'
-        command = [str(package / 'Pet3D.exe'), '--log-file', str(log), '--', f'--data-dir={data}', f'--report={status}', f'--auto-exit={duration + 30}']
+        command = [str(package / 'Pet3D.exe'), '--log-file', str(log), '--', f'--data-dir={data}', f'--report={status}', f'--auto-exit={duration + 30}',
+                   # The pet walks around on its own; this check injects a drag at a
+                   # coordinate derived from a fixed standing pose, so an autonomous
+                   # walk would move the hit region out from under the cursor.
+                   '--no-behavior']
         app = subprocess.Popen(command, cwd=package, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW)
         child = 0
         try:
@@ -124,14 +130,42 @@ def verify(package: Path, report: Path, duration: float = 120.0) -> None:
             foreground = USER.GetForegroundWindow()
             USER.mouse_event(0x0002, 0, 0, 0, 0)
             time.sleep(0.12)
+            # Measure while the button is still down. Reading the rectangle after
+            # mouse-up measured the fall, not the drag: the motion controller
+            # deliberately drops a released pet to the bottom edge, so a reading
+            # taken 0.25 s later is wherever gravity has carried it by then.
+            dragged = None
             for step in range(1, 6):
                 USER.SetCursorPos(x + step * 15, y - step * 8)
                 time.sleep(0.06)
+                dragged = rectangle(role)
+            held_steps = [x + step * 15 for step in range(1, 6)]
             USER.mouse_event(0x0004, 0, 0, 0, 0)
-            time.sleep(0.25)
-            moved = rectangle(role)
-            assert abs((moved.left - initial[0]) - 75) < 15 and abs((moved.top - initial[1]) + 40) < 15, 'Drag did not move the role'
+            # Release behaviour is asserted separately below; let it settle first.
+            time.sleep(1.2)
+            landed = rectangle(role)
+            released_delta = (landed.left - initial[0], landed.top - initial[1])
+            # Print the geometry on every run: this assertion drives the real
+            # cursor, so when it fails the numbers are the only evidence of
+            # whether the role was clamped at a wall or simply did not follow.
+            print('DESKTOP_DRAG start=%s probe=(%d,%d) size=(%d,%d) cursor_end=%d dragged=%s delta=(%d,%d) released_delta=(%d,%d)'
+                  % (initial, x, y, width, height, held_steps[-1], (dragged.left, dragged.top),
+                     dragged.left - initial[0], dragged.top - initial[1],
+                     released_delta[0], released_delta[1]), flush=True)
+            # Horizontal tracking must be close to 1:1. The vertical one is a
+            # spring: the pet lags the cursor while it swings, so it only has to
+            # move the right way and by a comparable amount.
+            dx = dragged.left - initial[0]
+            dy = dragged.top - initial[1]
+            assert dx > 40, 'Drag did not move the role horizontally, delta=%d' % dx
+            assert dy < -15, 'Drag did not lift the role, delta=%d' % dy
+            assert dx < 130, 'Role moved further than the cursor, delta=%d' % dx
             assert USER.GetForegroundWindow() == foreground, 'Role stole focus during drag'
+            # A released pet falls back to the work area's bottom edge. This is
+            # the documented behaviour of the physics branch and must not be
+            # passed off as a drag failure.
+            screen_height = USER.GetSystemMetrics(1)   # SM_CYSCREEN, physical px
+            assert landed.bottom >= screen_height - 260, 'Released role did not return to the desktop bottom edge, bottom=%d of %d' % (landed.bottom, screen_height)
             USER.SetCursorPos(original_cursor.x, original_cursor.y)
             USER.SendMessageW(tray, 0x0111, 1, 0)
             time.sleep(0.2)

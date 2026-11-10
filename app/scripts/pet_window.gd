@@ -68,10 +68,18 @@ var _walk_cycles_done := 0
 ## True once the behaviour chain has been switched on. Kept separate from
 ## `_behavior_cooldown` so a test or a future menu toggle can disable it without
 ## having to fake a timer.
+##
+## `--no-behavior` turns the autonomous chain off. The desktop acceptance script
+## needs it: that check drags the role by a fixed offset measured from a known
+## standing pose, and a pet that walks away on its own moves the hit region out
+## from under the injected cursor. Disabling is also what a user who wants the
+## pet to stay put would want.
 var behavior_enabled := true
 
 func _ready() -> void:
 	_parse_options()
+	if options.has("no-behavior"):
+		behavior_enabled = false
 	if options.has("verify-package"):
 		set_process(false)
 		_verify_package.call_deferred()
@@ -384,13 +392,18 @@ func _ensure_motion_bounds() -> void:
 ## Aligns the controller with where the window already is. Only valid when
 ## nothing owns the anchor: a walk or a fall must never be reset onto the
 ## window, because the window follows the anchor and not the other way round.
+##
+## The whole soles point is taken, not just x. A restored placement can leave
+## the pet standing above the bottom edge (`placement.y < 1`), and snapping y to
+## the ground line here made the pet drop a full body height the moment it was
+## grabbed — the desktop drag check caught it as a 382px jump on mouse-down.
 func _sync_motion_anchor(subject: Rect2) -> void:
 	if _motion_active or _walk_active:
 		return
 	if motion.is_held() or motion.is_falling():
 		return
 	var soles := Vector2(get_window().position) + Vector2(subject.get_center().x, subject.end.y)
-	motion.settle_at(soles.x)
+	motion.place_at(soles)
 
 
 func _begin_hold(cursor: Vector2i) -> void:
@@ -500,6 +513,13 @@ func _begin_walk(direction: int, cycles: int) -> bool:
 	if motion.is_held() or motion.is_falling() or _motion_active:
 		return false
 	if not motion.is_grounded():
+		return false
+	# This stage walks along the bottom edge only, and `begin_walk` pins the soles
+	# to the ground line. A pet left floating by a saved placement would be
+	# teleported a full body height the instant the chain decided to walk, so it
+	# has to be standing on that line already. Dragging and releasing it puts it
+	# there; until then it idles instead of jumping.
+	if absf(motion.anchor.y - motion.ground_y()) > 0.5:
 		return false
 	# The walk clip replaces whatever is playing; only start from idle so an
 	# ambient action is never cut off mid-pose.

@@ -189,6 +189,24 @@ func _run_motion_tests() -> void:
 	check(resettle.is_grounded() and resettle.velocity == Vector2.ZERO, "settle_at restores a grounded state")
 	check(absf(resettle.anchor.x - 500.0) < 0.001 and absf(resettle.anchor.y - 1000.0) < 0.001, "settle_at places the soles at the request")
 
+	# 10. `place_at` keeps a soles height that is above the ground line.
+	#
+	# A restored placement can leave the pet standing well above the bottom edge
+	# (`placement.y < 1`). Aligning the controller used to go through `settle_at`
+	# and drop that height, so touching a floating pet teleported it a full body
+	# height down. The packaged desktop check measured 382 px on mouse-down.
+	var floating = _new_motion()
+	floating.place_at(Vector2(700.0, 600.0))
+	check(floating.is_grounded(), "place_at leaves the pet standing")
+	check(absf(floating.anchor.x - 700.0) < 0.001 and absf(floating.anchor.y - 600.0) < 0.001,
+		"place_at keeps the requested soles height, got %s" % [floating.anchor])
+	var state = _new_motion()
+	state.place_at(Vector2(700.0, 600.0))
+	state.begin_hold(Vector2(700.0, 400.0), 200.0)
+	for i in 10:
+		state.update(1.0 / 60.0)
+	check(absf(state.anchor.y - 600.0) < 8.0, "grabbing a floating pet does not drop it, y=%f" % state.anchor.y)
+
 
 func _test_leg_ik() -> void:
 	var packed := load("res://models/godette.vrm") as PackedScene

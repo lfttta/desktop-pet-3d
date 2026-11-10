@@ -56,9 +56,11 @@ func run() -> void:
 	await _test_walk_runs(window, view)
 	_test_interrupt_by_grab(window, view)
 	_test_interrupt_by_action(window, view)
+	_test_float_blocks_walk(window)
 	_test_behavior_gate(window)
 	await _test_feet_return_after_walk(window, view)
 	await _test_facing(view)
+	_test_no_behavior_option()
 
 	print("WALK_WIRING_TESTS checks=", checks, " failures=", failures)
 	quit(1 if failures else 0)
@@ -181,6 +183,22 @@ func _test_interrupt_by_action(window, view) -> void:
 	window._play_action("idle")
 
 
+## A pet left floating by a restored placement must not start walking.
+##
+## This stage walks along the bottom edge and `begin_walk` pins the soles to the
+## ground line. Allowing it to start from mid-air teleported the body a full
+## height the moment the chain rolled a walk.
+func _test_float_blocks_walk(window) -> void:
+	window.motion.place_at(Vector2(900.0, 600.0))
+	check(window.motion.is_grounded(), "the floating pet is standing")
+	check(not window._begin_walk(1, 2), "a floating pet does not start walking")
+	check(window.motion.anchor.y == 600.0, "the refused walk left the soles alone, got %f" % window.motion.anchor.y)
+	# Back on the ground line the same request must succeed.
+	window.motion.settle_at(900.0)
+	check(window._begin_walk(1, 2), "a grounded pet still walks")
+	window._finish_walk(false)
+
+
 ## The behaviour chain must stay out of the way while the pet is busy.
 func _test_behavior_gate(window) -> void:
 	window.behavior_enabled = false
@@ -227,6 +245,24 @@ func _test_facing(view) -> void:
 	for i in 120:
 		await process_frame
 	check(absf(wrapf(view.rotation.y - authored, -PI, PI)) < 0.05, "the body returns to its authored yaw after walking, got %f vs %f" % [view.rotation.y, authored])
+
+
+## `--no-behavior` is what the desktop acceptance run relies on.
+##
+## That check injects a drag at a coordinate derived from a fixed standing pose.
+## A pet that walks away on its own moves its hit region out from under the
+## injected cursor, which is exactly how the packaged desktop test failed before
+## this switch existed.
+func _test_no_behavior_option() -> void:
+	var off := PetWindow.new()
+	root.add_child(off)
+	off.options["no-behavior"] = "true"
+	off.behavior_enabled = false
+	var before: float = off._behavior_cooldown
+	off._update_behavior(1.0 / 60.0)
+	check(off._behavior_cooldown == before, "a disabled chain never counts down or decides")
+	off.queue_free()
+	await process_frame
 
 
 ## Finishing a walk must re-plant the feet. `_settle_ground_contact` is only

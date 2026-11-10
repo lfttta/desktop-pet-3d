@@ -230,6 +230,7 @@ func _create_windows() -> void:
 	add_child(emotion_presenter)
 	emotion_presenter.configure(client, self)
 	chat_window.state_updated.connect(emotion_presenter.apply_delta)
+	chat_window.action_requested.connect(_play_chat_action)
 	notice = AcceptDialog.new()
 	notice.title = "Pet3D"
 	add_child(notice)

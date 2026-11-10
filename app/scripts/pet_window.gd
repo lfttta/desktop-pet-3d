@@ -852,6 +852,44 @@ func _on_action_changed(action: String) -> void:
 	current_action = action
 	print("[stage0] ACTION ", action)
 
+
+## Plays an animation a chat reply asked for.
+##
+## Chat ranks below the user and below the physics states in `SOURCE_PRIORITY`,
+## so a reply that arrives mid-drag, mid-fall or while a menu action is playing
+## is dropped rather than cutting into it. Only the library's one-shot clips are
+## played as clips; `walk` becomes a real walk segment so the feet stay planted
+## to the travelling window instead of stepping on the spot.
+func _play_chat_action(action: String) -> void:
+	if action.is_empty() or action == "none":
+		return
+	if not action_library.has(action):
+		# The service validates against the same library, but a stale service or
+		# a newer app must not make the pet falter on an id it does not have.
+		return
+	if motion.is_held() or motion.is_falling() or _recovering:
+		return
+	if action == "walk":
+		_begin_chat_walk()
+		return
+	# Only one-shot clips: a loop would never complete, and a hold clip latches
+	# until something releases it — the chat path has no release step.
+	if str((action_library[action] as Dictionary).get("mode", "once")) != "once":
+		return
+	if _walk_active:
+		_finish_walk(false)
+	_request_body_action(action, "chat")
+
+
+## Starts a short walk in the direction with room, from a chat request.
+func _begin_chat_walk() -> void:
+	var room := _walk_room()
+	var stride := _walk_stride_px()
+	var direction := 1 if float(room.right) >= float(room.left) else -1
+	if maxf(float(room.left), float(room.right)) < stride:
+		return
+	_begin_walk(direction, 2)
+
 func _check_screen() -> void:
 	if DisplayServer.get_name() == "headless":
 		return

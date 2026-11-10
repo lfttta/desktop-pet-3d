@@ -4,6 +4,8 @@ extends Window
 
 signal retry_requested
 signal state_updated(state_delta: Dictionary)
+## Carries the animation a reply asked for up to the pet window.
+signal action_requested(action: String)
 
 const ChatSession = preload("res://scripts/chat/chat_session.gd")
 const UNAVAILABLE_TEXT := "聊天功能尚未接入。"
@@ -128,6 +130,7 @@ func configure_chat(service, settings: Dictionary) -> void:
 		_session.history_loaded.connect(_on_history_loaded)
 		_session.history_unavailable.connect(_on_history_unavailable)
 		_session.bubble_received.connect(_on_bubble)
+		_session.action_requested.connect(_on_action_requested)
 	_session.configure(service)
 	if service and service.has_signal("capabilities_received") and not service.capabilities_received.is_connected(_on_capabilities):
 		service.capabilities_received.connect(_on_capabilities)
@@ -250,6 +253,11 @@ func _on_bubble(text: String) -> void:
 
 func _on_accepted(_id: String, _request_id: String) -> void:
 	status.text = "正在回复…"
+
+## Forward the reply's animation request; the pet window owns the decision.
+func _on_action_requested(action: String) -> void:
+	if not action.is_empty():
+		action_requested.emit(action)
 
 func _on_completed(_message: String, usage: Dictionary, memory_ops: Array, state_delta: Dictionary) -> void:
 	_streaming = false

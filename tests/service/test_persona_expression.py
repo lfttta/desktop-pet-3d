@@ -74,8 +74,17 @@ def test_invalid_summary_length_is_rejected(tmp_path):
 def test_prompt_budget_keeps_output_rules_and_boundaries(tmp_path, monkeypatch):
     store = SettingsStore(tmp_path)
     database = Database(tmp_path / 'pet.db')
+    # The rule text now carries the whole action vocabulary, so a fixed 900 would
+    # sit below the mandatory core and prove nothing except that the core is
+    # truncated. Derive a budget that leaves room for the state line and the
+    # rules but not for style plus memory, which is the drop order under test.
+    mandatory = (len(persona.build_prompt('godette').strip())
+                 + len(persona.build_boundaries('godette').strip())
+                 + len(prompt.OUTPUT_RULES))
+    state_line = len('当前状态：') + 240
+    budget = mandatory + state_line + 40
     try:
-        monkeypatch.setattr(prompt, 'MAX_SYSTEM_CHARS', 900)
+        monkeypatch.setattr(prompt, 'MAX_SYSTEM_CHARS', budget)
         monkeypatch.setattr(prompt, 'search_memories',
                             lambda *args, **kwargs: ['记忆' * 300 for _ in range(5)])
         monkeypatch.setattr(prompt, '_state_summary', lambda *args: '状态' * 150)

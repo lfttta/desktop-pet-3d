@@ -88,5 +88,35 @@ func run() -> void:
 			missing.append(action)
 	check(missing.is_empty(), "every menu action exists in godette library; missing=" + ",".join(missing))
 
+	_test_chat_actions(window, view)
+
 	print("ACTION_WIRING_TESTS checks=", checks, " failures=", failures)
 	quit(1 if failures else 0)
+
+
+## A chat reply may name an animation, but only one this build can play safely.
+##
+## The service validates against the same library; these checks are the app's own
+## guard against a stale service, a newer build, or a reply naming a clip the
+## chat path must not drive (a loop or a hold would never hand control back).
+func _test_chat_actions(window, view) -> void:
+	window._play_action("idle")
+	window._play_chat_action("dancing")
+	check(view.action == "dancing", "a chat action plays, got %s" % view.action)
+	check(view.player.current_animation == "shared/dancing", "a chat action reaches the AnimationPlayer")
+
+	# Ids the chat path must ignore: unknown, empty, explicit none, loop-only and
+	# hold-only clips.
+	for rejected in ["", "none", "does_not_exist", "running", "sleeping_idle", "pickup", "fall"]:
+		window._play_action("idle")
+		window._play_chat_action(rejected)
+		check(view.action == "idle", "'%s' from chat is ignored, got %s" % [rejected, view.action])
+
+	# Chat sits below the user in the priority table: a reply arriving while the
+	# user's own action is playing must not cut it short.
+	window._play_action("idle")
+	window._handle_tray(ActionMenu.COMMAND_BASE + window.action_menu.actions().find("wave"))
+	check(view.action == "wave", "the user action starts before the chat request")
+	window._play_chat_action("crying")
+	check(view.action == "wave", "a chat action does not override a user action, got %s" % view.action)
+	window._play_action("idle")

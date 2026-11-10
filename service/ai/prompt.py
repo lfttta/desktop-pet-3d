@@ -10,6 +10,7 @@ that order when the system block runs out of room.
 import json
 import sqlite3
 
+from service.ai.actions import prompt_list
 from service.database import SUBJECT_USER_ID
 from service.persona import DEFAULT_PERSONA_ID, build_boundaries, build_prompt
 
@@ -36,7 +37,8 @@ OUTPUT_RULES = (
     '只输出一个 JSON 对象，不要 Markdown、代码块或额外解释。字段：'
     '{"text":"给用户看的回复","speak":"要朗读的短句","action":"none",'
     '"memory_candidates":[],"state_suggestion":{},"confidence":0.8}。'
-    'action 只能是 none/idle/walk/turn/wave/pickup/fall/recover 之一；'
+    'action 只能是 none 或下列之一：' + prompt_list() + '；'
+    '选和自己说的话相配的那个，不确定就填 none。'
     'memory_candidates 是最多 8 条待确认的记忆；confidence 在 0 到 1 之间。'
 )
 

@@ -260,6 +260,38 @@ def test_schema_accepts_known_action_and_rejects_unknown_action():
     assert caught.value.code == 'unknown_action'
 
 
+def test_schema_accepts_every_chat_action():
+    from service.ai.actions import allowed
+
+    for action in allowed():
+        parsed = parse_structured(json.dumps(structured(action=action)))
+        assert parsed['action'] == action
+
+
+@pytest.mark.parametrize('action', [
+    'pickup',     # hold-mode: a reply would latch the pet mid-pose
+    'fall',       # hold-mode
+    'running',    # loop-mode: never completes
+    'sleeping_idle',
+    'turn',       # rewrites the body yaw
+    'recover',    # owned by the landing path
+    'male_sitting_pose',
+])
+def test_schema_rejects_actions_the_chat_path_cannot_drive(action):
+    with pytest.raises(SchemaError) as caught:
+        parse_structured(json.dumps(structured(action=action)))
+    assert caught.value.code == 'unknown_action'
+
+
+def test_prompt_lists_the_whole_chat_vocabulary():
+    from service.ai.actions import prompt_list
+    from service.ai.prompt import OUTPUT_RULES
+
+    for action in prompt_list().split('/'):
+        assert action in OUTPUT_RULES, f'{action} missing from output rules'
+    assert 'none' in OUTPUT_RULES
+
+
 @pytest.mark.parametrize('mutate, code', [
     (lambda item: item.pop('text'), 'missing_field'),
     (lambda item: item.update(confidence=2.0), 'out_of_range'),

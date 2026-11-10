@@ -9,9 +9,9 @@ import json
 import math
 import re
 
-ALLOWED_ACTIONS = frozenset({
-    '', 'none', 'idle', 'walk', 'turn', 'wave', 'pickup', 'fall', 'recover',
-})
+from service.ai.actions import allowed as _allowed_actions
+
+ALLOWED_ACTIONS = _allowed_actions()
 MAX_TEXT_CHARS = 4000
 MAX_SPEAK_CHARS = 2000
 MAX_CANDIDATES = 8

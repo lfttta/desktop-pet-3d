@@ -62,12 +62,33 @@ func _run() -> void:
 	var accepted := session.send("你好")
 	service.reply(accepted, "result", {"message": "占位回复"})
 	check(replies.size() == 1 and replies[0] == "占位回复", "result maps to an assistant message")
+
+	# The reply's animation request must reach the window. `none` and a missing
+	# field both mean "say it without acting it out" and must stay silent.
+	# `chat.done` is the path the service actually uses; the flat `result` frame
+	# is the one-shot backend fallback and carries the action at the top level.
+	var actions := []
+	session.action_requested.connect(func(action: String): actions.append(action))
+	var streamed := session.send("跳个舞")
+	service.event(streamed, "chat.done", {"message": {"content": "好呀", "action": "dancing"}})
+	check(actions == ["dancing"], "a done frame's action reaches the window, got %s" % [actions])
+	var quiet := session.send("嗯")
+	service.event(quiet, "chat.done", {"message": {"content": "嗯", "action": "none"}})
+	check(actions.size() == 1, "an explicit none requests no action")
+	var bare := session.send("嗯嗯")
+	service.event(bare, "chat.done", {"message": {"content": "嗯嗯"}})
+	check(actions.size() == 1, "a missing action field requests no action")
+	var flat := session.send("再跳一个")
+	service.reply(flat, "result", {"content": "好呀", "action": "spinning"})
+	check(actions.size() == 2 and actions[1] == "spinning", "a flat result frame carries its action, got %s" % [actions])
+
 	print("CHAT_FRAMEWORK_TESTS checks=", checks, " failures=", failures)
 	quit(0 if failures == 0 else 1)
 
 class FakeClient:
 	signal request_finished(id: String, type: String, payload: Dictionary)
 	signal capabilities_received(features: Dictionary, personas: Array)
+	signal event_received(id: String, type: String, payload: Dictionary)
 	var state := "ready"
 	var features := {}
 	var personas: Array = []
@@ -79,3 +100,6 @@ class FakeClient:
 
 	func reply(id: String, type: String, payload: Dictionary) -> void:
 		request_finished.emit(id, type, payload)
+
+	func event(id: String, type: String, payload: Dictionary) -> void:
+		event_received.emit(id, type, payload)

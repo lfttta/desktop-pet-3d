@@ -14,6 +14,8 @@ signal failed(message: String)
 signal history_loaded(messages: Array)
 signal history_unavailable(message: String)
 signal bubble_received(text: String)
+## The reply asked the pet to act something out. Empty or "none" means it did not.
+signal action_requested(action: String)
 
 const MAX_TEXT_LENGTH := 8000
 const CHAT_TIMEOUT := 40.0
@@ -189,13 +191,15 @@ func _on_request_finished(id: String, type: String, payload: Dictionary) -> void
 				_bind_stream(id, stream_id)
 				accepted.emit(id, stream_id)
 			return
-		# One-shot backends answer with a single final result frame.
+		# One-shot backends answer with a single final result frame. Its action
+		# sits at the top level rather than under `message`.
 		var reply := _message_text(payload)
 		_remove_pending(id)
 		if reply.is_empty():
 			_emit_error("empty_response", "后台服务未返回聊天内容。", true)
 			return
 		assistant_message.emit(reply)
+		_emit_action(_message_action(payload))
 		completed.emit(reply, {}, [], {})
 		return
 	_fail(id, payload)
@@ -203,7 +207,8 @@ func _on_request_finished(id: String, type: String, payload: Dictionary) -> void
 func _finish(id: String, payload: Dictionary) -> void:
 	var state: Dictionary = _pending[id]
 	var buffer := str(state.get("buffer", ""))
-	var text := _message_text(payload.get("message", ""))
+	var message_value: Variant = payload.get("message", "")
+	var text := _message_text(message_value)
 	if text.is_empty():
 		text = buffer
 	var usage_value: Variant = payload.get("usage", {})
@@ -220,6 +225,9 @@ func _finish(id: String, payload: Dictionary) -> void:
 		_emit_error("empty_response", "后台服务未返回聊天内容。", true)
 		return
 	assistant_message.emit(text)
+	# Emit before `completed` so a listener that reacts to both sees the body
+	# start moving while the window still reports "replying".
+	_emit_action(_message_action(message_value))
 	completed.emit(text, usage, memory_ops, state_delta)
 
 func _fail(id: String, payload: Dictionary) -> void:
@@ -262,6 +270,22 @@ func _message_text(value: Variant) -> String:
 			if value.get(key) is String:
 				return str(value[key])
 	return ""
+
+## The animation a reply asked for, or "" when it asked for none.
+##
+## The service validates the id against the library before sending it, but the
+## app still decides: an id this build does not have is dropped by the window.
+func _message_action(value: Variant) -> String:
+	if not (value is Dictionary):
+		return ""
+	var action := str((value as Dictionary).get("action", "")).strip_edges()
+	if action == "none":
+		return ""
+	return action
+
+func _emit_action(action: String) -> void:
+	if not action.is_empty():
+		action_requested.emit(action)
 
 func _normalize_history(payload: Dictionary) -> Array:
 	var items: Variant = payload.get("messages", [])

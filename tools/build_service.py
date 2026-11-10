@@ -37,17 +37,27 @@ def main():
     for variable in ('TEMP', 'TMP'):
         environment[variable] = str(work / 'tmp')
     (work / 'tmp').mkdir(exist_ok=True)
+    # The persona card and the phrase library are read at runtime, not imported,
+    # so PyInstaller does not collect them. Without this the packaged service
+    # falls back to the built-in persona and logs "Persona card godette is
+    # missing or invalid" on every start.
+    data_root = source_root / 'data'
+    if not (data_root / 'persona/godette.json').is_file():
+        raise SystemExit('Service data is missing: data/persona/godette.json')
     command = [
         sys.executable, '-B', '-m', 'PyInstaller', '--noconfirm', '--clean',
         '--onedir', '--console', '--noupx', '--name', 'pet-service',
         '--distpath', str(work / 'bundle'), '--workpath', str(work / 'work'),
         '--specpath', str(work), '--paths', str(source_root),
+        '--add-data', str(data_root) + os.pathsep + 'data',
         str(source_root / 'service/main.py'),
     ]
     subprocess.run(command, cwd=source_root, env=environment, check=True)
     bundle = work / 'bundle/pet-service'
     if not (bundle / 'pet-service.exe').is_file():
         raise SystemExit('PyInstaller did not produce pet-service.exe')
+    if not (bundle / '_internal/data/persona/godette.json').is_file():
+        raise SystemExit('PyInstaller did not bundle data/persona')
     shutil.copytree(bundle, destination, dirs_exist_ok=True)
     print(destination / 'pet-service.exe')
     return 0

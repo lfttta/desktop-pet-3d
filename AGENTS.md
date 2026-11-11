@@ -6,13 +6,14 @@
 
 | 项目 | 值 |
 |---|---|
-| git 仓库根 | `D:\danjigame\3D-pet-gtpdo` |
+| git 仓库根 | `D:\danjigame\3D-pet\3D-pet-gtpdo` |
 | Godot | `D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe`（4.7.2.stable） |
 | Python | 3.13.14，使用项目专用环境 |
-| 当前阶段 | 阶段 2，**只做 Godette 单角色** |
-| 有效范围文档 | `docs/stage-2-plan.md` |
+| 当前阶段 | 阶段 3，**只做 Godette 单角色**（沿底边行走与行为状态机已合入 `main`） |
+| 有效范围文档 | `docs/stage-3-plan.md` |
 | 已作废文档 | `docs/superpowers/plans/2026-11-02-stage-2.md`（多角色方案，仅作历史参考） |
 | 备份远端 | `D:\danjigame\3D-pet\git-backup.git`（本地 bare 仓库，`origin`） |
+| 上传远端 | `git@github.com:lfttta/desktop-pet-3d.git`（`github`，**私有**，禁止转为公开） |
 
 注意：`D:\danjigame\3D-pet\work-pet` 是早期阶段 0 的旧资料，**不是本工程的一部分**，不要往那里写代码，也不要从那里读运行资源。
 
@@ -25,7 +26,7 @@
 
 ```bat
 :: 开任务
-git -C D:\danjigame\3D-pet-gtpdo worktree add -b feat/godette-actions "D:\danjigame\3D-pet\wt\godette-actions" main
+git -C D:\danjigame\3D-pet\3D-pet-gtpdo worktree add -b feat/godette-actions "D:\danjigame\3D-pet\wt\godette-actions" main
 
 :: 在 worktree 内工作
 cd /d "D:\danjigame\3D-pet\wt\godette-actions"

@@ -214,9 +214,9 @@ intra_progress = animation_position / cycle_length
 
 | 阶段 | 内容 | 参考项目对应 | 判断 |
 |---|---|---|---|
-| 3-B | 聊天气泡 + 头顶快捷输入 | `speech_bubble.py` 1810 行 + `speech_bubble_text.py` 纯函数 | 真缺口，投入产出比最高 |
+| 3-B | 聊天气泡 + 头顶快捷输入 | `speech_bubble.py` 1810 行 + `speech_bubble_text.py` 纯函数 | 气泡已做（v3.3.0：回复上气泡、点击气泡进聊天、分时段问候）；头顶内联输入仍未做 |
 | 3-C | Agent 状态联动 | `agent_link` 6303 行，本地 JSONL 总线 | 真缺口，纯本地不联网 |
-| 3-D | TTS | `tts/{edge,sapi,mimo,doubao}` 声明式注册表 | 真缺口，`tts.synthesize` 当前返回 `not_available` |
+| 3-D | TTS | `tts/{edge,sapi,mimo,doubao}` 声明式注册表 | 已做 SAPI 合成（`tts.synthesize`，默认关闭）；合成同步阻塞主线程直至语音功能正式启用 |
 | 3-E | 截屏视觉 + 主动识屏 | `vision.py`、`proactive/` | 真缺口 |
 | 3-F | 分档降载 | `tick_governor.py` 四档 + 800ms 滞回 + AC 感知 | 打磨项 |
 

@@ -8,6 +8,12 @@ const EmotionPresenter = preload("res://scripts/state/emotion_presenter.gd")
 const TtsPlayer = preload("res://scripts/audio/tts_player.gd")
 var client: Node
 var saved_settings := AppSettings.defaults()
+## The service's bubble group. Defaults match service/settings.py so a pre-v7
+## service that sends no group still gets the same behaviour.
+var bubble := {"enabled": true, "show_replies": true, "duration_seconds": 4}
+## The service's greeting group. Defaults match service/settings.py so a pre-v7
+## service that sends no group still greets the way it used to.
+var greeting_group := {"enabled": true, "on_start": true, "cooldown_minutes": 60}
 var data_directory := ""
 var displays: Array = []
 var settings_window: Window
@@ -16,6 +22,7 @@ var emotion_presenter: Node
 var tts_player: Node
 var notice: AcceptDialog
 var _app_ready := false
+var _greeted_on_start := false
 var _closing := false
 var _applying := false
 var _display_fallback := false
@@ -79,6 +86,9 @@ func _ready() -> void:
 	apply_runtime_settings(saved_settings)
 	_restore_placement()
 	_create_windows()
+	# Settings may already have arrived during the startup wait, so the ready
+	# handshake itself cannot be relied on to trigger the start greeting.
+	_greet_on_start_once()
 	if not _warnings.is_empty():
 		_show_notice("设置已恢复", "\n".join(PackedStringArray(_warnings)))
 	if options.has("open-settings"):
@@ -235,7 +245,12 @@ func _create_windows() -> void:
 	add_child(tts_player)
 	tts_player.configure(client)
 	_connect_chat_bubble()
+	_connect_chat_reply()
 	_connect_chat_speech()
+	_apply_bubble_settings()
+	_apply_greeting_settings()
+	if not bubble_clicked.is_connected(_on_bubble_clicked):
+		bubble_clicked.connect(_on_bubble_clicked)
 	emotion_presenter = EmotionPresenter.new()
 	add_child(emotion_presenter)
 	emotion_presenter.configure(client, self)
@@ -259,7 +274,72 @@ func _connect_chat_bubble() -> void:
 		session.connect("bubble_received", _on_chat_bubble)
 
 func _on_chat_bubble(text: String) -> void:
-	show_bubble(text)
+	if not bool(bubble.get("enabled", true)):
+		return
+	show_bubble(text, _bubble_seconds())
+
+## Adds the reply connection the chat window does not make for the desktop.
+func _connect_chat_reply() -> void:
+	if chat_window == null:
+		return
+	var session: Object = chat_window.get("_session")
+	if session == null or not session.has_signal("assistant_message"):
+		return
+	if not session.is_connected("assistant_message", _on_chat_reply):
+		session.connect("assistant_message", _on_chat_reply)
+
+## Shows a chat reply on the desktop unless bubble.show_replies is off. The chat
+## window keeps the full text; the bubble clips it to forty characters.
+func _on_chat_reply(text: String) -> void:
+	if not bool(bubble.get("enabled", true)) or not bool(bubble.get("show_replies", true)):
+		return
+	show_bubble(text, _bubble_seconds(), true)
+
+## Reads the service-configured display time, falling back to the four second
+## default when an older settings document has no bubble group.
+func _bubble_seconds() -> float:
+	return float(bubble.get("duration_seconds", 4))
+
+## Copies the bubble group from the settings document and applies it to the
+## window, so enabling or disabling bubbles takes effect without a restart.
+func _apply_bubble_settings() -> void:
+	var group: Variant = saved_settings.get("bubble", {})
+	if group is Dictionary:
+		for key in bubble.keys():
+			if (group as Dictionary).has(key):
+				bubble[key] = (group as Dictionary)[key]
+		set_bubble_enabled(bool(bubble.get("enabled", true)))
+		set_bubble_seconds(_bubble_seconds())
+
+## Copies the greeting group from the settings document into the window, so the
+## start greeting and the click cooldown follow the service without a restart.
+func _apply_greeting_settings() -> void:
+	var group: Variant = saved_settings.get("greeting", {})
+	if group is Dictionary:
+		for key in greeting_group.keys():
+			if (group as Dictionary).has(key):
+				greeting_group[key] = (group as Dictionary)[key]
+	set_greeting_settings(
+		bool(greeting_group.get("enabled", true)),
+		bool(greeting_group.get("on_start", true)),
+		int(greeting_group.get("cooldown_minutes", 60)))
+
+## Shows the start greeting once, after the client reported ready and the
+## settings document has been applied. Deferred so the first frame of the pet is
+## drawn before the bubble appears above it.
+func _greet_on_start_once() -> void:
+	if _greeted_on_start or not _app_ready:
+		return
+	if client == null or client.state != "ready":
+		return
+	_greeted_on_start = true
+	greet_on_start.call_deferred()
+
+## A click on the bubble is a request to talk: open chat with the caret ready.
+func _on_bubble_clicked() -> void:
+	_open_chat()
+	if chat_window and chat_window.has_method("focus_input"):
+		chat_window.focus_input()
 
 ## Forwards the reply's spoken line to the speech player. The chat window owns
 ## the session; this only adds the one connection it does not react to itself.
@@ -317,6 +397,7 @@ func _save_patch(patch: Dictionary, user_initiated: bool) -> String:
 func _on_connected(settings: Dictionary, warnings: Array) -> void:
 	_warnings = warnings
 	_on_settings_received(settings)
+	_greet_on_start_once()
 	if _app_ready and options.has("report"):
 		_write_report()
 
@@ -332,6 +413,8 @@ func _on_settings_received(settings: Dictionary) -> void:
 		_restore_placement()
 	_applying = false
 	apply_runtime_settings(saved_settings)
+	_apply_bubble_settings()
+	_apply_greeting_settings()
 	if chat_window:
 		chat_window.update_settings(saved_settings)
 	if emotion_presenter:

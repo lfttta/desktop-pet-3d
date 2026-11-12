@@ -52,6 +52,45 @@ func _run() -> void:
 	bubble.hide_bubble()
 	check(not bubble.visible, "hide_bubble hides immediately")
 
+	# Reply bubbles are clipped to 40 characters plus an ellipsis; a click phrase
+	# passes no cap and keeps its whole text.
+	bubble.set_max_chars(40)
+	bubble.show_bubble("一".repeat(41))
+	check(bubble.label.text == "一".repeat(40) + "…", "41 characters keep 40 and an ellipsis, got %d characters" % bubble.label.text.length())
+	bubble.show_bubble("一".repeat(40))
+	check(bubble.label.text == "一".repeat(40), "exactly forty characters are not clipped")
+	bubble.set_max_chars(0)
+	bubble.show_bubble("一".repeat(41))
+	check(bubble.label.text == "一".repeat(41), "no cap keeps the whole text")
+	bubble.hide_bubble()
+
+	# Click-through stays the default; an interactive bubble takes the mouse and
+	# reports one press per left click.
+	check(bubble.mouse_filter == Control.MOUSE_FILTER_IGNORE, "the bubble stays click-through by default")
+	bubble.set_interactive(true)
+	check(bubble.mouse_filter == Control.MOUSE_FILTER_STOP, "set_interactive(true) takes the mouse")
+	var presses: Array[int] = [0]
+	bubble.pressed.connect(func(): presses[0] += 1)
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	bubble.gui_input.emit(press)
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	bubble.gui_input.emit(release)
+	check(presses[0] == 1, "a left click emits pressed once, got %d" % presses[0])
+	bubble.set_interactive(false)
+	check(bubble.mouse_filter == Control.MOUSE_FILTER_IGNORE, "set_interactive(false) restores click-through")
+
+	# A disabled bubble shows nothing, and an already visible one is hidden.
+	bubble.show_bubble("显示中")
+	bubble.enabled = false
+	bubble.show_bubble("不应显示")
+	check(not bubble.visible, "a disabled bubble shows nothing")
+	bubble.enabled = true
+	bubble.hide_bubble()
+
 	bubble.show_bubble("这是一段很长的测试文本，".repeat(12))
 	check(bubble.size.x <= 240.0, "the bubble never exceeds its maximum width, got %.1f" % bubble.size.x)
 	check(bubble.label.text.length() > 20, "the width check uses long text")

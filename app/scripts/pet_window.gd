@@ -1,6 +1,9 @@
 extends Node3D
 ## Stage 0 application: rendering/interaction and native lifetime only.
 
+## Emitted when the visible speech bubble was clicked. The app layer opens chat.
+signal bubble_clicked
+
 const DragState = preload("res://scripts/drag_state.gd")
 const HitRegions = preload("res://scripts/hit_regions.gd")
 const ScreenMath = preload("res://scripts/screen_math.gd")
@@ -12,7 +15,23 @@ const SpeechBubble = preload("res://scripts/ui/speech_bubble.gd")
 const BUBBLE_GAP := 10.0
 ## Slack kept on each side when the bubble is limited to the window width.
 const BUBBLE_WINDOW_MARGIN := 12.0
+## Longest reply a bubble shows before an ellipsis. The chat window keeps the
+## full text; only the desktop bubble is clipped so it does not cover the pet.
+const REPLY_BUBBLE_CHARS := 40
 const CLICK_PHRASE_CATEGORIES := ["greeting", "care"]
+## The start greeting is a hello only; a care reminder would be a strange first
+## line after launching the pet.
+const START_PHRASE_CATEGORIES := ["greeting"]
+## Wall-clock windows for phrase selection, copied from TIME_WINDOWS in
+## service/expression/phrases.py. Each range is half-open and `night` wraps
+## midnight; `any` stays valid at every hour.
+const TIME_WINDOWS := {
+	"morning": Vector2i(5, 11),
+	"afternoon": Vector2i(11, 17),
+	"evening": Vector2i(17, 22),
+	"night": Vector2i(22, 5),
+}
+const TIME_WINDOW_ANY := "any"
 
 var camera: Camera3D
 var actor: Node3D
@@ -35,6 +54,28 @@ var status_label: Label
 ## Created on first use so a headless run that never speaks pays nothing.
 var speech_bubble: Control
 var _bubble_layer: CanvasLayer
+## Mirrors the service's bubble.enabled setting: false makes show_bubble a no-op.
+var _bubble_enabled := true
+## Mirrors bubble.duration_seconds; -1 keeps the per-text default. Named
+## `duration` because main.gd's `_bubble_seconds()` helper shadows a field of
+## that name in the derived class.
+var _bubble_duration := -1.0
+## Mirrors the service's greeting group (service/settings.py GREETING_DEFAULTS):
+## whether greetings are spoken, whether one is said after startup, and how many
+## minutes a click phrase keeps the next one from replacing it.
+var greeting := {"enabled": true, "on_start": true, "cooldown_minutes": 60}
+## Injectable wall clock for the time window and the click cooldown. It returns
+## a Dictionary with `hour` (local wall clock, 0-23) and `minutes` (fractional
+## minutes on one timeline). Left invalid, the local system clock is used; a
+## test swaps it in so it can pin an hour and advance time without waiting.
+var greeting_clock: Callable = Callable()
+## Timeline minutes of the last click phrase and whether one has been said yet,
+## so the first click is never held back by the cooldown.
+var _click_greeting_said := false
+var _click_greeting_minutes := 0.0
+## True while a press began on the bubble, so releasing it opens chat instead of
+## counting as a click on the pet.
+var _press_on_bubble := false
 var action_menu := ActionMenu.new()
 var action_library := {}
 var _last_work_area := Rect2i()
@@ -386,19 +427,45 @@ func _update_regions() -> void:
 # the window for free; only the offset above the head is recomputed each frame.
 
 ## Shows `text` over the pet. `seconds` below zero uses the automatic duration
-## (4 s, longer for long text, capped at 10 s).
-func show_bubble(text: String, seconds := -1.0) -> void:
-	if text.strip_edges().is_empty():
+## (4 s, longer for long text, capped at 10 s). `reply` clips the text to
+## REPLY_BUBBLE_CHARS with an ellipsis; click phrases keep their full text.
+func show_bubble(text: String, seconds := -1.0, reply := false) -> void:
+	if not _bubble_enabled or text.strip_edges().is_empty():
 		hide_bubble()
 		return
 	_ensure_speech_bubble()
 	speech_bubble.set_max_width(_bubble_max_width())
+	speech_bubble.set_max_chars(REPLY_BUBBLE_CHARS if reply else 0)
 	speech_bubble.show_bubble(text, seconds)
 	_update_bubble_position()
 
 func hide_bubble() -> void:
 	if is_instance_valid(speech_bubble):
 		speech_bubble.hide_bubble()
+
+## Applies the service's bubble.enabled setting. Disabling hides whatever is
+## showing and makes every later show a no-op; interaction goes away with it.
+func set_bubble_enabled(value: bool) -> void:
+	_bubble_enabled = value
+	if is_instance_valid(speech_bubble):
+		speech_bubble.set("enabled", value)
+	if not value:
+		hide_bubble()
+
+## Applies the service's bubble.duration_seconds. Click lines and the start
+## greeting pass it explicitly, so the setting covers every kind of bubble and
+## not only the ones main.gd shows.
+func set_bubble_seconds(value: float) -> void:
+	_bubble_duration = value
+
+## Applies the service's greeting group. The cooldown range matches
+## `_validate_greeting` in service/settings.py; an out-of-range value keeps the
+## previous one rather than inventing a cooldown the service would reject.
+func set_greeting_settings(enabled: bool, on_start: bool, cooldown_minutes: int) -> void:
+	greeting["enabled"] = enabled
+	greeting["on_start"] = on_start
+	if 5 <= cooldown_minutes and cooldown_minutes <= 1440:
+		greeting["cooldown_minutes"] = cooldown_minutes
 
 func _ensure_speech_bubble() -> void:
 	if is_instance_valid(speech_bubble):
@@ -411,6 +478,29 @@ func _ensure_speech_bubble() -> void:
 	speech_bubble = SpeechBubble.new()
 	speech_bubble.name = "SpeechBubble"
 	_bubble_layer.add_child(speech_bubble)
+	# The bubble is the one control that may take a click; everything else in
+	# this window stays click-through. Its rectangle joins the native hit area
+	# only while it is visible, so hiding it restores passthrough.
+	speech_bubble.set("enabled", _bubble_enabled)
+	speech_bubble.set_interactive(true)
+	speech_bubble.pressed.connect(_on_bubble_pressed)
+
+## Hides the bubble a click landed on and hands the click to the app layer.
+func _on_bubble_pressed() -> void:
+	if not is_instance_valid(speech_bubble) or not speech_bubble.visible:
+		return
+	hide_bubble()
+	bubble_clicked.emit()
+
+## True when the cursor is over the visible, interactive bubble. The bubble is a
+## child of a CanvasLayer with an identity transform, so its global rect is
+## already in the same viewport pixels the cursor is converted into.
+func _pointer_in_bubble(cursor: Vector2i) -> bool:
+	if not is_instance_valid(speech_bubble) or not speech_bubble.visible:
+		return false
+	if not bool(speech_bubble.get("interactive")):
+		return false
+	return speech_bubble.get_global_rect().has_point(Vector2(cursor - get_window().position))
 
 ## Widest the bubble may get: never wider than the window that draws it.
 func _bubble_max_width() -> float:
@@ -455,23 +545,30 @@ func _update_input() -> void:
 	var window_position := get_window().position
 	var subject := _subject_rect()
 	var inside := ScreenMath.pointer_in_subject(cursor, window_position, subject, work_area)
-	var on_body := HitRegions.contains(Vector2(cursor - window_position), regions)
-	var hit := inside and on_body
+	var on_body := inside and HitRegions.contains(Vector2(cursor - window_position), regions)
+	var bubble_hit := _pointer_in_bubble(cursor)
+	var hit := on_body or bubble_hit
 	var state: Dictionary = drag.update(down, hit, cursor, get_window().position, bridge.has_capture(), true)
 	var interactive: bool = hit or drag.active
 	if interactive != previous_interactive:
 		bridge.set_interactive(interactive)
 		previous_interactive = interactive
 	if state.begin:
+		# Remember where the press landed: a press that started on the bubble is
+		# a click on it, never a drag of the pet. A bubble that happens to be
+		# drawn over the body (a very narrow window) does not take that press;
+		# the character keeps priority there.
+		_press_on_bubble = bubble_hit and not on_body
 		if not bridge.begin_capture():
 			drag.cancel()
+			_press_on_bubble = false
 		else:
 			Engine.max_fps = drag_fps
 			# A press is not a grab yet. Only travel past the drag threshold turns
 			# it into one, so a plain click never lifts the pet and drops it.
 			_press_cursor = cursor
 			_hold_pending = true
-	if state.moved:
+	if state.moved and not _press_on_bubble:
 		if _hold_pending:
 			_hold_pending = false
 			print("[stage0] DRAG begin")
@@ -480,7 +577,11 @@ func _update_input() -> void:
 	if state.end:
 		bridge.end_capture()
 		Engine.max_fps = idle_fps
-		if _hold_pending:
+		if _press_on_bubble:
+			_press_on_bubble = false
+			_hold_pending = false
+			_on_bubble_pressed()
+		elif _hold_pending:
 			_hold_pending = false
 			print("[stage0] CLICK position=", get_window().position)
 			# A click is a user instruction: stop walking and answer it.
@@ -498,9 +599,54 @@ func _update_input() -> void:
 func _say_click_phrase() -> void:
 	var phrase := _pick_click_phrase()
 	if not phrase.is_empty():
-		show_bubble(phrase)
+		show_bubble(phrase, _bubble_duration)
 
+## Says one greeting phrase after the window first appears, when the service's
+## greeting.on_start is on.
+##
+## Starting is not a click, so the click cooldown does not apply here. The
+## phrase still has to match the wall-clock window, and `show_bubble` keeps
+## honouring bubble.enabled.
+func greet_on_start() -> void:
+	if not _greetings_on() or not bool(greeting.get("on_start", true)):
+		return
+	var phrase := _pick_start_phrase()
+	if not phrase.is_empty():
+		show_bubble(phrase, _bubble_duration)
+
+## Picks one click phrase valid for the current wall-clock window.
+##
+## The greeting switch silences the click entirely. The cooldown keeps a second
+## click from replacing the words of a recent one: the pet still waves, it just
+## does not speak again. Time windows are half-open and match
+## service/expression/phrases.py, so "早上好" never shows at midnight.
 func _pick_click_phrase() -> String:
+	if not _greetings_on():
+		return ""
+	var now := _greeting_now()
+	if not _click_greeting_ready(float(now.get("minutes", 0.0))):
+		return ""
+	var choices := _phrase_choices(CLICK_PHRASE_CATEGORIES, time_window_for(int(now.get("hour", 0))))
+	if choices.is_empty():
+		return ""
+	_click_greeting_said = true
+	_click_greeting_minutes = float(now.get("minutes", 0.0))
+	return choices[randi() % choices.size()]
+
+## Picks one enabled start greeting for the current wall-clock window.
+func _pick_start_phrase() -> String:
+	var hour := int(_greeting_now().get("hour", 0))
+	var choices := _phrase_choices(START_PHRASE_CATEGORIES, time_window_for(hour))
+	if choices.is_empty():
+		return ""
+	return choices[randi() % choices.size()]
+
+## Every enabled phrase in `categories` whose own `time_window` covers `window`.
+##
+## The first readable library with usable entries wins, as before; a local file
+## that has nothing for this hour falls through to the packaged one.
+func _phrase_choices(categories: Array, window: String) -> Array[String]:
+	var choices: Array[String] = []
 	for path in _phrase_paths():
 		if not FileAccess.file_exists(path):
 			continue
@@ -510,21 +656,66 @@ func _pick_click_phrase() -> String:
 		var entries: Variant = (data as Dictionary).get("phrases", [])
 		if not (entries is Array):
 			continue
-		var choices: Array[String] = []
+		choices.clear()
 		for item in entries:
 			if not (item is Dictionary):
 				continue
 			var entry: Dictionary = item
-			if not CLICK_PHRASE_CATEGORIES.has(str(entry.get("category", ""))):
+			if not categories.has(str(entry.get("category", ""))):
 				continue
 			if not bool(entry.get("enabled", true)):
+				continue
+			if not _phrase_window_matches(entry, window):
 				continue
 			var text := str(entry.get("text", "")).strip_edges()
 			if not text.is_empty():
 				choices.append(text)
 		if not choices.is_empty():
-			return choices[randi() % choices.size()]
-	return ""
+			return choices
+	return choices
+
+## Window name of one wall-clock hour, matching `time_window_for` in
+## service/expression/phrases.py.
+static func time_window_for(hour: int) -> String:
+	for name in ["morning", "afternoon", "evening"]:
+		var span: Vector2i = TIME_WINDOWS[name]
+		if span.x <= hour and hour < span.y:
+			return name
+	return "night"
+
+## True when a phrase's own `time_window` is valid at `window`. A missing or
+## unknown value means every hour, exactly like the service normalizes it.
+func _phrase_window_matches(entry: Dictionary, window: String) -> bool:
+	var value := str(entry.get("time_window", TIME_WINDOW_ANY))
+	if value != TIME_WINDOW_ANY and not TIME_WINDOWS.has(value):
+		value = TIME_WINDOW_ANY
+	return value == TIME_WINDOW_ANY or value == window
+
+## True when the last click phrase is old enough to be replaced.
+func _click_greeting_ready(minutes: float) -> bool:
+	if not _click_greeting_said:
+		return true
+	return minutes - _click_greeting_minutes >= float(greeting.get("cooldown_minutes", 60))
+
+func _greetings_on() -> bool:
+	return bool(greeting.get("enabled", true))
+
+## Current wall clock for the greeting rules: `hour` plus `minutes` on one
+## timeline. The injectable callable keeps tests off the real clock.
+func _greeting_now() -> Dictionary:
+	if greeting_clock.is_valid():
+		var value: Variant = greeting_clock.call()
+		if value is Dictionary:
+			var injected: Dictionary = value
+			return {
+				"hour": int(injected.get("hour", 0)),
+				"minutes": float(injected.get("minutes", 0.0)),
+			}
+	var datetime := Time.get_datetime_dict_from_system()
+	return {
+		"hour": int(datetime.get("hour", 0)),
+		"minutes": Time.get_unix_time_from_system() / 60.0,
+	}
 
 ## The phrase library ships outside `res://`, in `data/`. Both the development
 ## tree and a package that copies that folder next to the executable are tried.
@@ -1131,6 +1322,7 @@ func _cancel_drag() -> void:
 	# A press that never travelled is dropped with the capture; leaving the flag
 	# set would turn the next unrelated release into a click.
 	_hold_pending = false
+	_press_on_bubble = false
 	if was_held:
 		# A cancelled drag must not leave the pet hanging in mid-air.
 		motion.release()

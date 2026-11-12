@@ -152,6 +152,11 @@ func open() -> void:
 	_refresh_availability()
 	_load_history()
 
+## Puts the caret in the message field, for a bubble click that asked to talk.
+func focus_input() -> void:
+	if input != null:
+		input.grab_focus()
+
 func _on_capabilities(features: Dictionary, personas: Array) -> void:
 	var chat: Variant = features.get("chat", {})
 	_chat_blocked = not (chat is Dictionary and bool(chat.get("available", false)))

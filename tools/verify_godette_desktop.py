@@ -124,8 +124,17 @@ def verify(package: Path, report: Path, duration: float = 120.0) -> None:
             x = rect.left + width // 2
             y = rect.top + int(height * (0.5 + (0.9 - 0.69) / 3.0))
             USER.SetCursorPos(x, y)
-            time.sleep(0.25)
-            body_interactive = not bool(USER.GetWindowLongPtrW(role, -20) & 0x20)
+            # A cold start of a freshly extracted package can spend longer than
+            # one frame building the greeting bubble and its font, so poll
+            # instead of trusting a single 250 ms sample. One run out of three
+            # failed here while the same binary passed on the spot.
+            body_interactive = False
+            deadline = time.monotonic() + 2.0
+            while time.monotonic() < deadline:
+                if not bool(USER.GetWindowLongPtrW(role, -20) & 0x20):
+                    body_interactive = True
+                    break
+                time.sleep(0.05)
             assert body_interactive, 'Body hit region did not become interactive'
             foreground = USER.GetForegroundWindow()
             USER.mouse_event(0x0002, 0, 0, 0, 0)

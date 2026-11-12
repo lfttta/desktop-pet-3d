@@ -1,5 +1,5 @@
-"""Settings schema v5/v6 contracts: desktop group, cloud switch, behavior,
-performance and migrations."""
+"""Settings schema v5/v6/v7 contracts: desktop group, cloud switch, behavior,
+performance, bubble/greeting and migrations."""
 
 from copy import deepcopy
 import json
@@ -31,6 +31,8 @@ def _v4_document():
     del document['desktop']
     del document['behavior']
     del document['performance']
+    del document['bubble']
+    del document['greeting']
     del document['autonomy']['cloud_enabled']
     del document['autonomy']['default_quiet_minutes']
     document['scale'] = 0.75
@@ -56,7 +58,7 @@ def _write(tmp_path, document):
 
 
 def test_default_document_and_fresh_store_validate(tmp_path):
-    assert SCHEMA_VERSION == 6
+    assert SCHEMA_VERSION == 7
     assert validate_document(deepcopy(DEFAULTS)) == DEFAULTS
     store = SettingsStore(tmp_path)
     assert store.settings == DEFAULTS
@@ -78,7 +80,7 @@ def test_v4_document_migrates_and_fills_desktop_and_cloud_enabled(tmp_path):
     path = _write(tmp_path, v4)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 6
+    assert store.settings['schema_version'] == 7
     assert store.settings['desktop'] == DESKTOP_DEFAULTS
     assert store.settings['behavior'] == BEHAVIOR_DEFAULTS
     assert store.settings['performance'] == PERFORMANCE_DEFAULTS
@@ -98,12 +100,12 @@ def test_v4_document_migrates_and_fills_desktop_and_cloud_enabled(tmp_path):
     assert store.settings['autonomy']['max_per_hour'] == 5
     assert store.settings['growth']['min_sessions'] == 5
     assert store.settings['privacy']['log_prompts'] is True
-    assert any('schema version 6' in warning for warning in store.warnings)
+    assert any('schema version 7' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 
 
-def test_v3_document_migrates_to_v6_and_preserves_values(tmp_path):
+def test_v3_document_migrates_to_v7_and_preserves_values(tmp_path):
     v3 = {
         'schema_version': 3, 'character_id': 'godette', 'persona_id': 'godette',
         'scale': 0.75, 'screen_id': 'monitor-2', 'user_name': '小明',
@@ -133,7 +135,7 @@ def test_v3_document_migrates_to_v6_and_preserves_values(tmp_path):
     path = _write(tmp_path, v3)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 6
+    assert store.settings['schema_version'] == 7
     assert store.settings['scale'] == 0.75
     assert store.settings['ai']['temperature'] == 0.3
     assert store.settings['ai']['embedding'] == AI_EMBEDDING_DEFAULTS
@@ -150,7 +152,7 @@ def test_v3_document_migrates_to_v6_and_preserves_values(tmp_path):
     assert store.settings['behavior'] == BEHAVIOR_DEFAULTS
     assert store.settings['performance'] == PERFORMANCE_DEFAULTS
     assert store.settings['privacy']['log_prompts'] is True
-    assert any('schema version 6' in warning for warning in store.warnings)
+    assert any('schema version 7' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
 
 
@@ -160,6 +162,8 @@ def _v5_document(with_voice=True):
     document['schema_version'] = 5
     del document['behavior']
     del document['performance']
+    del document['bubble']
+    del document['greeting']
     del document['autonomy']['default_quiet_minutes']
     if not with_voice:
         del document['voice']
@@ -173,7 +177,7 @@ def _v5_document(with_voice=True):
 
 
 @pytest.mark.parametrize('with_voice', [True, False])
-def test_v5_document_migrates_to_v6_and_fills_new_keys(tmp_path, with_voice):
+def test_v5_document_migrates_to_v7_and_fills_new_keys(tmp_path, with_voice):
     v5 = _v5_document(with_voice)
     if with_voice:
         v5['voice'] = {'enabled': False, 'voice': 'zh-CN-XiaoxiaoNeural',
@@ -181,7 +185,7 @@ def test_v5_document_migrates_to_v6_and_fills_new_keys(tmp_path, with_voice):
     path = _write(tmp_path, v5)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 6
+    assert store.settings['schema_version'] == 7
     assert store.settings['behavior'] == {'enabled': True}
     assert store.settings['performance'] == {
         'idle_fps': 30, 'drag_fps': 60, 'hidden_fps': 5,
@@ -201,9 +205,9 @@ def test_v5_document_migrates_to_v6_and_fills_new_keys(tmp_path, with_voice):
         }
     else:
         assert store.settings['voice'] == DEFAULTS['voice']
-    assert any('schema version 6' in warning for warning in store.warnings)
+    assert any('schema version 7' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
-    # The migrated file is already v6, so a second open has nothing to do.
+    # The migrated file is already v7, so a second open has nothing to do.
     assert SettingsStore(tmp_path).warnings == []
 
 
@@ -216,7 +220,7 @@ def test_v5_with_voice_values_keeps_them_through_migration(tmp_path):
     _write(tmp_path, v5)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 6
+    assert store.settings['schema_version'] == 7
     assert store.settings['voice']['enabled'] is False
     assert store.settings['voice']['volume'] == 0
     assert all('Invalid settings' not in warning for warning in store.warnings)

@@ -158,7 +158,8 @@ def test_v5_document_without_voice_gains_defaults(tmp_path):
     # A schema 5 file written before the voice group existed; neither v6 group
     # nor autonomy.default_quiet_minutes was there yet either.
     document = {key: value for key, value in deepcopy(DEFAULTS).items()
-                if key not in ('voice', 'behavior', 'performance')}
+                if key not in ('voice', 'behavior', 'performance',
+                               'bubble', 'greeting')}
     document['schema_version'] = 5
     del document['autonomy']['default_quiet_minutes']
     _write_settings(tmp_path, document)
@@ -167,7 +168,7 @@ def test_v5_document_without_voice_gains_defaults(tmp_path):
 
     assert store.settings['voice'] == VOICE_DEFAULTS
     assert json.loads((tmp_path / 'settings.json').read_text('utf-8')) == store.settings
-    assert any('schema version 6' in warning for warning in store.warnings)
+    assert any('schema version 7' in warning for warning in store.warnings)
 
 
 def test_v4_document_without_voice_gains_desktop_and_voice_defaults(tmp_path):
@@ -177,12 +178,14 @@ def test_v4_document_without_voice_gains_desktop_and_voice_defaults(tmp_path):
     del document['behavior']
     del document['performance']
     del document['voice']
+    del document['bubble']
+    del document['greeting']
     del document['autonomy']['cloud_enabled']
     del document['autonomy']['default_quiet_minutes']
     _write_settings(tmp_path, document)
 
     store = SettingsStore(tmp_path)
 
-    assert store.settings['schema_version'] == 6
+    assert store.settings['schema_version'] == 7
     assert store.settings['desktop'] == DESKTOP_DEFAULTS
     assert store.settings['voice'] == VOICE_DEFAULTS

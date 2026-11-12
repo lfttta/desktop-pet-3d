@@ -14,7 +14,7 @@ from service.jsonutil import MAX_FRAME_BYTES, dumps, loads
 from service.character_catalog import ALLOWED_CHARACTER_IDS
 from service.persona import ALLOWED_PERSONA_IDS, DEFAULT_PERSONA_ID
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 DEFAULTS_V1 = {
     'schema_version': 1, 'character_id': 'godette', 'scale': 1.0,
     'screen_id': '', 'user_name': '你',
@@ -128,6 +128,16 @@ VOICE_DEFAULTS = {
     'rate': 0,
     'volume': 70,
 }
+BUBBLE_DEFAULTS = {
+    'enabled': True,
+    'duration_seconds': 4,
+    'show_replies': True,
+}
+GREETING_DEFAULTS = {
+    'enabled': True,
+    'on_start': True,
+    'cooldown_minutes': 60,
+}
 GROUP_DEFAULTS = {
     'ai': AI_DEFAULTS,
     'memory': MEMORY_DEFAULTS,
@@ -139,6 +149,8 @@ GROUP_DEFAULTS = {
     'voice': VOICE_DEFAULTS,
     'behavior': BEHAVIOR_DEFAULTS,
     'performance': PERFORMANCE_DEFAULTS,
+    'bubble': BUBBLE_DEFAULTS,
+    'greeting': GREETING_DEFAULTS,
 }
 DEFAULTS = {
     'schema_version': SCHEMA_VERSION, 'character_id': 'godette',
@@ -300,6 +312,10 @@ def _group(name, value, partial):
             result[key] = _validate_behavior(key, item)
         elif name == 'performance':
             result[key] = _validate_performance(key, item)
+        elif name == 'bubble':
+            result[key] = _validate_bubble(key, item)
+        elif name == 'greeting':
+            result[key] = _validate_greeting(key, item)
         else:
             result[key] = _boolean(item)
     return result
@@ -443,6 +459,22 @@ def _validate_performance(key, value):
     raise ValidationError('unsupported performance setting')
 
 
+def _validate_bubble(key, value):
+    if key in ('enabled', 'show_replies'):
+        return _boolean(value)
+    if key == 'duration_seconds':
+        return _integer(value, 2, 15)
+    raise ValidationError('unsupported bubble setting')
+
+
+def _validate_greeting(key, value):
+    if key in ('enabled', 'on_start'):
+        return _boolean(value)
+    if key == 'cooldown_minutes':
+        return _integer(value, 5, 1440)
+    raise ValidationError('unsupported greeting setting')
+
+
 def _choice(value, choices, label):
     if type(value) is not str or value not in choices:
         raise ValidationError(f'{label} must be one of ' + ', '.join(choices))
@@ -516,14 +548,18 @@ def _add_default_groups(document):
     return document
 
 
-# v3 had every group except growth, desktop, voice, behavior and performance.
+# v3 had every group except growth, desktop, voice, behavior, performance,
+# bubble and greeting.
 V3_TOP_LEVEL_KEYS = DEFAULTS.keys() - {
     'growth', 'desktop', 'voice', 'behavior', 'performance',
+    'bubble', 'greeting',
 }
 # v4 added growth but neither the desktop/behavior/performance groups nor
 # autonomy.cloud_enabled. The voice group was added to v5 later, so a v4
 # document may or may not carry it.
-V4_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'desktop', 'behavior', 'performance'}
+V4_TOP_LEVEL_KEYS = DEFAULTS.keys() - {
+    'desktop', 'behavior', 'performance', 'bubble', 'greeting',
+}
 V4_TOP_LEVEL_KEYS_WITHOUT_VOICE = V4_TOP_LEVEL_KEYS - {'voice'}
 V4_AUTONOMY_KEYS = frozenset({
     'enabled', 'quiet_start', 'quiet_end', 'min_seconds_between',
@@ -531,15 +567,17 @@ V4_AUTONOMY_KEYS = frozenset({
 })
 # v5 added the desktop group and autonomy.cloud_enabled. The voice group was
 # added to v5 after the fact, so a v5 document may or may not carry it.
-V5_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'behavior', 'performance'}
+V5_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'behavior', 'performance', 'bubble', 'greeting'}
 V5_TOP_LEVEL_KEYS_WITHOUT_VOICE = V5_TOP_LEVEL_KEYS - {'voice'}
+# v6 added the behavior and performance groups; v7 adds bubble and greeting.
+V6_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'bubble', 'greeting'}
 
 
 def _add_missing_groups(document):
-    """Add the v4/v5/v6 groups while preserving every value already stored."""
+    """Add the v4..v7 groups while preserving every value already stored."""
     migrated = deepcopy(document)
     migrated['schema_version'] = SCHEMA_VERSION
-    for name in ('voice', 'behavior', 'performance'):
+    for name in ('voice', 'behavior', 'performance', 'bubble', 'greeting'):
         migrated.setdefault(name, deepcopy(GROUP_DEFAULTS[name]))
     return migrated
 
@@ -590,6 +628,15 @@ def _upgrade_v5(document):
     return migrated
 
 
+def _upgrade_v6(document):
+    """Add the v7 bubble and greeting groups to a v6 document.
+
+    Every value already stored stays as it is; only the two missing groups are
+    filled from their defaults.
+    """
+    return _add_missing_groups(document)
+
+
 def migrate_document(document):
     """Upgrade a recognized older schema; return (document, migrated)."""
     if type(document) is not dict:
@@ -614,6 +661,9 @@ def migrate_document(document):
             and document.keys() in (V5_TOP_LEVEL_KEYS,
                                     V5_TOP_LEVEL_KEYS_WITHOUT_VOICE)):
         return _upgrade_v5(document), True
+    if (document.get('schema_version') == 6
+            and document.keys() == V6_TOP_LEVEL_KEYS):
+        return _upgrade_v6(document), True
     return document, False
 
 

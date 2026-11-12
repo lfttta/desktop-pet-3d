@@ -4,7 +4,8 @@ The default library lives in ``data/expression/phrases.json``. The user
 override lives under the data directory at ``expression/phrases.local.json``;
 it may update fields of an existing phrase, add new phrases, or disable phrases
 by id. Selection never picks a disabled phrase, a phrase still in cooldown, or
-one that reached its daily limit.
+one that reached its daily limit. When the caller supplies a ``now`` datetime,
+phrases also have to match the current time window (see ``TIME_WINDOWS``).
 
 ``phrase_usage.uses`` is the number of uses on the day recorded in
 ``last_used_at``; it resets when the day changes. This keeps the existing
@@ -20,6 +21,20 @@ import tempfile
 
 DEFAULT_LIBRARY = Path(__file__).resolve().parents[2] / 'data' / 'expression' / 'phrases.json'
 USER_LIBRARY_NAME = 'phrases.local.json'
+
+# Time windows use the wall-clock hour of the caller's ``now`` and each range
+# is half-open: ``morning`` 05:00-11:00, ``afternoon`` 11:00-17:00,
+# ``evening`` 17:00-22:00 and ``night`` 22:00-05:00 (wraps midnight).
+# ``any`` stays valid at every hour.
+TIME_WINDOWS = {
+    'morning': (5, 11),
+    'afternoon': (11, 17),
+    'evening': (17, 22),
+    'night': (22, 5),
+}
+TIME_WINDOW_ANY = 'any'
+TIME_WINDOW_CHOICES = tuple(TIME_WINDOWS) + (TIME_WINDOW_ANY,)
+TIME_WINDOW_NAMES = frozenset(TIME_WINDOW_CHOICES)
 
 
 def user_library_path(data_dir):
@@ -59,6 +74,23 @@ def _positive_int(value, default=0):
     return default
 
 
+def _time_window(value):
+    """Normalize a phrase's window; anything unknown means every hour."""
+    if type(value) is str and value in TIME_WINDOW_NAMES:
+        return value
+    return TIME_WINDOW_ANY
+
+
+def time_window_for(moment):
+    """Return the window name of one datetime's own wall-clock hour."""
+    hour = moment.hour
+    for name in ('morning', 'afternoon', 'evening'):
+        start, end = TIME_WINDOWS[name]
+        if start <= hour < end:
+            return name
+    return 'night'
+
+
 def _normalize(entry):
     if type(entry) is not dict:
         return None
@@ -78,6 +110,7 @@ def _normalize(entry):
         'cooldown_seconds': _positive_int(entry.get('cooldown_seconds')),
         'daily_limit': _positive_int(entry.get('daily_limit')),
         'enabled': entry.get('enabled', True) is not False,
+        'time_window': _time_window(entry.get('time_window')),
     }
 
 
@@ -92,6 +125,8 @@ def _merge(base, override):
             merged[key] = override[key]
     if type(override.get('enabled')) is bool:
         merged['enabled'] = override['enabled']
+    if type(override.get('time_window')) is str:
+        merged['time_window'] = _time_window(override['time_window'])
     return merged
 
 
@@ -311,8 +346,14 @@ def _record_usage(connection, phrase, now):
 
 def select_phrase(connection, category=None, now=None, rng=None,
                   default_path=None, user_path=None, data_dir=None):
-    """Pick one usable phrase, record the use and return it, or return None."""
-    now = normalize_now(now)
+    """Pick one usable phrase, record the use and return it, or return None.
+
+    ``now`` (a datetime) additionally hides phrases whose ``time_window`` does
+    not match that wall-clock hour. ``now=None`` keeps the old behaviour and
+    does not filter by time of day.
+    """
+    moment = normalize_now(now)
+    window = time_window_for(now) if now is not None else None
     if user_path is None and data_dir is None:
         data_dir = _data_dir_from_connection(connection)
     candidates = []
@@ -322,12 +363,15 @@ def select_phrase(connection, category=None, now=None, rng=None,
             continue
         if category is not None and phrase['category'] != category:
             continue
-        if not usable_now(connection, phrase, now=now):
+        if (window is not None and phrase['time_window'] != TIME_WINDOW_ANY
+                and phrase['time_window'] != window):
+            continue
+        if not usable_now(connection, phrase, now=moment):
             continue
         candidates.append(phrase)
     if not candidates:
         return None
     picker = rng.choice if rng is not None and hasattr(rng, 'choice') else random.choice
     chosen = picker(candidates)
-    _record_usage(connection, chosen, now)
+    _record_usage(connection, chosen, moment)
     return dict(chosen)

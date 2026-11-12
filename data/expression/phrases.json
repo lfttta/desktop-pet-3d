@@ -7,7 +7,8 @@
       "category": "idle",
       "cooldown_seconds": 7200,
       "daily_limit": 2,
-      "enabled": true
+      "enabled": true,
+      "time_window": "any"
     },
     {
       "id": "idle_water",
@@ -15,7 +16,8 @@
       "category": "idle",
       "cooldown_seconds": 10800,
       "daily_limit": 2,
-      "enabled": true
+      "enabled": true,
+      "time_window": "any"
     },
     {
       "id": "idle_stretch",
@@ -23,7 +25,8 @@
       "category": "idle",
       "cooldown_seconds": 10800,
       "daily_limit": 2,
-      "enabled": true
+      "enabled": true,
+      "time_window": "any"
     },
     {
       "id": "idle_smalltalk",
@@ -31,7 +34,8 @@
       "category": "idle",
       "cooldown_seconds": 14400,
       "daily_limit": 1,
-      "enabled": true
+      "enabled": true,
+      "time_window": "any"
     },
     {
       "id": "idle_encourage",
@@ -39,7 +43,8 @@
       "category": "idle",
       "cooldown_seconds": 14400,
       "daily_limit": 1,
-      "enabled": true
+      "enabled": true,
+      "time_window": "any"
     },
     {
       "id": "greet_morning",
@@ -47,7 +52,8 @@
       "category": "greeting",
       "cooldown_seconds": 21600,
       "daily_limit": 1,
-      "enabled": true
+      "enabled": true,
+      "time_window": "morning"
     },
     {
       "id": "greet_evening",
@@ -55,7 +61,8 @@
       "category": "greeting",
       "cooldown_seconds": 21600,
       "daily_limit": 1,
-      "enabled": true
+      "enabled": true,
+      "time_window": "evening"
     },
     {
       "id": "care_rest",
@@ -63,7 +70,8 @@
       "category": "care",
       "cooldown_seconds": 12600,
       "daily_limit": 1,
-      "enabled": true
+      "enabled": true,
+      "time_window": "any"
     },
     {
       "id": "care_eyes",
@@ -71,7 +79,8 @@
       "category": "care",
       "cooldown_seconds": 12600,
       "daily_limit": 2,
-      "enabled": true
+      "enabled": true,
+      "time_window": "any"
     },
     {
       "id": "night_rest",
@@ -79,7 +88,116 @@
       "category": "night",
       "cooldown_seconds": 21600,
       "daily_limit": 1,
-      "enabled": true
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "morning_wakeup",
+      "text": "醒来啦，先慢慢醒一醒，不着急。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "morning"
+    },
+    {
+      "id": "morning_water",
+      "text": "早上先喝杯温水，胃会舒服一点。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "morning"
+    },
+    {
+      "id": "morning_plan",
+      "text": "今天想先做哪一件小事？",
+      "category": "care",
+      "cooldown_seconds": 18000,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "morning"
+    },
+    {
+      "id": "afternoon_check",
+      "text": "下午好，记得给自己留一点喘气的时间。",
+      "category": "greeting",
+      "cooldown_seconds": 18000,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "afternoon"
+    },
+    {
+      "id": "afternoon_eyes",
+      "text": "下午光线强，屏幕亮度调低一点吧。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "afternoon"
+    },
+    {
+      "id": "afternoon_snack",
+      "text": "忙到这会儿，吃点东西垫一垫吧。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "afternoon"
+    },
+    {
+      "id": "evening_home",
+      "text": "晚上好，回来就好。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "evening_stretch",
+      "text": "忙完了就站起来走走，肩颈会松一些。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "evening_wind",
+      "text": "傍晚风凉，出门记得披件外套。",
+      "category": "care",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "night_eyes",
+      "text": "这个点了，眼睛也该歇一歇了。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_quiet",
+      "text": "夜很安静，有什么事明天再想也来得及。",
+      "category": "care",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_late",
+      "text": "还没睡吗？别熬太晚，我会担心。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
     }
   ]
 }

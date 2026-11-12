@@ -146,14 +146,14 @@ def test_backup_failure_does_not_destroy_broken_original(tmp_path, monkeypatch):
     assert config.read_bytes() == b'broken original'
 
 
-def test_schema6_defaults_include_phase2_desktop_behavior_and_performance():
+def test_schema7_defaults_include_phase2_desktop_behavior_and_performance():
     from service.settings import (AI_EMBEDDING_DEFAULTS, AUTONOMY_DEFAULTS,
                                   BEHAVIOR_DEFAULTS, DEFAULTS, DESKTOP_DEFAULTS,
                                   GROWTH_DEFAULTS, MEMORY_ARCHIVE_DEFAULTS,
                                   MEMORY_COMPACTION_DEFAULTS, PERFORMANCE_DEFAULTS,
                                   SCHEMA_VERSION)
-    assert SCHEMA_VERSION == 6
-    assert DEFAULTS['schema_version'] == 6
+    assert SCHEMA_VERSION == 7
+    assert DEFAULTS['schema_version'] == 7
     assert DEFAULTS['memory']['compaction'] == {
         'enabled': False, 'model_compress': False, 'daily_limit': 20,
         'min_age_days': 7, 'max_per_run': 10, 'protect_importance': 0.8,
@@ -182,7 +182,7 @@ def test_schema6_defaults_include_phase2_desktop_behavior_and_performance():
     assert DEFAULTS['autonomy']['default_quiet_minutes'] == 30
 
 
-def test_v3_document_migrates_to_v6_and_preserves_values(tmp_path):
+def test_v3_document_migrates_to_v7_and_preserves_values(tmp_path):
     from service.settings import (AI_EMBEDDING_DEFAULTS, BEHAVIOR_DEFAULTS,
                                   DESKTOP_DEFAULTS, GROWTH_DEFAULTS,
                                   MEMORY_ARCHIVE_DEFAULTS, MEMORY_COMPACTION_DEFAULTS,
@@ -216,7 +216,7 @@ def test_v3_document_migrates_to_v6_and_preserves_values(tmp_path):
     path = tmp_path / 'settings.json'
     path.write_bytes((json.dumps(v3, ensure_ascii=False) + '\n').encode('utf-8'))
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 6
+    assert store.settings['schema_version'] == 7
     for key in ('character_id', 'persona_id', 'scale', 'screen_id', 'user_name',
                 'placement'):
         assert store.settings[key] == v3[key]
@@ -238,7 +238,7 @@ def test_v3_document_migrates_to_v6_and_preserves_values(tmp_path):
     assert store.settings['performance'] == PERFORMANCE_DEFAULTS
     assert store.settings['autonomy']['cloud_enabled'] is True
     assert store.settings['autonomy']['default_quiet_minutes'] == 30
-    assert any('schema version 6' in warning for warning in store.warnings)
+    assert any('schema version 7' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 

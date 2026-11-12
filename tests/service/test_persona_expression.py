@@ -105,6 +105,33 @@ def test_prompt_budget_keeps_output_rules_and_boundaries(tmp_path, monkeypatch):
     assert measured <= prompt.MAX_PROMPT_CHARS
 
 
+def test_system_prompt_addresses_the_user_by_name(tmp_path):
+    # `user_name` had a settings control and no reader: the persona never learned
+    # the name. One line in the system prompt is what makes the field mean
+    # something.
+    store = SettingsStore(tmp_path)
+    store.update({'user_name': '小明'})
+    database = Database(tmp_path / 'pet.db')
+    try:
+        messages = prompt.build_messages(database, '', '你好', store.settings)
+    finally:
+        database.close()
+
+    assert '称呼用户为「小明」' in messages[0]['content']
+
+
+def test_default_user_name_adds_no_address_line(tmp_path):
+    store = SettingsStore(tmp_path)
+    database = Database(tmp_path / 'pet.db')
+    try:
+        messages = prompt.build_messages(database, '', '你好', store.settings)
+    finally:
+        database.close()
+
+    assert store.settings['user_name'] == '你'
+    assert '称呼用户为' not in messages[0]['content']
+
+
 def test_prompt_keeps_memories_and_style_when_they_fit(tmp_path, monkeypatch):
     store = SettingsStore(tmp_path)
     database = Database(tmp_path / 'pet.db')

@@ -18,6 +18,9 @@ MAX_PROMPT_CHARS = 4000
 MAX_HISTORY_MESSAGES = 16
 MAX_SYSTEM_CHARS = 2600
 MAX_MEMORY_CHARS = 800
+# The address line is one short sentence, not free text; the cap keeps a pasted
+# paragraph in the name field from crowding out the persona.
+MAX_ADDRESS_CHARS = 24
 STYLE_KEYS = (
     'casualness', 'warmth', 'directness',
     'playfulness', 'sentence_length', 'emoji_frequency',
@@ -99,40 +102,54 @@ def _system_message(settings, state, memories):
     persona_id = settings.get('persona_id') or DEFAULT_PERSONA_ID
     core = build_prompt(persona_id).strip()
     boundaries = build_boundaries(persona_id).strip()
+    address_line = _address_line(settings)
     style_line = style_instruction(settings)
     state_line = ('当前状态：' + state.strip()[:240]) if state else ''
     memory_line = ''
     if memories:
         joined = '\n'.join('- ' + item for item in memories)
         memory_line = '可能相关的记忆：\n' + joined[:MAX_MEMORY_CHARS]
-    return '\n'.join(_fit_system(core, boundaries, style_line, state_line, memory_line))
+    return '\n'.join(_fit_system(core, boundaries, style_line, state_line,
+                                 memory_line, address_line))
 
 
-def _fit_system(core, boundaries, style_line, state_line, memory_line):
+def _address_line(settings):
+    """How the user wants to be addressed, or "" for the default "你"."""
+    name = str(settings.get('user_name') or '').strip()
+    if not name or name == '你':
+        return ''
+    return '称呼用户为「' + name[:MAX_ADDRESS_CHARS] + '」。'
+
+
+def _fit_system(core, boundaries, style_line, state_line, memory_line,
+                address_line=''):
     """Drop optional sections before shrinking the core paragraph.
 
     Boundaries and output rules are mandatory and are never shortened.
     """
 
-    def assemble(core_text, style_text, state_text, memory_text):
+    def assemble(core_text, address_text, style_text, state_text, memory_text):
         return '\n'.join(part for part in
-                         (core_text, boundaries, style_text, state_text,
-                          memory_text, OUTPUT_RULES) if part)
+                         (core_text, boundaries, address_text, style_text,
+                          state_text, memory_text, OUTPUT_RULES) if part)
 
-    if len(assemble(core, style_line, state_line, memory_line)) > MAX_SYSTEM_CHARS:
+    if len(assemble(core, address_line, style_line, state_line, memory_line)) > MAX_SYSTEM_CHARS:
         memory_line = ''
-    if len(assemble(core, style_line, state_line, '')) > MAX_SYSTEM_CHARS:
+    if len(assemble(core, address_line, style_line, state_line, '')) > MAX_SYSTEM_CHARS:
+        address_line = ''
+    if len(assemble(core, '', style_line, state_line, '')) > MAX_SYSTEM_CHARS:
         style_line = ''
-    if len(assemble(core, '', state_line, '')) > MAX_SYSTEM_CHARS:
-        without_state = len(assemble(core, '', '', ''))
+    if len(assemble(core, '', '', state_line, '')) > MAX_SYSTEM_CHARS:
+        without_state = len(assemble(core, '', '', '', ''))
         room = MAX_SYSTEM_CHARS - without_state - (1 if state_line else 0)
         state_line = state_line[:max(0, room)]
-    if len(assemble(core, '', state_line, '')) > MAX_SYSTEM_CHARS:
-        without_core = len(assemble('', '', state_line, ''))
+    if len(assemble(core, '', '', state_line, '')) > MAX_SYSTEM_CHARS:
+        without_core = len(assemble('', '', '', state_line, ''))
         room = MAX_SYSTEM_CHARS - without_core - (1 if core else 0)
         core = core[:max(0, room)]
     return [part for part in
-            (core, boundaries, style_line, state_line, memory_line, OUTPUT_RULES)
+            (core, boundaries, address_line, style_line, state_line, memory_line,
+             OUTPUT_RULES)
             if part]
 
 

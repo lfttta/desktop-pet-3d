@@ -43,7 +43,7 @@ service/locking.py                     数据目录单实例锁
    - `personas`：公开人格列表（id + display_name，不含 prompt）
 3. 应用恢复窗口位置、创建设置/聊天窗口。
 4. 设置修改走 `settings.update`，服务校验后原子写盘再回 `result`。
-5. 聊天请求走 `chat.send`，会话层校验后发往服务；服务当前返回 `not_available`，窗口显示“未接入”。
+5. 聊天请求走 `chat.send`，会话层校验后发往服务；服务调用配置的 OpenAI 兼容接口流式返回，未配置 Key 时只有本地指令会应答。
 
 ## 3. 当前能力矩阵
 
@@ -51,13 +51,13 @@ service/locking.py                     数据目录单实例锁
 |---|---|---|
 | 透明窗口、拖动、穿透、贴边、托盘、热键 | 已实现 | `pet_window.gd`、`native/` |
 | 设置持久化、损坏备份、旧角色迁移 | 已实现 | `service/settings.py` |
-| 设置 schema v1 → v2（新增 `persona_id`） | 已实现 | `settings.py`、`app_settings.gd` |
-| 人格目录与公开列表 | 框架就绪 | `service/persona.py`、`hello.personas` |
-| 聊天命令契约与窗口骨架 | 框架就绪，未实现生成 | `service/features/chat.py`、`chat_session.gd`、`chat_window.gd` |
-| 记忆读写 | 未实现 | `memory.*` 保留命令；`pet.db` 空表 |
-| TTS | 未实现 | `tts.synthesize` 保留；`tts.cancel` 返回 cancelled |
-| 桌面行为/物理 | 未实现 | 阶段三；动作优先级已预留 `autonomous`/`chat` |
-| 多角色 | 未实现 | 阶段二明确暂缓 |
+| 设置 schema v1 → v6（v2 `persona_id`、v5 桌面组、v6 行为/性能/安静时长） | 已实现 | `settings.py`、`settings_window.gd` |
+| 人格目录与公开列表 | 已实现 | `service/persona.py`、`hello.personas` |
+| 聊天（流式、动作、speak、记忆候选） | 已实现，需要 API Key | `service/features/chat.py`、`chat_session.gd`、`chat_window.gd` |
+| 记忆读写、整理、归档、向量索引 | 已实现 | `memory.*`、`service/memory/` |
+| TTS | 已实现但**默认关闭**；合成在服务线程同步执行，长文本会阻塞其它请求 | `service/tts.py`、`tts_player.gd`；`tts.cancel` 仍为保留命令，返回 `not_available` |
+| 桌面行为/物理（沿底边行走、拖拽物理、气泡） | 已实现 | 阶段三；`behavior_controller.gd`、`motion_controller.gd`、`speech_bubble.gd` |
+| 多角色 | 未实现（Alicia 资产待放行） | 阶段二明确暂缓 |
 
 ## 4. 扩展点
 

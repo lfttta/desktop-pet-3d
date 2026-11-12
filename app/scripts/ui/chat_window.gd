@@ -263,17 +263,82 @@ func _on_completed(_message: String, usage: Dictionary, memory_ops: Array, state
 	_streaming = false
 	_active_assistant = null
 	var total := int(usage.get("total_tokens", 0))
-	status.text = "回复完成" if total <= 0 else "回复完成（%d tokens）" % total
 	var notes: Array[String] = []
-	if not memory_ops.is_empty():
+	# With auto_capture off the service hands back candidates instead of writing
+	# them, and the reply used to say "记忆 N 条" while nothing was stored. Offer
+	# the choice instead of counting them.
+	var pending := pending_memory_candidates(memory_ops)
+	if not pending.is_empty():
+		_render_memory_candidates(pending)
+		notes.append("%d 条记忆待确认" % pending.size())
+	elif not memory_ops.is_empty():
 		notes.append("记忆 %d 条" % memory_ops.size())
 	if bool(state_delta.get("applied", false)):
 		notes.append("状态已更新")
+	status.text = "回复完成" if total <= 0 else "回复完成（%d tokens）" % total
 	if not notes.is_empty():
 		status.text += "，" + "，".join(PackedStringArray(notes))
 	_refresh_availability()
 	if state_delta.has("presentation"):
 		state_updated.emit(state_delta)
+
+## The candidates a reply asked us to remember but did not store.
+##
+## Static so the filter can be tested without building the whole window.
+static func pending_memory_candidates(memory_ops: Array) -> Array[String]:
+	var lines: Array[String] = []
+	for op in memory_ops:
+		if typeof(op) != TYPE_DICTIONARY:
+			continue
+		var entry: Dictionary = op
+		if str(entry.get("operation", "")) != "propose":
+			continue
+		if str(entry.get("status", "")) != "pending":
+			continue
+		var text := str(entry.get("content", "")).strip_edges()
+		if not text.is_empty():
+			lines.append(text)
+	return lines
+
+func _render_memory_candidates(lines: Array[String]) -> void:
+	var block := VBoxContainer.new()
+	var title := Label.new()
+	title.text = "AI 想记住："
+	block.add_child(title)
+	for line in lines:
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		label.text = line
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		row.add_child(label)
+		var keep := Button.new()
+		keep.text = "记住"
+		var drop := Button.new()
+		drop.text = "忽略"
+		keep.pressed.connect(_remember_candidate.bind(label, keep, drop, line))
+		drop.pressed.connect(_dismiss_candidate.bind(label, keep, drop, line))
+		row.add_child(keep)
+		row.add_child(drop)
+		block.add_child(row)
+	messages.add_child(block)
+	_scroll_to_bottom()
+
+func _remember_candidate(label: Label, keep: Button, drop: Button, text: String) -> void:
+	keep.disabled = true
+	drop.disabled = true
+	if _service == null:
+		label.text = text + "（服务未连接）"
+		return
+	if _service.request("memory.propose", {"text": text}, 10.0).is_empty():
+		label.text = text + "（保存失败）"
+		return
+	label.text = text + "（已记住）"
+
+func _dismiss_candidate(label: Label, keep: Button, drop: Button, text: String) -> void:
+	keep.disabled = true
+	drop.disabled = true
+	label.text = text + "（已忽略）"
 
 func _on_error(_code: String, message: String, retryable: bool) -> void:
 	_last_retryable = retryable

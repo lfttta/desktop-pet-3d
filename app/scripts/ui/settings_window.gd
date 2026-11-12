@@ -16,6 +16,11 @@ const AI_DEFAULTS := {
 	"request_timeout_ms": 30000,
 	"daily_token_budget": 120000,
 	"monthly_cost_budget": 15.0,
+	"max_tokens": 800,
+	"max_retries": 1,
+}
+const PRIVACY_DEFAULTS := {
+	"log_prompts": false,
 }
 const MEMORY_DEFAULTS := {
 	"enabled": true,
@@ -39,7 +44,9 @@ const EMBEDDING_DEFAULTS := {
 	"dimensions": 0,
 }
 const VOICE_DEFAULTS := {
-	"enabled": true,
+	# Paused by default: synthesis runs on the service thread, so a long line
+	# stalls every other request. See service/settings.py VOICE_DEFAULTS.
+	"enabled": false,
 	"voice": "",
 	"rate": 0,
 	"volume": 70,
@@ -129,6 +136,9 @@ var ai_connect_timeout: SpinBox
 var ai_request_timeout: SpinBox
 var ai_daily_tokens: SpinBox
 var ai_monthly_budget: SpinBox
+var ai_max_tokens: SpinBox
+var ai_max_retries: SpinBox
+var privacy_log_prompts: CheckButton
 var voice_enabled: CheckButton
 var memory_enabled: CheckButton
 var memory_auto_capture: CheckButton
@@ -352,10 +362,18 @@ func _build_ai_page() -> void:
 	_row(page, "每日 Token 预算", ai_daily_tokens)
 	ai_monthly_budget = _spin(0, 1000000000, 0.5)
 	_row(page, "每月费用预算", ai_monthly_budget)
+	ai_max_tokens = _spin(1, 32768, 1)
+	_row(page, "单次回复上限（tokens）", ai_max_tokens)
+	ai_max_retries = _spin(0, 10, 1)
+	_row(page, "失败重试次数", ai_max_retries)
 	_section(page, "语音")
 	voice_enabled = CheckButton.new()
 	voice_enabled.text = "朗读回复"
 	_row(page, "朗读", voice_enabled)
+	_section(page, "隐私")
+	privacy_log_prompts = CheckButton.new()
+	privacy_log_prompts.text = "把完整提示词写进诊断日志"
+	_row(page, "提示词日志", privacy_log_prompts)
 	_section(page, "向量索引")
 	embedding_enabled = CheckButton.new()
 	embedding_enabled.text = "启用向量索引"
@@ -600,6 +618,10 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	ai_request_timeout.value = float(ai.get("request_timeout_ms", AI_DEFAULTS.request_timeout_ms))
 	ai_daily_tokens.value = float(ai.get("daily_token_budget", AI_DEFAULTS.daily_token_budget))
 	ai_monthly_budget.value = float(ai.get("monthly_cost_budget", AI_DEFAULTS.monthly_cost_budget))
+	ai_max_tokens.value = float(ai.get("max_tokens", AI_DEFAULTS.max_tokens))
+	ai_max_retries.value = float(ai.get("max_retries", AI_DEFAULTS.max_retries))
+	var privacy := _group(settings, "privacy")
+	privacy_log_prompts.button_pressed = bool(privacy.get("log_prompts", PRIVACY_DEFAULTS.log_prompts))
 	var voice := _group(settings, "voice")
 	voice_enabled.button_pressed = bool(voice.get("enabled", VOICE_DEFAULTS.enabled))
 	_voice_name = str(voice.get("voice", VOICE_DEFAULTS.voice))
@@ -684,6 +706,8 @@ func _save() -> void:
 			"request_timeout_ms": int(ai_request_timeout.value),
 			"daily_token_budget": int(ai_daily_tokens.value),
 			"monthly_cost_budget": ai_monthly_budget.value,
+			"max_tokens": int(ai_max_tokens.value),
+			"max_retries": int(ai_max_retries.value),
 			"embedding": {
 				"enabled": embedding_enabled.button_pressed,
 				"model": embedding_model.text.strip_edges(),
@@ -720,6 +744,7 @@ func _save() -> void:
 			"rate": _voice_rate,
 			"volume": _voice_volume,
 		},
+		"privacy": {"log_prompts": privacy_log_prompts.button_pressed},
 	}
 	if _supports_schema(6):
 		patch["behavior"] = {"enabled": behavior_enabled.button_pressed}

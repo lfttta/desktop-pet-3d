@@ -97,6 +97,18 @@ func _run() -> void:
 	service.event(no_field, "chat.done", {"message": {"content": "嗯嗯"}})
 	check(speeches.size() == 1, "a missing speak field reads nothing")
 
+	# Memory candidates used to be counted and dropped, so a reply said "记住了"
+	# while nothing was stored. The window now filters the pending ones so it can
+	# offer 记住 / 忽略.
+	var pending := ChatWindow.pending_memory_candidates([
+		{"operation": "propose", "status": "pending", "content": "  我喜欢猫  "},
+		{"operation": "propose", "status": "stored", "content": "已写入"},
+		{"operation": "propose", "status": "pending", "content": "   "},
+		{"operation": "delete", "status": "pending", "content": "x"},
+		"not a dict",
+	])
+	check(pending == ["我喜欢猫"], "only trimmed pending proposals are offered, got %s" % [pending])
+
 	print("CHAT_FRAMEWORK_TESTS checks=", checks, " failures=", failures)
 	quit(0 if failures == 0 else 1)
 

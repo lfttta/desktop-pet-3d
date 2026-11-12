@@ -144,6 +144,14 @@ func _test_controls_and_save() -> void:
 	check(patch.autonomy.cloud_enabled == false, "save patch carries the cloud switch")
 	check(patch.autonomy.has("quiet_start") and patch.autonomy.quiet_start == "22:30",
 		"save patch keeps the existing quiet hours")
+	# Keys that gained controls in this pass: each must actually travel, and the
+	# defaults must keep speaking and prompt logging off.
+	check(patch.has("voice") and patch.voice.enabled == false,
+		"voice stays off by default and the switch travels in the patch")
+	check(patch.has("privacy") and patch.privacy.log_prompts == false,
+		"prompt logging is off by default and travels in the patch")
+	check(int(patch.ai.max_tokens) == 800, "max_tokens round-trips into the patch")
+	check(int(patch.ai.max_retries) == 1, "max_retries round-trips into the patch")
 
 	window.free()
 	host.free()

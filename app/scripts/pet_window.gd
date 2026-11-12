@@ -1,8 +1,11 @@
 extends Node3D
 ## Stage 0 application: rendering/interaction and native lifetime only.
 
-## Emitted when the visible speech bubble was clicked. The app layer opens chat.
-signal bubble_clicked
+## Emitted when a line typed into the reply bar is ready. The app layer sends
+## it through the chat window's own path.
+signal bubble_reply_submitted(text: String)
+## Emitted by the reply bar's "聊天" button.
+signal bubble_chat_requested
 
 const DragState = preload("res://scripts/drag_state.gd")
 const HitRegions = preload("res://scripts/hit_regions.gd")
@@ -11,6 +14,7 @@ const ActionMenu = preload("res://scripts/action_menu.gd")
 const MotionController = preload("res://scripts/motion/motion_controller.gd")
 const BehaviorController = preload("res://scripts/behavior/behavior_controller.gd")
 const SpeechBubble = preload("res://scripts/ui/speech_bubble.gd")
+const ReplyBar = preload("res://scripts/ui/reply_bar.gd")
 ## Pixels between the top of the head and the bottom of the bubble.
 const BUBBLE_GAP := 10.0
 ## Slack kept on each side when the bubble is limited to the window width.
@@ -53,6 +57,9 @@ var previous_interactive := false
 var status_label: Label
 ## Created on first use so a headless run that never speaks pays nothing.
 var speech_bubble: Control
+## The focusable input bar that opens when the bubble is clicked. Created on
+## first use as well: a run that never replies never creates a second window.
+var reply_bar: Window
 var _bubble_layer: CanvasLayer
 ## Mirrors the service's bubble.enabled setting: false makes show_bubble a no-op.
 var _bubble_enabled := true
@@ -451,6 +458,7 @@ func set_bubble_enabled(value: bool) -> void:
 		speech_bubble.set("enabled", value)
 	if not value:
 		hide_bubble()
+		close_reply_bar()
 
 ## Applies the service's bubble.duration_seconds. Click lines and the start
 ## greeting pass it explicitly, so the setting covers every kind of bubble and
@@ -485,12 +493,47 @@ func _ensure_speech_bubble() -> void:
 	speech_bubble.set_interactive(true)
 	speech_bubble.pressed.connect(_on_bubble_pressed)
 
-## Hides the bubble a click landed on and hands the click to the app layer.
+## Turns a click on the bubble into a focused reply bar over the same spot.
+##
+## The bar is a separate native window: the pet window is created with
+## `no_focus` and Windows does not let that style be removed at runtime, so a
+## field inside the bubble itself would never receive the keyboard.
 func _on_bubble_pressed() -> void:
 	if not is_instance_valid(speech_bubble) or not speech_bubble.visible:
 		return
+	var bubble_rect := Rect2(Vector2(get_window().position) + speech_bubble.position,
+		speech_bubble.get_bubble_size())
 	hide_bubble()
-	bubble_clicked.emit()
+	_open_reply_bar(bubble_rect)
+
+
+func _ensure_reply_bar() -> void:
+	if is_instance_valid(reply_bar):
+		return
+	reply_bar = ReplyBar.new()
+	add_child(reply_bar)
+	reply_bar.submitted.connect(func(text: String): bubble_reply_submitted.emit(text))
+	reply_bar.chat_requested.connect(func(): bubble_chat_requested.emit())
+
+
+## Opens the bar aligned with the bubble and keeps it inside the work area.
+func _open_reply_bar(bubble_rect: Rect2) -> void:
+	_ensure_reply_bar()
+	var area_rect := _work_area()
+	var bar_size: Vector2i = reply_bar.size
+	var x := int(bubble_rect.get_center().x - bar_size.x * 0.5)
+	var y := int(bubble_rect.position.y)
+	x = clampi(x, area_rect.position.x, maxi(area_rect.position.x,
+		area_rect.position.x + area_rect.size.x - bar_size.x))
+	y = clampi(y, area_rect.position.y, maxi(area_rect.position.y,
+		area_rect.position.y + area_rect.size.y - bar_size.y))
+	reply_bar.open_at(Vector2i(x, y))
+
+
+## Closes the reply bar if it is open. Used when the pet is dismissed.
+func close_reply_bar() -> void:
+	if is_instance_valid(reply_bar):
+		reply_bar.close()
 
 ## True when the cursor is over the visible, interactive bubble. The bubble is a
 ## child of a CanvasLayer with an identity transform, so its global rect is
@@ -1181,6 +1224,8 @@ func _handle_tray(action: int) -> void:
 			# node's visibility and has to be hidden explicitly.
 			if is_instance_valid(_bubble_layer):
 				_bubble_layer.visible = not hidden
+			if hidden:
+				close_reply_bar()
 			_apply_actor_state()
 			Engine.max_fps = hidden_fps if hidden else idle_fps
 			if bridge:

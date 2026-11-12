@@ -31,9 +31,19 @@ func _run() -> void:
 	window.configure_chat(fake, {"persona_id": "godette"})
 	await process_frame
 	check(not window.input.editable and window.send_button.disabled, "unavailable chat stays disabled")
+	# Text from the desktop bubble goes through the same path as the input box.
+	check(not window.submit_text("还没接入"), "submit_text refuses while chat is unavailable")
+	check(window.input.text == "还没接入", "a refused line stays in the field")
+	check(fake.requests.is_empty(), "a refused line sends nothing")
 	fake.features = {"chat": {"available": true, "commands": ["chat.send"]}}
 	fake.capabilities_received.emit(fake.features, fake.personas)
 	check(window.input.editable and not window.send_button.disabled, "capability enables the controls")
+	check(not window.submit_text("   "), "blank submit_text is refused")
+	check(window.submit_text("  你好  "), "submit_text sends when chat is available")
+	check(fake.requests.size() == 1 and fake.requests[0]["type"] == "chat.send",
+		"submit_text sends chat.send, got %s" % [fake.requests])
+	check(fake.requests[0]["payload"].get("text") == "你好",
+		"submit_text trims the bubble's line, got %s" % [fake.requests[0]["payload"]])
 	window.free()
 
 	var service := FakeClient.new()
@@ -119,10 +129,12 @@ class FakeClient:
 	var state := "ready"
 	var features := {}
 	var personas: Array = []
+	var requests: Array = []
 	var _sequence := 0
 
-	func request(_type: String, _payload: Dictionary, _timeout := 8.0) -> String:
+	func request(type: String, payload: Dictionary, _timeout := 8.0) -> String:
 		_sequence += 1
+		requests.append({"type": type, "payload": payload.duplicate(true)})
 		return "fake-%d" % _sequence
 
 	func reply(id: String, type: String, payload: Dictionary) -> void:

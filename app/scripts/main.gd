@@ -249,8 +249,10 @@ func _create_windows() -> void:
 	_connect_chat_speech()
 	_apply_bubble_settings()
 	_apply_greeting_settings()
-	if not bubble_clicked.is_connected(_on_bubble_clicked):
-		bubble_clicked.connect(_on_bubble_clicked)
+	if not bubble_reply_submitted.is_connected(_on_bubble_reply_submitted):
+		bubble_reply_submitted.connect(_on_bubble_reply_submitted)
+	if not bubble_chat_requested.is_connected(_on_bubble_chat_requested):
+		bubble_chat_requested.connect(_on_bubble_chat_requested)
 	emotion_presenter = EmotionPresenter.new()
 	add_child(emotion_presenter)
 	emotion_presenter.configure(client, self)
@@ -335,8 +337,17 @@ func _greet_on_start_once() -> void:
 	_greeted_on_start = true
 	greet_on_start.call_deferred()
 
-## A click on the bubble is a request to talk: open chat with the caret ready.
-func _on_bubble_clicked() -> void:
+## Sends a line typed into the desktop bubble through the chat window's own
+## send path, so history, streaming and error handling stay in one place. When
+## chat is not configured the text is kept and the window opens to explain why.
+func _on_bubble_reply_submitted(text: String) -> void:
+	if chat_window == null:
+		return
+	if not chat_window.submit_text(text):
+		_open_chat()
+
+## The reply bar's "聊天" button: open the window with the caret ready.
+func _on_bubble_chat_requested() -> void:
 	_open_chat()
 	if chat_window and chat_window.has_method("focus_input"):
 		chat_window.focus_input()

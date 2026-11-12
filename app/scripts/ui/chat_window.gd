@@ -157,6 +157,23 @@ func focus_input() -> void:
 	if input != null:
 		input.grab_focus()
 
+## Sends text that came from somewhere else (the desktop bubble) through the
+## same path as the input box, so history, streaming and retry all apply.
+## Returns false when chat is not available; the text stays in the field so the
+## window can show it instead of silently dropping the line.
+func submit_text(text: String) -> bool:
+	if input == null:
+		return false
+	var body := text.strip_edges()
+	if body.is_empty():
+		return false
+	input.text = body
+	if not _chat_available():
+		_refresh_availability()
+		return false
+	_send()
+	return true
+
 func _on_capabilities(features: Dictionary, personas: Array) -> void:
 	var chat: Variant = features.get("chat", {})
 	_chat_blocked = not (chat is Dictionary and bool(chat.get("available", false)))

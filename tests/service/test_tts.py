@@ -103,7 +103,8 @@ def test_voice_command_uses_the_settings_group_and_is_registered(tmp_path, monke
     calls = []
     monkeypatch.setattr(tts, '_run_powershell', _fake_backend(calls))
     store = SettingsStore(tmp_path)
-    store.update({'voice': {'voice': 'Microsoft Huihui', 'rate': 4, 'volume': 55}})
+    store.update({'voice': {'enabled': True, 'voice': 'Microsoft Huihui',
+                            'rate': 4, 'volume': 55}})
 
     event, payload = commands.dispatch(
         {'type': 'tts.synthesize', 'id': 'v1', 'payload': {'text': '你好'}}, store)
@@ -113,6 +114,13 @@ def test_voice_command_uses_the_settings_group_and_is_registered(tmp_path, monke
     assert payload['cached'] is False
     assert calls == [{'text': '你好', 'voice': 'Microsoft Huihui',
                       'rate': 4, 'volume': 55}]
+
+
+def test_voice_is_off_by_default(tmp_path):
+    # Speaking is paused: synthesis blocks the service thread, so the default
+    # path must not run it. Turning the switch on stays possible.
+    store = SettingsStore(tmp_path)
+    assert store.settings['voice']['enabled'] is False
 
 
 def test_disabled_voice_refuses_without_touching_the_backend(tmp_path, monkeypatch):
@@ -132,7 +140,7 @@ def test_disabled_voice_refuses_without_touching_the_backend(tmp_path, monkeypat
 def test_voice_settings_validate_rate_volume_and_type(tmp_path):
     store = SettingsStore(tmp_path)
     assert store.settings['voice'] == {
-        'enabled': True, 'voice': '', 'rate': 0, 'volume': 70}
+        'enabled': False, 'voice': '', 'rate': 0, 'volume': 70}
     for patch in ({'voice': {'rate': 11}}, {'voice': {'rate': -11}},
                   {'voice': {'volume': 101}}, {'voice': {'volume': -1}},
                   {'voice': {'voice': 5}}, {'voice': {'enabled': 1}},

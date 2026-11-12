@@ -120,7 +120,10 @@ GROWTH_DEFAULTS = {
     'locked_traits': [],
 }
 VOICE_DEFAULTS = {
-    'enabled': True,
+    # Speaking is paused: the command works, but synthesis is synchronous on the
+    # service thread, so a long line blocks every other request for up to 20 s.
+    # Off by default keeps that off the normal path until speech is finished.
+    'enabled': False,
     'voice': '',
     'rate': 0,
     'volume': 70,

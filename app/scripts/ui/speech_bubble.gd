@@ -33,6 +33,9 @@ var max_chars := 0
 ## Whether the bubble takes mouse input. Off by default: an ordinary bubble is
 ## presentation only and must not swallow clicks meant for the desktop.
 var interactive := false
+## How long the visible bubble stays up. Readable so a caller (or a test) can
+## tell which duration a bubble ended up with.
+var duration := DEFAULT_SECONDS
 
 var label: Label
 var _built := false
@@ -89,7 +92,7 @@ func show_bubble(text: String, seconds := -1.0) -> float:
 	label.text = body
 	_fit()
 	visible = true
-	var duration := duration_for_text(body) if seconds <= 0.0 else seconds
+	duration = duration_for_text(body) if seconds <= 0.0 else seconds
 	_start_timer(duration)
 	return duration
 

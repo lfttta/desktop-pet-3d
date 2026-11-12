@@ -136,6 +136,9 @@ func _test_displays() -> void:
 	clock.hour = 8
 	clock.minutes = 5000.0
 	window.greeting_clock = clock.now
+	# A non-default duration so a bubble falling back to its own default is
+	# distinguishable from one that received the setting.
+	window.set_bubble_seconds(7.0)
 
 	# greeting.enabled = false silences both the start greeting and the click.
 	window.set_greeting_settings(false, true, 60)
@@ -152,6 +155,8 @@ func _test_displays() -> void:
 	var click_text: String = window.speech_bubble.label.text
 	check(_texts_for(clock.hour, PetWindow.time_window_for(clock.hour), CLICK_CATEGORIES).has(click_text),
 		"the click phrase matches the hour: '%s'" % click_text)
+	check(is_equal_approx(window.speech_bubble.duration, 7.0),
+		"a click phrase uses bubble.duration_seconds, got %.1f" % window.speech_bubble.duration)
 	window.hide_bubble()
 
 	# With both switches on the start greeting appears, and it is a greeting line
@@ -163,6 +168,8 @@ func _test_displays() -> void:
 	var start_text: String = window.speech_bubble.label.text
 	check(_texts_for(clock.hour, PetWindow.time_window_for(clock.hour), GREETING_CATEGORIES).has(start_text),
 		"the start greeting is a greeting for the hour: '%s'" % start_text)
+	check(is_equal_approx(window.speech_bubble.duration, 7.0),
+		"the start greeting uses bubble.duration_seconds, got %.1f" % window.speech_bubble.duration)
 	window.hide_bubble()
 	window.free()
 

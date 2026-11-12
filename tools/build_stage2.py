@@ -154,6 +154,10 @@ def main() -> None:
     run('export', [str(ENGINE), '--headless', '--path', str(APP), '--export-release', 'Windows', str(candidate / 'Pet3D.exe')])
     for filename in ['README-stage2.md', 'THIRD_PARTY_NOTICES.md']:
         shutil.copy2(ROOT / filename, candidate / filename)
+    # The app reads data/expression/phrases.json at runtime (the line it says
+    # when clicked). The service carries its own copy under service/_internal/data,
+    # but the app looks next to the executable, so the package needs this too.
+    shutil.copytree(ROOT / 'data', candidate / 'data')
     shutil.copy2(ROOT / 'tools/Preview.cmd', candidate / 'Preview.cmd')
     licenses = candidate / 'licenses'
     licenses.mkdir()

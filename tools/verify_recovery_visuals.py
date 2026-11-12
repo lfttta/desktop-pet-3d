@@ -53,7 +53,12 @@ def verify(package: Path, report: Path) -> None:
             service_exchange(package, data, [
                 {"version": 1, "id": "save", "type": "settings.update", "payload": {
                     "character_id": id_, "scale": scale,
-                    "placement": {"x": 0 if edge < 0 else 1, "y": 1, "edge_x": edge, "edge_y": 1}}},
+                    "placement": {"x": 0 if edge < 0 else 1, "y": 1, "edge_x": edge, "edge_y": 1},
+                    # The speech bubble is opaque and can reach the window
+                    # edges, which the silhouette check reads as a clipped
+                    # character. These captures are about the character.
+                    "bubble": {"enabled": False},
+                    "greeting": {"enabled": False, "on_start": False}}},
                 {"version": 1, "id": "stop", "type": "shutdown", "payload": {}},
             ])
             stem = f"{id_}-{action}-{scale}-{edge}"
@@ -62,7 +67,12 @@ def verify(package: Path, report: Path) -> None:
             log = report / (stem + ".log")
             command = [str(package / "Pet3D.exe"), "--log-file", str(log), "--",
                        f"--data-dir={data}", f"--action={action}", f"--capture={screenshot}",
-                       "--capture-at=0.8", f"--report={status}", "--auto-exit=1.1"]
+                       "--capture-at=0.8", f"--report={status}", "--auto-exit=1.1",
+                       # An autonomous action or walk that starts in the 0.8 s
+                       # before the capture changes the pose or the placement, so
+                       # the silhouette can touch a window edge and read as
+                       # "clipped". The capture must show the requested pose.
+                       "--no-behavior"]
             process = subprocess.Popen(command, cwd=package, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                        creationflags=subprocess.CREATE_NO_WINDOW)
             try:

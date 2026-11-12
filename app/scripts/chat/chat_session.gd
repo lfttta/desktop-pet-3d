@@ -16,6 +16,8 @@ signal history_unavailable(message: String)
 signal bubble_received(text: String)
 ## The reply asked the pet to act something out. Empty or "none" means it did not.
 signal action_requested(action: String)
+## The reply asked for a short line to be spoken aloud. Empty means silence.
+signal speech_requested(text: String)
 
 const MAX_TEXT_LENGTH := 8000
 const CHAT_TIMEOUT := 40.0
@@ -200,6 +202,7 @@ func _on_request_finished(id: String, type: String, payload: Dictionary) -> void
 			return
 		assistant_message.emit(reply)
 		_emit_action(_message_action(payload))
+		_emit_speech(_message_speak(payload))
 		completed.emit(reply, {}, [], {})
 		return
 	_fail(id, payload)
@@ -228,6 +231,7 @@ func _finish(id: String, payload: Dictionary) -> void:
 	# Emit before `completed` so a listener that reacts to both sees the body
 	# start moving while the window still reports "replying".
 	_emit_action(_message_action(message_value))
+	_emit_speech(_message_speak(message_value))
 	completed.emit(text, usage, memory_ops, state_delta)
 
 func _fail(id: String, payload: Dictionary) -> void:
@@ -286,6 +290,27 @@ func _message_action(value: Variant) -> String:
 func _emit_action(action: String) -> void:
 	if not action.is_empty():
 		action_requested.emit(action)
+
+## The short line a reply asked to be spoken, or "" when it asked for silence.
+##
+## `speak` is separate from the displayed body: an empty value must never make
+## the app read the whole reply aloud.
+func _message_speak(value: Variant) -> String:
+	if not (value is Dictionary):
+		return ""
+	var data := value as Dictionary
+	var speak := str(data.get("speak", "")).strip_edges()
+	if not speak.is_empty():
+		return speak
+	# A one-shot result carries the same fields either flat or under `message`.
+	var message: Variant = data.get("message")
+	if message is Dictionary:
+		return str((message as Dictionary).get("speak", "")).strip_edges()
+	return ""
+
+func _emit_speech(speak: String) -> void:
+	if not speak.is_empty():
+		speech_requested.emit(speak)
 
 func _normalize_history(payload: Dictionary) -> Array:
 	var items: Variant = payload.get("messages", [])

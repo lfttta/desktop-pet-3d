@@ -8,6 +8,8 @@ const UNAVAILABLE_TEXT := "记忆功能未接入。"
 const HISTORY_UNAVAILABLE_TEXT := "历史版本未接入。"
 const RESTORE_UNAVAILABLE_TEXT := "归档恢复未接入。"
 const CORRECT_UNAVAILABLE_TEXT := "纠正功能未接入。"
+const PROPOSE_UNAVAILABLE_TEXT := "记忆保存未接入。"
+const SEARCH_UNAVAILABLE_TEXT := "记忆搜索未接入。"
 
 var status: Label
 var refresh_button: Button
@@ -15,7 +17,14 @@ var compact_button: Button
 var jobs_button: Button
 var rebuild_button: Button
 var index_status_button: Button
+var list_scroll: ScrollContainer
 var list_box: VBoxContainer
+var remember_input: LineEdit
+var remember_button: Button
+var search_input: LineEdit
+var search_button: Button
+var search_scroll: ScrollContainer
+var search_box: VBoxContainer
 var conflicts_box: VBoxContainer
 var history_dialog: AcceptDialog
 var history_list: VBoxContainer
@@ -36,6 +45,9 @@ var _compact_available := true
 var _jobs_available := true
 var _index_available := true
 var _resolve_available := true
+var _propose_available := true
+var _search_available := true
+var _searching := false
 var _correction_memory_id := ""
 var _rows: Array = []
 var _action_buttons: Array = []
@@ -77,16 +89,49 @@ func _ready() -> void:
 	index_status_button.disabled = true
 	index_status_button.pressed.connect(_request_index_status)
 	header.add_child(index_status_button)
+	var remember_row := HBoxContainer.new()
+	add_child(remember_row)
+	remember_input = LineEdit.new()
+	remember_input.placeholder_text = "写一条想记住的事…"
+	remember_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	remember_input.text_submitted.connect(func(_text: String): _request_propose())
+	remember_row.add_child(remember_input)
+	remember_button = Button.new()
+	remember_button.text = "记住"
+	remember_button.disabled = true
+	remember_button.pressed.connect(_request_propose)
+	remember_row.add_child(remember_button)
+	var search_row := HBoxContainer.new()
+	add_child(search_row)
+	search_input = LineEdit.new()
+	search_input.placeholder_text = "搜索记忆…"
+	search_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	search_input.text_changed.connect(_on_search_changed)
+	search_input.text_submitted.connect(func(_text: String): _request_search())
+	search_row.add_child(search_input)
+	search_button = Button.new()
+	search_button.text = "搜索"
+	search_button.disabled = true
+	search_button.pressed.connect(_request_search)
+	search_row.add_child(search_button)
 	status = Label.new()
 	status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(status)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(0, 170)
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_child(scroll)
+	list_scroll = ScrollContainer.new()
+	list_scroll.custom_minimum_size = Vector2(0, 170)
+	list_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_child(list_scroll)
 	list_box = VBoxContainer.new()
 	list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(list_box)
+	list_scroll.add_child(list_box)
+	search_scroll = ScrollContainer.new()
+	search_scroll.custom_minimum_size = Vector2(0, 170)
+	search_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	search_scroll.visible = false
+	add_child(search_scroll)
+	search_box = VBoxContainer.new()
+	search_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	search_scroll.add_child(search_box)
 	var conflicts_title := Label.new()
 	conflicts_title.text = "待处理冲突"
 	add_child(conflicts_title)
@@ -178,6 +223,104 @@ func refresh() -> void:
 	_requests[id] = {"type": "memory.list"}
 	status.text = "正在加载…"
 
+func _request_propose() -> void:
+	if not _ready_for_requests() or not _propose_available:
+		status.text = PROPOSE_UNAVAILABLE_TEXT
+		return
+	var text := remember_input.text.strip_edges()
+	if text.is_empty():
+		status.text = "记忆内容不能为空。"
+		return
+	var id: String = _service.request("memory.propose", {"text": text}, 10.0)
+	if id.is_empty():
+		status.text = "记录失败：后台服务不可用。"
+		return
+	_requests[id] = {"type": "memory.propose"}
+	status.text = "正在保存记忆…"
+
+func _on_search_changed(new_text: String) -> void:
+	if new_text.strip_edges().is_empty() and _searching:
+		_clear_search()
+
+func _request_search() -> void:
+	var query := search_input.text.strip_edges()
+	if query.is_empty():
+		_clear_search()
+		return
+	if not _ready_for_requests() or not _search_available:
+		status.text = SEARCH_UNAVAILABLE_TEXT
+		return
+	var id: String = _service.request("memory.search", {"query": query}, 10.0)
+	if id.is_empty():
+		status.text = "搜索失败：后台服务不可用。"
+		return
+	_requests[id] = {"type": "memory.search"}
+	_set_searching(true)
+	status.text = "正在搜索…"
+
+func _set_searching(active: bool) -> void:
+	_searching = active
+	list_scroll.visible = not active
+	search_scroll.visible = active
+
+func _clear_search_rows() -> void:
+	for child in search_box.get_children():
+		search_box.remove_child(child)
+		child.queue_free()
+
+func _clear_search() -> void:
+	var was_searching := _searching
+	_set_searching(false)
+	_clear_search_rows()
+	if not search_input.text.is_empty():
+		search_input.text = ""
+	if was_searching and _ready_for_requests():
+		refresh()
+
+func _render_search_results(results: Array) -> void:
+	if not _searching:
+		return
+	_clear_search_rows()
+	var count := 0
+	for item in results:
+		if not item is Dictionary:
+			continue
+		var text := str(item.get("text", item.get("snippet", "")))
+		if text.is_empty():
+			continue
+		_add_search_row(item, text)
+		count += 1
+	if count == 0:
+		status.text = "没有找到相关记忆。"
+	else:
+		status.text = "搜索到 %d 条记忆" % count
+	_refresh_controls()
+
+func _add_search_row(item: Dictionary, text: String) -> void:
+	var row := HBoxContainer.new()
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info.add_theme_constant_override("separation", 4)
+	var label := Label.new()
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.text = text
+	info.add_child(label)
+	var meta := Label.new()
+	meta.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	meta.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var parts: Array[String] = []
+	var category := str(item.get("category", ""))
+	if not category.is_empty():
+		parts.append("分类：%s" % category)
+	parts.append("重要度 %.2f" % float(item.get("importance", 0.0)))
+	if item.has("score"):
+		parts.append("匹配度 %s" % str(item.get("score")))
+	meta.text = " · ".join(PackedStringArray(parts))
+	info.add_child(meta)
+	row.add_child(info)
+	search_box.add_child(row)
+
 func row_for(memory_id: String) -> Control:
 	for row in list_box.get_children():
 		if row is Control and str(row.get_meta("memory_id", "")) == memory_id:
@@ -213,6 +356,10 @@ func _refresh_controls() -> void:
 	jobs_button.disabled = not (enabled and _jobs_available)
 	rebuild_button.disabled = not (enabled and _index_available)
 	index_status_button.disabled = not (enabled and _index_available)
+	remember_button.disabled = not (enabled and _propose_available)
+	search_button.disabled = not (enabled and _search_available)
+	remember_input.editable = enabled and _propose_available
+	search_input.editable = enabled and _search_available
 	for entry in _action_buttons:
 		var action := str(entry.get("action", ""))
 		var allowed := enabled
@@ -383,6 +530,37 @@ func _on_request_finished(id: String, type: String, payload: Dictionary) -> void
 		else:
 			_conflicts_checked = true
 		return
+	if command == "memory.propose":
+		if type == "result":
+			var outcome := str(payload.get("status", ""))
+			if outcome in ["committed", "merged", "queued"]:
+				status.text = "记忆已保存。"
+				remember_input.text = ""
+				if _searching:
+					_clear_search()
+				else:
+					refresh()
+			else:
+				status.text = "记录失败：%s" % str(payload.get("reason", ""))
+				_refresh_controls()
+		elif message.is_empty():
+			status.text = "记录失败。"
+			_refresh_controls()
+		else:
+			status.text = "记录失败：%s" % message
+			_refresh_controls()
+		return
+	if command == "memory.search":
+		if type == "result":
+			var results: Variant = payload.get("results", [])
+			_render_search_results(results if results is Array else [])
+		elif message.is_empty():
+			status.text = "搜索失败。"
+			_refresh_controls()
+		else:
+			status.text = "搜索失败：%s" % message
+			_refresh_controls()
+		return
 	if type == "result":
 		refresh()
 	elif message.is_empty():
@@ -422,6 +600,14 @@ func _mark_unavailable(command: String) -> void:
 		status.text = "冲突解决未接入。"
 	elif command == "memory.conflicts.list":
 		_conflicts_checked = true
+	elif command == "memory.propose":
+		_propose_available = false
+		status.text = PROPOSE_UNAVAILABLE_TEXT
+	elif command == "memory.search":
+		_search_available = false
+		status.text = SEARCH_UNAVAILABLE_TEXT
+		_set_searching(false)
+		_clear_search_rows()
 	else:
 		_available = false
 		status.text = UNAVAILABLE_TEXT
@@ -436,7 +622,8 @@ func _render(items: Array) -> void:
 	_conflict_ids.clear()
 	_conflicts_checked = false
 	if items.is_empty():
-		status.text = "还没有记忆。"
+		if not _searching:
+			status.text = "还没有记忆。"
 		_refresh_controls()
 		return
 	var count := 0
@@ -445,7 +632,8 @@ func _render(items: Array) -> void:
 			continue
 		_add_row(item)
 		count += 1
-	status.text = "共 %d 条记忆" % count
+	if not _searching:
+		status.text = "共 %d 条记忆" % count
 	_refresh_controls()
 	_request_conflicts()
 

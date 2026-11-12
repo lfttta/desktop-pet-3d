@@ -7,6 +7,12 @@ const ScreenMath = preload("res://scripts/screen_math.gd")
 const ActionMenu = preload("res://scripts/action_menu.gd")
 const MotionController = preload("res://scripts/motion/motion_controller.gd")
 const BehaviorController = preload("res://scripts/behavior/behavior_controller.gd")
+const SpeechBubble = preload("res://scripts/ui/speech_bubble.gd")
+## Pixels between the top of the head and the bottom of the bubble.
+const BUBBLE_GAP := 10.0
+## Slack kept on each side when the bubble is limited to the window width.
+const BUBBLE_WINDOW_MARGIN := 12.0
+const CLICK_PHRASE_CATEGORIES := ["greeting", "care"]
 
 var camera: Camera3D
 var actor: Node3D
@@ -26,6 +32,9 @@ var screen := 0
 var dpi_scale := 1.0
 var previous_interactive := false
 var status_label: Label
+## Created on first use so a headless run that never speaks pays nothing.
+var speech_bubble: Control
+var _bubble_layer: CanvasLayer
 var action_menu := ActionMenu.new()
 var action_library := {}
 var _last_work_area := Rect2i()
@@ -75,16 +84,24 @@ var _walk_cycles_done := 0
 ## from under the injected cursor. Disabling is also what a user who wants the
 ## pet to stay put would want.
 var behavior_enabled := true
+## Frame caps from settings.performance, clamped to the service ranges when the
+## settings document is applied. The defaults match service/settings.py.
+var idle_fps := 30
+var drag_fps := 60
+var hidden_fps := 5
+## `--no-behavior` wins over the saved behavior.enabled value.
+var _behavior_forced_off := false
 
 func _ready() -> void:
 	_parse_options()
-	if options.has("no-behavior"):
+	_behavior_forced_off = options.has("no-behavior")
+	if _behavior_forced_off:
 		behavior_enabled = false
 	if options.has("verify-package"):
 		set_process(false)
 		_verify_package.call_deferred()
 		return
-	Engine.max_fps = 30
+	Engine.max_fps = idle_fps
 	get_window().title = "Pet3D Stage 0"
 	get_window().close_requested.connect(_quit)
 	get_tree().auto_accept_quit = false
@@ -113,6 +130,44 @@ func _ready() -> void:
 		drag.update(bridge.is_left_button_down(), false, bridge.get_cursor_position(), get_window().position, false, true)
 	print("[stage0] READY ", JSON.stringify(_status()))
 	# Stage 1 lifecycle checks also run headless; explicit shutdown owns exit.
+
+## Applies behavior.enabled and performance.* from a settings document.
+##
+## Called when the service hands settings over, so it must tolerate a missing
+## group or an out-of-range value: a pre-v6 service sends neither.
+func apply_runtime_settings(settings: Dictionary) -> void:
+	var behavior_settings: Variant = settings.get("behavior", {})
+	if (behavior_settings is Dictionary and behavior_settings.has("enabled")
+			and not _behavior_forced_off):
+		var was_enabled := behavior_enabled
+		behavior_enabled = bool(behavior_settings.get("enabled", true))
+		# Stop a walk the autonomous chain already started; otherwise the pet
+		# keeps walking until that segment ends after the switch was turned off.
+		if was_enabled and not behavior_enabled and _walk_active:
+			_finish_walk(false)
+	var performance: Variant = settings.get("performance", {})
+	if performance is Dictionary:
+		idle_fps = _fps_setting(performance, "idle_fps", idle_fps, 10, 60)
+		drag_fps = _fps_setting(performance, "drag_fps", drag_fps, 30, 120)
+		hidden_fps = _fps_setting(performance, "hidden_fps", hidden_fps, 1, 15)
+	Engine.max_fps = _active_fps()
+
+## Reads an integer fps value, falling back when it is missing or outside the
+## range service/settings.py validates.
+func _fps_setting(group: Dictionary, key: String, fallback: int, low: int, high: int) -> int:
+	var value: Variant = group.get(key)
+	if value is int:
+		var fps := int(value)
+		if low <= fps and fps <= high:
+			return fps
+	return fallback
+
+func _active_fps() -> int:
+	if hidden:
+		return hidden_fps
+	if drag.active:
+		return drag_fps
+	return idle_fps
 
 func _configure_action_menu() -> void:
 	# Feed the native tray menu the same flat order this class maps commands back to.
@@ -292,6 +347,7 @@ func _process(delta: float) -> void:
 		_settle_ground_contact(delta)
 		_constrain_window()
 		_update_regions()
+		_update_bubble_position()
 		if bridge:
 			_update_input()
 		if status_label:
@@ -323,6 +379,70 @@ func _update_regions() -> void:
 		]
 
 
+## --- Speech bubble -----------------------------------------------------------
+#
+# The bubble lives in its own CanvasLayer, above the 3D canvas and the
+# diagnostics label. It is a child Control of this window, so it travels with
+# the window for free; only the offset above the head is recomputed each frame.
+
+## Shows `text` over the pet. `seconds` below zero uses the automatic duration
+## (4 s, longer for long text, capped at 10 s).
+func show_bubble(text: String, seconds := -1.0) -> void:
+	if text.strip_edges().is_empty():
+		hide_bubble()
+		return
+	_ensure_speech_bubble()
+	speech_bubble.set_max_width(_bubble_max_width())
+	speech_bubble.show_bubble(text, seconds)
+	_update_bubble_position()
+
+func hide_bubble() -> void:
+	if is_instance_valid(speech_bubble):
+		speech_bubble.hide_bubble()
+
+func _ensure_speech_bubble() -> void:
+	if is_instance_valid(speech_bubble):
+		return
+	_bubble_layer = CanvasLayer.new()
+	_bubble_layer.name = "SpeechBubbleLayer"
+	# Above the 3D canvas and the diagnostics label, which both use layer 1.
+	_bubble_layer.layer = 2
+	add_child(_bubble_layer)
+	speech_bubble = SpeechBubble.new()
+	speech_bubble.name = "SpeechBubble"
+	_bubble_layer.add_child(speech_bubble)
+
+## Widest the bubble may get: never wider than the window that draws it.
+func _bubble_max_width() -> float:
+	return maxf(1.0, float(get_window().size.x) - BUBBLE_WINDOW_MARGIN * 2.0)
+
+## Pins the bubble above the character's head and inside the work area.
+func _update_bubble_position() -> void:
+	if not is_instance_valid(speech_bubble) or not speech_bubble.visible:
+		return
+	var limit := _bubble_max_width()
+	if not is_equal_approx(speech_bubble.max_width, limit):
+		speech_bubble.set_max_width(limit)
+	var bubble_size: Vector2 = speech_bubble.get_bubble_size()
+	var subject := _subject_rect()
+	var window := get_window()
+	var origin := Vector2(window.position)
+	var area_rect := _work_area()
+	var area := Rect2(Vector2(area_rect.position), Vector2(area_rect.size))
+	var head := origin + Vector2(subject.get_center().x, subject.position.y)
+	var target := Vector2(head.x - bubble_size.x * 0.5, head.y - bubble_size.y - BUBBLE_GAP)
+	var on_screen := Vector2(
+		clampf(target.x, area.position.x, maxf(area.position.x, area.end.x - bubble_size.x)),
+		clampf(target.y, area.position.y, maxf(area.position.y, area.end.y - bubble_size.y)))
+	# Clamping to the work area alone is not enough: the bubble is drawn inside
+	# this window, so a pet standing against an edge would push it outside the
+	# viewport and clip it. Keep it inside both.
+	var local := on_screen - origin
+	local.x = clampf(local.x, 0.0, maxf(0.0, float(window.size.x) - bubble_size.x))
+	local.y = clampf(local.y, 0.0, maxf(0.0, float(window.size.y) - bubble_size.y))
+	speech_bubble.position = local.round()
+
+
 func _update_input() -> void:
 	# Every value here is already in the same space: the bridge reads the cursor
 	# with GetPhysicalCursorPos, get_window().position is physical too (verified
@@ -346,7 +466,7 @@ func _update_input() -> void:
 		if not bridge.begin_capture():
 			drag.cancel()
 		else:
-			Engine.max_fps = 60
+			Engine.max_fps = drag_fps
 			# A press is not a grab yet. Only travel past the drag threshold turns
 			# it into one, so a plain click never lifts the pet and drops it.
 			_press_cursor = cursor
@@ -359,16 +479,61 @@ func _update_input() -> void:
 		_hold_to(cursor)
 	if state.end:
 		bridge.end_capture()
-		Engine.max_fps = 30
+		Engine.max_fps = idle_fps
 		if _hold_pending:
 			_hold_pending = false
 			print("[stage0] CLICK position=", get_window().position)
 			# A click is a user instruction: stop walking and answer it.
 			_finish_walk(false)
 			_play_action("wave")
+			_say_click_phrase()
 		else:
 			print("[stage0] DRAG end position=", get_window().position)
 			_end_hold()
+
+
+## Says one greeting or care phrase when the pet is clicked. The library is
+## optional: a missing or unreadable file leaves the click silent instead of
+## failing, so a package without the data folder still works.
+func _say_click_phrase() -> void:
+	var phrase := _pick_click_phrase()
+	if not phrase.is_empty():
+		show_bubble(phrase)
+
+func _pick_click_phrase() -> String:
+	for path in _phrase_paths():
+		if not FileAccess.file_exists(path):
+			continue
+		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+		if not (data is Dictionary):
+			continue
+		var entries: Variant = (data as Dictionary).get("phrases", [])
+		if not (entries is Array):
+			continue
+		var choices: Array[String] = []
+		for item in entries:
+			if not (item is Dictionary):
+				continue
+			var entry: Dictionary = item
+			if not CLICK_PHRASE_CATEGORIES.has(str(entry.get("category", ""))):
+				continue
+			if not bool(entry.get("enabled", true)):
+				continue
+			var text := str(entry.get("text", "")).strip_edges()
+			if not text.is_empty():
+				choices.append(text)
+		if not choices.is_empty():
+			return choices[randi() % choices.size()]
+	return ""
+
+## The phrase library ships outside `res://`, in `data/`. Both the development
+## tree and a package that copies that folder next to the executable are tried.
+func _phrase_paths() -> PackedStringArray:
+	var paths := PackedStringArray([ProjectSettings.globalize_path("res://../data/expression/phrases.json")])
+	var executable_dir := OS.get_executable_path().get_base_dir()
+	if not executable_dir.is_empty():
+		paths.append(executable_dir.path_join("data/expression/phrases.json"))
+	return paths
 
 
 ## --- Hold / fall / land -------------------------------------------------------
@@ -821,8 +986,12 @@ func _handle_tray(action: int) -> void:
 			visible = not hidden
 			if status_label:
 				status_label.visible = not hidden
+			# The bubble sits on its own canvas, so it does not inherit the 3D
+			# node's visibility and has to be hidden explicitly.
+			if is_instance_valid(_bubble_layer):
+				_bubble_layer.visible = not hidden
 			_apply_actor_state()
-			Engine.max_fps = 5 if hidden else 30
+			Engine.max_fps = hidden_fps if hidden else idle_fps
 			if bridge:
 				bridge.set_interactive(false)
 				previous_interactive = false
@@ -968,7 +1137,7 @@ func _cancel_drag() -> void:
 		_motion_active = true
 	if bridge:
 		bridge.end_capture()
-	Engine.max_fps = 5 if hidden else 30
+	Engine.max_fps = hidden_fps if hidden else idle_fps
 
 func _build_diagnostics() -> void:
 	var layer := CanvasLayer.new()

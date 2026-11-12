@@ -38,6 +38,12 @@ const EMBEDDING_DEFAULTS := {
 	"model": "",
 	"dimensions": 0,
 }
+const VOICE_DEFAULTS := {
+	"enabled": true,
+	"voice": "",
+	"rate": 0,
+	"volume": 70,
+}
 const GROWTH_DEFAULTS := {
 	"enabled": false,
 	"min_sessions": 3,
@@ -50,7 +56,26 @@ const AUTONOMY_DEFAULTS := {
 	"quiet_start": "23:00",
 	"quiet_end": "08:00",
 	"cloud_enabled": true,
+	"default_quiet_minutes": 30,
 }
+const BEHAVIOR_DEFAULTS := {
+	"enabled": true,
+}
+# Mirrors service/settings.py PERFORMANCE_DEFAULTS and its ranges.
+const PERFORMANCE_DEFAULTS := {
+	"idle_fps": 30,
+	"drag_fps": 60,
+	"hidden_fps": 5,
+}
+const IDLE_FPS_MIN := 10
+const IDLE_FPS_MAX := 60
+const DRAG_FPS_MIN := 30
+const DRAG_FPS_MAX := 120
+const HIDDEN_FPS_MIN := 1
+const HIDDEN_FPS_MAX := 15
+## Offsets offered for the manual quiet action; the service accepts 5..240,
+## and a stored value outside this list is kept as an extra option.
+const QUIET_MINUTE_CHOICES := [15, 30, 60, 120]
 # Defaults mirror service/settings.py DESKTOP_DEFAULTS. The desktop group is
 # only sent when the connected service advertises schema v5 or later; an older
 # service rejects the whole patch, so it must receive none of these keys.
@@ -104,6 +129,7 @@ var ai_connect_timeout: SpinBox
 var ai_request_timeout: SpinBox
 var ai_daily_tokens: SpinBox
 var ai_monthly_budget: SpinBox
+var voice_enabled: CheckButton
 var memory_enabled: CheckButton
 var memory_auto_capture: CheckButton
 var compaction_enabled: CheckButton
@@ -129,8 +155,13 @@ var usage_panel
 var autonomy_enabled: CheckButton
 var quiet_start_input: LineEdit
 var quiet_end_input: LineEdit
+var quiet_minutes: OptionButton
 var quiet_button: Button
 var autonomy_status: Label
+var behavior_enabled: CheckButton
+var idle_fps: SpinBox
+var drag_fps: SpinBox
+var hidden_fps: SpinBox
 var desktop_enabled: CheckButton
 var desktop_idle: SpinBox
 var fullscreen_policy: OptionButton
@@ -153,6 +184,11 @@ var _desktop_known := false
 # send them back unchanged instead of overwriting them with a constant.
 var _desktop_poll_seconds := int(DESKTOP_DEFAULTS.poll_seconds)
 var _desktop_dnd_policy := str(DESKTOP_DEFAULTS.dnd_policy)
+# Same rule for the voice group: only `enabled` has a control, so the voice
+# name, rate and volume have to travel back untouched.
+var _voice_name := str(VOICE_DEFAULTS.voice)
+var _voice_rate := int(VOICE_DEFAULTS.rate)
+var _voice_volume := int(VOICE_DEFAULTS.volume)
 # Settings schema the connected service reported. The desktop group and
 # autonomy.cloud_enabled only exist from schema v5; an older service rejects
 # the whole patch when it sees them.
@@ -261,6 +297,16 @@ func _build_basic_page() -> void:
 	slider_row.add_child(size_value)
 	size_slider.value_changed.connect(func(value: float): size_value.text = "%d%%" % roundi(value * 100))
 	_row(page, "显示大小", slider_row)
+	behavior_enabled = CheckButton.new()
+	behavior_enabled.text = "允许自己走动与演动作"
+	_row(page, "自主行为", behavior_enabled)
+	_section(page, "性能")
+	idle_fps = _spin(IDLE_FPS_MIN, IDLE_FPS_MAX, 1)
+	_row(page, "待机帧率", idle_fps)
+	drag_fps = _spin(DRAG_FPS_MIN, DRAG_FPS_MAX, 1)
+	_row(page, "拖拽帧率", drag_fps)
+	hidden_fps = _spin(HIDDEN_FPS_MIN, HIDDEN_FPS_MAX, 1)
+	_row(page, "隐藏帧率", hidden_fps)
 
 func _build_ai_page() -> void:
 	var page := _page("AI", "AiPage")
@@ -306,6 +352,10 @@ func _build_ai_page() -> void:
 	_row(page, "每日 Token 预算", ai_daily_tokens)
 	ai_monthly_budget = _spin(0, 1000000000, 0.5)
 	_row(page, "每月费用预算", ai_monthly_budget)
+	_section(page, "语音")
+	voice_enabled = CheckButton.new()
+	voice_enabled.text = "朗读回复"
+	_row(page, "朗读", voice_enabled)
 	_section(page, "向量索引")
 	embedding_enabled = CheckButton.new()
 	embedding_enabled.text = "启用向量索引"
@@ -397,9 +447,14 @@ func _build_autonomy_page() -> void:
 	desktop_state_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	desktop_state_label.text = "当前：—"
 	page.add_child(desktop_state_label)
+	quiet_minutes = OptionButton.new()
+	for minutes in QUIET_MINUTE_CHOICES:
+		quiet_minutes.add_item("%d 分钟" % minutes)
+		quiet_minutes.set_item_metadata(quiet_minutes.item_count - 1, minutes)
+	_row(page, "安静时长", quiet_minutes)
 	var quiet_row := HBoxContainer.new()
 	quiet_button = Button.new()
-	quiet_button.text = "安静 30 分钟"
+	quiet_button.text = "进入安静模式"
 	quiet_button.pressed.connect(_set_quiet)
 	quiet_row.add_child(quiet_button)
 	autonomy_status = Label.new()
@@ -545,6 +600,11 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	ai_request_timeout.value = float(ai.get("request_timeout_ms", AI_DEFAULTS.request_timeout_ms))
 	ai_daily_tokens.value = float(ai.get("daily_token_budget", AI_DEFAULTS.daily_token_budget))
 	ai_monthly_budget.value = float(ai.get("monthly_cost_budget", AI_DEFAULTS.monthly_cost_budget))
+	var voice := _group(settings, "voice")
+	voice_enabled.button_pressed = bool(voice.get("enabled", VOICE_DEFAULTS.enabled))
+	_voice_name = str(voice.get("voice", VOICE_DEFAULTS.voice))
+	_voice_rate = int(voice.get("rate", VOICE_DEFAULTS.rate))
+	_voice_volume = int(voice.get("volume", VOICE_DEFAULTS.volume))
 	var embedding := _group(ai, "embedding")
 	embedding_enabled.button_pressed = bool(embedding.get("enabled", EMBEDDING_DEFAULTS.enabled))
 	embedding_model.text = str(embedding.get("model", EMBEDDING_DEFAULTS.model))
@@ -579,6 +639,14 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	cloud_proactive.button_pressed = bool(autonomy.get("cloud_enabled", AUTONOMY_DEFAULTS.cloud_enabled))
 	quiet_start_input.text = str(autonomy.get("quiet_start", AUTONOMY_DEFAULTS.quiet_start))
 	quiet_end_input.text = str(autonomy.get("quiet_end", AUTONOMY_DEFAULTS.quiet_end))
+	_select_quiet_minutes(int(autonomy.get("default_quiet_minutes", AUTONOMY_DEFAULTS.default_quiet_minutes)))
+	var behavior := _group(settings, "behavior")
+	behavior_enabled.button_pressed = bool(behavior.get("enabled", BEHAVIOR_DEFAULTS.enabled))
+	# The spin boxes clamp an out-of-range saved value to their own bounds.
+	var performance := _group(settings, "performance")
+	idle_fps.value = clampf(float(performance.get("idle_fps", PERFORMANCE_DEFAULTS.idle_fps)), float(IDLE_FPS_MIN), float(IDLE_FPS_MAX))
+	drag_fps.value = clampf(float(performance.get("drag_fps", PERFORMANCE_DEFAULTS.drag_fps)), float(DRAG_FPS_MIN), float(DRAG_FPS_MAX))
+	hidden_fps.value = clampf(float(performance.get("hidden_fps", PERFORMANCE_DEFAULTS.hidden_fps)), float(HIDDEN_FPS_MIN), float(HIDDEN_FPS_MAX))
 	var desktop := _group(settings, "desktop")
 	desktop_enabled.button_pressed = bool(desktop.get("enabled", DESKTOP_DEFAULTS.enabled))
 	desktop_idle.value = float(desktop.get("idle_after_seconds", DESKTOP_DEFAULTS.idle_after_seconds))
@@ -646,7 +714,20 @@ func _save() -> void:
 			"cooldown_days": int(growth_cooldown_days.value),
 		},
 		"autonomy": _autonomy_patch(quiet_start, quiet_end),
+		"voice": {
+			"enabled": voice_enabled.button_pressed,
+			"voice": _voice_name,
+			"rate": _voice_rate,
+			"volume": _voice_volume,
+		},
 	}
+	if _supports_schema(6):
+		patch["behavior"] = {"enabled": behavior_enabled.button_pressed}
+		patch["performance"] = {
+			"idle_fps": int(idle_fps.value),
+			"drag_fps": int(drag_fps.value),
+			"hidden_fps": int(hidden_fps.value),
+		}
 	if _supports_desktop() and _desktop_available:
 		patch["desktop"] = {
 			"enabled": desktop_enabled.button_pressed,
@@ -661,11 +742,15 @@ func _save() -> void:
 		patch["expression"] = {"style": expression_panel.style_values()}
 	save_requested.emit(patch)
 
-## True only when the connected service understands the v5 keys. An unknown
-## schema (older service or no handshake yet) must not receive them: the whole
-## patch would be rejected and even user_name/scale would fail to save.
+## True only when the connected service understands the keys introduced at
+## `minimum`. An unknown schema (older service or no handshake yet) must not
+## receive them: the whole patch would be rejected and even user_name/scale
+## would fail to save.
+func _supports_schema(minimum: int) -> bool:
+	return _schema_version >= minimum
+
 func _supports_desktop() -> bool:
-	return _schema_version >= 5
+	return _supports_schema(5)
 
 func _autonomy_patch(quiet_start: String, quiet_end: String) -> Dictionary:
 	var patch := {
@@ -675,7 +760,27 @@ func _autonomy_patch(quiet_start: String, quiet_end: String) -> Dictionary:
 	}
 	if _supports_desktop():
 		patch["cloud_enabled"] = cloud_proactive.button_pressed
+	if _supports_schema(6):
+		patch["default_quiet_minutes"] = _quiet_minutes_value()
 	return patch
+
+## Selects a preset quiet duration, or appends a stored non-preset value so
+## saving never silently rewrites it.
+func _select_quiet_minutes(minutes: int) -> void:
+	minutes = clampi(minutes, 5, 240)
+	for index in range(quiet_minutes.item_count):
+		if int(quiet_minutes.get_item_metadata(index)) == minutes:
+			quiet_minutes.select(index)
+			return
+	quiet_minutes.add_item("%d 分钟" % minutes)
+	quiet_minutes.set_item_metadata(quiet_minutes.item_count - 1, minutes)
+	quiet_minutes.select(quiet_minutes.item_count - 1)
+
+func _quiet_minutes_value() -> int:
+	var index := quiet_minutes.selected
+	if index < 0:
+		return int(AUTONOMY_DEFAULTS.default_quiet_minutes)
+	return int(quiet_minutes.get_item_metadata(index))
 
 func _valid_time(value: String) -> bool:
 	if value.length() != 5 or value[2] != ":":
@@ -706,7 +811,7 @@ func _test_key() -> void:
 func _set_quiet() -> void:
 	if quiet_button:
 		quiet_button.disabled = true
-	var id := _send("autonomy.set_quiet", {"minutes": 30}, 10.0)
+	var id := _send("autonomy.set_quiet", {"minutes": _quiet_minutes_value()}, 10.0)
 	if id.is_empty():
 		_refresh_controls()
 
@@ -852,6 +957,14 @@ func _refresh_controls() -> void:
 	autonomy_enabled.disabled = not ready
 	quiet_start_input.editable = ready
 	quiet_end_input.editable = ready
+	# behavior/performance and autonomy.default_quiet_minutes exist from schema
+	# v6; saving them to an older service rejects the whole patch.
+	var local_ready := ready and _supports_schema(6)
+	behavior_enabled.disabled = not local_ready
+	quiet_minutes.disabled = not local_ready
+	idle_fps.editable = local_ready
+	drag_fps.editable = local_ready
+	hidden_fps.editable = local_ready
 	# cloud_enabled only exists from schema v5; a legacy service would reject it.
 	cloud_proactive.disabled = not (ready and _supports_desktop())
 	# Desktop controls stay unavailable once the service reported the command
@@ -901,7 +1014,7 @@ func show_status(state: String, detail: String) -> void:
 		_autonomy_available = _feature_available("autonomy")
 		_desktop_available = true
 		# The window may have been populated before the handshake; refresh the
-		# schema so the v5-only controls unlock once the real service is known.
+		# schema so the newer controls unlock once the real service is known.
 		if _service != null:
 			var live: Variant = _service.get("settings")
 			if live is Dictionary and live.has("schema_version"):

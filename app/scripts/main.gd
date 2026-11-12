@@ -5,6 +5,7 @@ const ServiceClient = preload("res://scripts/service_client.gd")
 const SettingsWindow = preload("res://scripts/ui/settings_window.gd")
 const ChatWindow = preload("res://scripts/ui/chat_window.gd")
 const EmotionPresenter = preload("res://scripts/state/emotion_presenter.gd")
+const TtsPlayer = preload("res://scripts/audio/tts_player.gd")
 var client: Node
 var saved_settings := AppSettings.defaults()
 var data_directory := ""
@@ -12,6 +13,7 @@ var displays: Array = []
 var settings_window: Window
 var chat_window: Window
 var emotion_presenter: Node
+var tts_player: Node
 var notice: AcceptDialog
 var _app_ready := false
 var _closing := false
@@ -72,6 +74,9 @@ func _ready() -> void:
 	super._ready()
 	get_window().title = "Pet3D"
 	_app_ready = true
+	# The service may have delivered settings during the startup wait above;
+	# apply the saved behavior and frame caps now that the window exists.
+	apply_runtime_settings(saved_settings)
 	_restore_placement()
 	_create_windows()
 	if not _warnings.is_empty():
@@ -226,6 +231,11 @@ func _create_windows() -> void:
 	chat_window.size = Vector2i(Vector2(520, 400) * dpi_scale)
 	chat_window.retry_requested.connect(client.retry)
 	chat_window.configure_chat(client, saved_settings)
+	tts_player = TtsPlayer.new()
+	add_child(tts_player)
+	tts_player.configure(client)
+	_connect_chat_bubble()
+	_connect_chat_speech()
 	emotion_presenter = EmotionPresenter.new()
 	add_child(emotion_presenter)
 	emotion_presenter.configure(client, self)
@@ -235,6 +245,32 @@ func _create_windows() -> void:
 	notice.title = "Pet3D"
 	add_child(notice)
 	_on_service_status(client.state, client.detail)
+
+## Mirrors autonomy bubbles onto the desktop. The chat window keeps its own copy
+## in the message list; this only forwards the session signal it already reacts
+## to, so both surfaces show the same text.
+func _connect_chat_bubble() -> void:
+	if chat_window == null:
+		return
+	var session: Object = chat_window.get("_session")
+	if session == null or not session.has_signal("bubble_received"):
+		return
+	if not session.is_connected("bubble_received", _on_chat_bubble):
+		session.connect("bubble_received", _on_chat_bubble)
+
+func _on_chat_bubble(text: String) -> void:
+	show_bubble(text)
+
+## Forwards the reply's spoken line to the speech player. The chat window owns
+## the session; this only adds the one connection it does not react to itself.
+func _connect_chat_speech() -> void:
+	if chat_window == null or tts_player == null:
+		return
+	var session: Object = chat_window.get("_session")
+	if session == null or not session.has_signal("speech_requested"):
+		return
+	if not session.is_connected("speech_requested", tts_player.speak):
+		session.connect("speech_requested", tts_player.speak)
 
 func _open_settings() -> void:
 	if settings_window:
@@ -295,6 +331,7 @@ func _on_settings_received(settings: Dictionary) -> void:
 	if previous.get("scale") != saved_settings.scale or previous.get("screen_id") != saved_settings.screen_id:
 		_restore_placement()
 	_applying = false
+	apply_runtime_settings(saved_settings)
 	if chat_window:
 		chat_window.update_settings(saved_settings)
 	if emotion_presenter:

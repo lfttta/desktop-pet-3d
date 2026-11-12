@@ -82,6 +82,21 @@ func _run() -> void:
 	service.reply(flat, "result", {"content": "好呀", "action": "spinning"})
 	check(actions.size() == 2 and actions[1] == "spinning", "a flat result frame carries its action, got %s" % [actions])
 
+	# `speak` is what gets read aloud. It is independent of `action`: a reply may
+	# act without speaking, speak without acting, or both. An empty field must not
+	# fall back to the whole reply text, or every long answer would be read out.
+	var speeches := []
+	session.speech_requested.connect(func(line: String): speeches.append(line))
+	var spoken := session.send("说句话")
+	service.event(spoken, "chat.done", {"message": {"content": "这是一段很长的回复正文。", "speak": "你好呀"}})
+	check(speeches == ["你好呀"], "a done frame's speak line reaches the player, got %s" % [speeches])
+	var silent := session.send("别说")
+	service.event(silent, "chat.done", {"message": {"content": "嗯", "speak": ""}})
+	check(speeches.size() == 1, "an empty speak field reads nothing, got %s" % [speeches])
+	var no_field := session.send("也别念")
+	service.event(no_field, "chat.done", {"message": {"content": "嗯嗯"}})
+	check(speeches.size() == 1, "a missing speak field reads nothing")
+
 	print("CHAT_FRAMEWORK_TESTS checks=", checks, " failures=", failures)
 	quit(0 if failures == 0 else 1)
 

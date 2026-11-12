@@ -3,6 +3,7 @@ extends SceneTree
 ## disabled state while the service is down.
 
 const SettingsWindow = preload("res://scripts/ui/settings_window.gd")
+const PetWindow = preload("res://scripts/pet_window.gd")
 
 var checks := 0
 var failures := 0
@@ -20,6 +21,9 @@ func _run() -> void:
 	await _test_controls_and_save()
 	await _test_unavailable()
 	await _test_legacy_schema()
+	await _test_behavior_performance_settings()
+	await _test_behavior_legacy_schema()
+	_test_runtime_settings()
 	print("DESKTOP_SETTINGS_TESTS checks=", checks, " failures=", failures)
 	quit(0 if failures == 0 else 1)
 
@@ -238,6 +242,154 @@ func _test_legacy_schema() -> void:
 		"desktop controls stay locked for a legacy service")
 	window.free()
 	host.free()
+
+
+## Schema 6 behavior/performance keys: populate restores them, out-of-range
+## values clamp into the spin boxes, and save sends them back.
+func _test_behavior_performance_settings() -> void:
+	var host := Node.new()
+	root.add_child(host)
+	var fake := FakeService.new()
+	host.add_child(fake)
+	var window := SettingsWindow.new()
+	window.visible = false
+	host.add_child(window)
+	await process_frame
+	window.show_status("ready", "后台服务已连接")
+	var settings := _settings()
+	settings["schema_version"] = 6
+	settings["behavior"] = {"enabled": false}
+	settings["performance"] = {"idle_fps": 45, "drag_fps": 90, "hidden_fps": 10}
+	settings["autonomy"]["default_quiet_minutes"] = 60
+	window.populate(settings, [])
+	await process_frame
+
+	check(window.behavior_enabled != null, "basic page has a behavior switch")
+	check(window.idle_fps != null and window.drag_fps != null and window.hidden_fps != null,
+		"basic page has the three frame rate inputs")
+	check(window.idle_fps.min_value == 10 and window.idle_fps.max_value == 60,
+		"idle fps covers the service range 10 to 60")
+	check(window.drag_fps.min_value == 30 and window.drag_fps.max_value == 120,
+		"drag fps covers the service range 30 to 120")
+	check(window.hidden_fps.min_value == 1 and window.hidden_fps.max_value == 15,
+		"hidden fps covers the service range 1 to 15")
+	check(not window.behavior_enabled.disabled, "a v6 service unlocks the behavior switch")
+	check(window.idle_fps.editable and window.drag_fps.editable and window.hidden_fps.editable,
+		"a v6 service unlocks the frame rate inputs")
+	check(not window.behavior_enabled.button_pressed,
+		"populate restores behavior.enabled")
+	check(window.idle_fps.value == 45 and window.drag_fps.value == 90 and window.hidden_fps.value == 10,
+		"populate restores performance idle/drag/hidden fps")
+	check(window._quiet_minutes_value() == 60,
+		"populate restores autonomy.default_quiet_minutes")
+	var choices: Array = []
+	for index in range(window.quiet_minutes.item_count):
+		choices.append(int(window.quiet_minutes.get_item_metadata(index)))
+	check(choices.has(15) and choices.has(30) and choices.has(60) and choices.has(120),
+		"quiet duration offers 15/30/60/120, got %s" % [choices])
+
+	# Out-of-range saved values clamp into the spin boxes instead of being kept.
+	settings["performance"] = {"idle_fps": 999, "drag_fps": 1, "hidden_fps": 99}
+	settings["autonomy"]["default_quiet_minutes"] = 999
+	window.populate(settings, [])
+	await process_frame
+	check(window.idle_fps.value == 60, "an oversized idle fps clamps to 60")
+	check(window.drag_fps.value == 30, "an undersized drag fps clamps to 30")
+	check(window.hidden_fps.value == 15, "an oversized hidden fps clamps to 15")
+	check(window._quiet_minutes_value() == 240,
+		"an oversized quiet duration clamps to the service maximum")
+
+	var patches: Array = []
+	window.save_requested.connect(func(value: Dictionary): patches.append(value))
+	window._save()
+	check(patches.size() == 1, "a v6 save emits one patch")
+	var patch: Dictionary = patches[0]
+	check(patch.has("behavior") and patch.behavior.enabled == false,
+		"save patch carries behavior.enabled")
+	check(patch.has("performance"), "save patch includes the performance group")
+	check(int(patch.performance.idle_fps) == 60 and int(patch.performance.drag_fps) == 30
+		and int(patch.performance.hidden_fps) == 15,
+		"save patch carries the clamped frame rates")
+	check(int(patch.autonomy.default_quiet_minutes) == 240,
+		"save patch carries autonomy.default_quiet_minutes")
+
+	# The quiet button now uses the selected duration instead of a fixed 30.
+	window._select_quiet_minutes(120)
+	window._set_quiet()
+	var quiet_request: Dictionary = fake.requests[fake.requests.size() - 1]
+	check(quiet_request.type == "autonomy.set_quiet",
+		"the quiet button sends autonomy.set_quiet")
+	check(int(quiet_request.payload.minutes) == 120,
+		"the quiet action uses the selected duration, got %s" % [quiet_request.payload.minutes])
+
+	window.free()
+	host.free()
+
+
+## A schema 5 service knows neither new group, so save must omit them.
+func _test_behavior_legacy_schema() -> void:
+	var host := Node.new()
+	root.add_child(host)
+	var fake := FakeService.new()
+	host.add_child(fake)
+	var window := SettingsWindow.new()
+	window.visible = false
+	host.add_child(window)
+	await process_frame
+	window.show_status("ready", "后台服务已连接")
+	window.populate(_settings(), [])
+	await process_frame
+	check(window.behavior_enabled.disabled, "a v5 service leaves the behavior switch locked")
+	check(not window.idle_fps.editable and not window.drag_fps.editable
+		and not window.hidden_fps.editable,
+		"a v5 service leaves the frame rate inputs locked")
+	var patches: Array = []
+	window.save_requested.connect(func(value: Dictionary): patches.append(value))
+	window._save()
+	check(patches.size() == 1, "a v5 save still emits one patch")
+	check(not patches[0].has("behavior"), "a v5 service receives no behavior group")
+	check(not patches[0].has("performance"), "a v5 service receives no performance group")
+	check(not patches[0].autonomy.has("default_quiet_minutes"),
+		"a v5 service receives no autonomy.default_quiet_minutes")
+	window.free()
+	host.free()
+
+
+## pet_window.apply_runtime_settings is the entry point main.gd calls with the
+## settings document; it must read every key without a running scene.
+func _test_runtime_settings() -> void:
+	var window := PetWindow.new()
+	window.apply_runtime_settings({
+		"behavior": {"enabled": false},
+		"performance": {"idle_fps": 20, "drag_fps": 45, "hidden_fps": 3},
+	})
+	check(not window.behavior_enabled, "apply_runtime_settings turns the behavior chain off")
+	check(window.idle_fps == 20 and window.drag_fps == 45 and window.hidden_fps == 3,
+		"apply_runtime_settings reads the three frame caps")
+	check(Engine.max_fps == 20, "the idle frame cap reaches Engine.max_fps")
+
+	window.hidden = true
+	window.apply_runtime_settings({})
+	check(Engine.max_fps == 3, "the hidden frame cap applies while hidden")
+	window.hidden = false
+
+	window.apply_runtime_settings({
+		"performance": {"idle_fps": 999, "drag_fps": 1, "hidden_fps": 0},
+	})
+	check(window.idle_fps == 20 and window.drag_fps == 45 and window.hidden_fps == 3,
+		"out-of-range frame caps keep the previous values")
+	check(not window.behavior_enabled,
+		"a missing behavior group leaves the current switch alone")
+
+	# --no-behavior still wins over a saved true.
+	var forced := PetWindow.new()
+	forced._behavior_forced_off = true
+	forced.behavior_enabled = false
+	forced.apply_runtime_settings({"behavior": {"enabled": true}})
+	check(not forced.behavior_enabled, "--no-behavior wins over behavior.enabled")
+	Engine.max_fps = 30
+	window.free()
+	forced.free()
 
 class FakeService extends Node:
 	signal request_finished(id: String, type: String, payload: Dictionary)

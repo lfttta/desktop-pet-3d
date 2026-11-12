@@ -152,6 +152,18 @@ func _test_controls_and_save() -> void:
 		"prompt logging is off by default and travels in the patch")
 	check(int(patch.ai.max_tokens) == 800, "max_tokens round-trips into the patch")
 	check(int(patch.ai.max_retries) == 1, "max_retries round-trips into the patch")
+	# Keys that used to exist only in the schema. Each one now has a control and
+	# must still travel; a control that never saves is the same lie as no control.
+	check(str(patch.ai.provider) == "deepseek", "ai.provider travels in the patch")
+	check(str(patch.ai.chat_path) == "/v1/chat/completions", "ai.chat_path travels in the patch")
+	check(str(patch.ai.currency) == "USD", "ai.currency travels in the patch")
+	check(int(patch.memory.max_injected) == 5, "memory.max_injected travels in the patch")
+	check(int(patch.memory.max_entry_chars) == 500, "memory.max_entry_chars travels in the patch")
+	check(patch.expression.enabled == true and patch.expression.phrases_enabled == true,
+		"expression switches travel in the patch")
+	check(int(patch.autonomy.min_seconds_between) == 1800,
+		"autonomy.min_seconds_between travels in the patch")
+	check(int(patch.autonomy.max_per_hour) == 2, "autonomy.max_per_hour travels in the patch")
 
 	window.free()
 	host.free()

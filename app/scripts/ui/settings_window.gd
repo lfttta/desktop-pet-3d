@@ -9,7 +9,9 @@ const ExpressionPanel = preload("res://scripts/ui/expression_panel.gd")
 const GrowthPanel = preload("res://scripts/ui/growth_panel.gd")
 const UsagePanel = preload("res://scripts/ui/usage_panel.gd")
 const AI_DEFAULTS := {
+	"provider": "deepseek",
 	"base_url": "https://api.deepseek.com",
+	"chat_path": "/v1/chat/completions",
 	"model": "deepseek-chat",
 	"temperature": 0.8,
 	"connect_timeout_ms": 5000,
@@ -18,6 +20,9 @@ const AI_DEFAULTS := {
 	"monthly_cost_budget": 15.0,
 	"max_tokens": 800,
 	"max_retries": 1,
+	"currency": "USD",
+	"input_price_per_million": 0.0,
+	"output_price_per_million": 0.0,
 }
 const PRIVACY_DEFAULTS := {
 	"log_prompts": false,
@@ -25,6 +30,8 @@ const PRIVACY_DEFAULTS := {
 const MEMORY_DEFAULTS := {
 	"enabled": true,
 	"auto_capture": false,
+	"max_injected": 5,
+	"max_entry_chars": 500,
 }
 const MEMORY_COMPACTION_DEFAULTS := {
 	"enabled": false,
@@ -51,6 +58,12 @@ const VOICE_DEFAULTS := {
 	"rate": 0,
 	"volume": 70,
 }
+const EXPRESSION_DEFAULTS := {
+	"enabled": true,
+	"phrases_enabled": true,
+}
+## `desktop.dnd_policy` only accepts these two; the service rejects anything else.
+const DND_POLICIES := ["silent", "minimal"]
 const GROWTH_DEFAULTS := {
 	"enabled": false,
 	"min_sessions": 3,
@@ -64,6 +77,8 @@ const AUTONOMY_DEFAULTS := {
 	"quiet_end": "08:00",
 	"cloud_enabled": true,
 	"default_quiet_minutes": 30,
+	"min_seconds_between": 1800,
+	"max_per_hour": 2,
 }
 const BEHAVIOR_DEFAULTS := {
 	"enabled": true,
@@ -138,8 +153,21 @@ var ai_daily_tokens: SpinBox
 var ai_monthly_budget: SpinBox
 var ai_max_tokens: SpinBox
 var ai_max_retries: SpinBox
+var ai_provider: LineEdit
+var ai_chat_path: LineEdit
+var ai_currency: LineEdit
+var ai_input_price: SpinBox
+var ai_output_price: SpinBox
 var privacy_log_prompts: CheckButton
 var voice_enabled: CheckButton
+var memory_max_injected: SpinBox
+var memory_max_entry_chars: SpinBox
+var expression_enabled: CheckButton
+var expression_phrases: CheckButton
+var autonomy_min_gap: SpinBox
+var autonomy_max_hour: SpinBox
+var desktop_poll: SpinBox
+var dnd_policy: OptionButton
 var memory_enabled: CheckButton
 var memory_auto_capture: CheckButton
 var compaction_enabled: CheckButton
@@ -192,8 +220,6 @@ var _desktop_status_due := 0
 var _desktop_known := false
 # Values the service reported but the window has no control for. Saving must
 # send them back unchanged instead of overwriting them with a constant.
-var _desktop_poll_seconds := int(DESKTOP_DEFAULTS.poll_seconds)
-var _desktop_dnd_policy := str(DESKTOP_DEFAULTS.dnd_policy)
 # Same rule for the voice group: only `enabled` has a control, so the voice
 # name, rate and volume have to travel back untouched.
 var _voice_name := str(VOICE_DEFAULTS.voice)
@@ -320,9 +346,17 @@ func _build_basic_page() -> void:
 
 func _build_ai_page() -> void:
 	var page := _page("AI", "AiPage")
+	ai_provider = LineEdit.new()
+	ai_provider.max_length = 64
+	ai_provider.placeholder_text = "deepseek"
+	_row(page, "提供方标记", ai_provider)
 	ai_base_url = LineEdit.new()
 	ai_base_url.max_length = 2048
 	_row(page, "服务地址", ai_base_url)
+	ai_chat_path = LineEdit.new()
+	ai_chat_path.max_length = 512
+	ai_chat_path.placeholder_text = "/v1/chat/completions"
+	_row(page, "请求路径", ai_chat_path)
 	ai_model = LineEdit.new()
 	ai_model.max_length = 200
 	_row(page, "模型", ai_model)
@@ -366,6 +400,15 @@ func _build_ai_page() -> void:
 	_row(page, "单次回复上限（tokens）", ai_max_tokens)
 	ai_max_retries = _spin(0, 10, 1)
 	_row(page, "失败重试次数", ai_max_retries)
+	_section(page, "计费")
+	ai_currency = LineEdit.new()
+	ai_currency.max_length = 3
+	ai_currency.placeholder_text = "USD"
+	_row(page, "币种", ai_currency)
+	ai_input_price = _spin(0.0, 1000000.0, 0.01)
+	_row(page, "输入价 / 百万 token", ai_input_price)
+	ai_output_price = _spin(0.0, 1000000.0, 0.01)
+	_row(page, "输出价 / 百万 token", ai_output_price)
 	_section(page, "语音")
 	voice_enabled = CheckButton.new()
 	voice_enabled.text = "朗读回复"
@@ -403,6 +446,10 @@ func _build_memory_page() -> void:
 	memory_auto_capture = CheckButton.new()
 	memory_auto_capture.text = "自动记录对话"
 	_row(page, "自动记录", memory_auto_capture)
+	memory_max_injected = _spin(0, 50, 1)
+	_row(page, "每轮注入条数", memory_max_injected)
+	memory_max_entry_chars = _spin(1, 100000, 1)
+	_row(page, "单条最大字数", memory_max_entry_chars)
 	_section(page, "整理与归档")
 	compaction_enabled = CheckButton.new()
 	compaction_enabled.text = "启用记忆整理"
@@ -429,6 +476,12 @@ func _build_memory_page() -> void:
 
 func _build_expression_page() -> void:
 	var page := _page("表达", "ExpressionPage")
+	expression_enabled = CheckButton.new()
+	expression_enabled.text = "启用表达（表情与语气）"
+	_row(page, "表达", expression_enabled)
+	expression_phrases = CheckButton.new()
+	expression_phrases.text = "启用台词库"
+	_row(page, "台词库", expression_phrases)
 	expression_panel = ExpressionPanel.new()
 	expression_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	page.add_child(expression_panel)
@@ -441,6 +494,10 @@ func _build_autonomy_page() -> void:
 	cloud_proactive = CheckButton.new()
 	cloud_proactive.text = "使用云端生成主动消息"
 	_row(page, "云端主动消息", cloud_proactive)
+	autonomy_min_gap = _spin(0, 86400, 60)
+	_row(page, "两次主动最小间隔（秒）", autonomy_min_gap)
+	autonomy_max_hour = _spin(0, 1000, 1)
+	_row(page, "每小时最多几次", autonomy_max_hour)
 	quiet_start_input = LineEdit.new()
 	quiet_start_input.max_length = 5
 	quiet_start_input.placeholder_text = "HH:MM"
@@ -455,6 +512,10 @@ func _build_autonomy_page() -> void:
 	_row(page, "桌面感知", desktop_enabled)
 	desktop_idle = _spin(DESKTOP_IDLE_MIN, DESKTOP_IDLE_MAX, 1)
 	_row(page, "空闲判定秒数", desktop_idle)
+	desktop_poll = _spin(1, 60, 1)
+	_row(page, "采样间隔（秒）", desktop_poll)
+	dnd_policy = _policy_option(["静默", "仅关怀"], DND_POLICIES)
+	_row(page, "系统免打扰时", dnd_policy)
 	fullscreen_policy = _policy_option(["静默", "仅关怀"], FULLSCREEN_POLICIES)
 	_row(page, "全屏时", fullscreen_policy)
 	work_focus_policy = _policy_option(["静默", "仅关怀", "正常"], WORK_FOCUS_POLICIES)
@@ -610,7 +671,9 @@ func populate(settings: Dictionary, displays: Array) -> void:
 		selected = _display_ids.size() - 1
 	display_choice.select(selected)
 	var ai := _group(settings, "ai")
+	ai_provider.text = str(ai.get("provider", AI_DEFAULTS.provider))
 	ai_base_url.text = str(ai.get("base_url", AI_DEFAULTS.base_url))
+	ai_chat_path.text = str(ai.get("chat_path", AI_DEFAULTS.chat_path))
 	ai_model.text = str(ai.get("model", AI_DEFAULTS.model))
 	ai_temperature.value = clampf(float(ai.get("temperature", AI_DEFAULTS.temperature)), 0.0, 2.0)
 	ai_temperature_value.text = "%.2f" % ai_temperature.value
@@ -620,6 +683,9 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	ai_monthly_budget.value = float(ai.get("monthly_cost_budget", AI_DEFAULTS.monthly_cost_budget))
 	ai_max_tokens.value = float(ai.get("max_tokens", AI_DEFAULTS.max_tokens))
 	ai_max_retries.value = float(ai.get("max_retries", AI_DEFAULTS.max_retries))
+	ai_currency.text = str(ai.get("currency", AI_DEFAULTS.currency))
+	ai_input_price.value = float(ai.get("input_price_per_million", AI_DEFAULTS.input_price_per_million))
+	ai_output_price.value = float(ai.get("output_price_per_million", AI_DEFAULTS.output_price_per_million))
 	var privacy := _group(settings, "privacy")
 	privacy_log_prompts.button_pressed = bool(privacy.get("log_prompts", PRIVACY_DEFAULTS.log_prompts))
 	var voice := _group(settings, "voice")
@@ -635,6 +701,8 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	var memory := _group(settings, "memory")
 	memory_enabled.button_pressed = bool(memory.get("enabled", MEMORY_DEFAULTS.enabled))
 	memory_auto_capture.button_pressed = bool(memory.get("auto_capture", MEMORY_DEFAULTS.auto_capture))
+	memory_max_injected.value = float(memory.get("max_injected", MEMORY_DEFAULTS.max_injected))
+	memory_max_entry_chars.value = float(memory.get("max_entry_chars", MEMORY_DEFAULTS.max_entry_chars))
 	var compaction := _group(memory, "compaction")
 	compaction_enabled.button_pressed = bool(compaction.get("enabled", MEMORY_COMPACTION_DEFAULTS.enabled))
 	compaction_model_compress.button_pressed = bool(compaction.get("model_compress", MEMORY_COMPACTION_DEFAULTS.model_compress))
@@ -646,6 +714,8 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	archive_enabled.button_pressed = bool(archive.get("enabled", MEMORY_ARCHIVE_DEFAULTS.enabled))
 	archive_stale_days.value = float(archive.get("topic_stale_days", MEMORY_ARCHIVE_DEFAULTS.topic_stale_days))
 	var expression := _group(settings, "expression")
+	expression_enabled.button_pressed = bool(expression.get("enabled", EXPRESSION_DEFAULTS.enabled))
+	expression_phrases.button_pressed = bool(expression.get("phrases_enabled", EXPRESSION_DEFAULTS.phrases_enabled))
 	if expression_panel:
 		expression_panel.populate_style(_group(expression, "style"))
 	var growth := _group(settings, "growth")
@@ -661,6 +731,8 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	cloud_proactive.button_pressed = bool(autonomy.get("cloud_enabled", AUTONOMY_DEFAULTS.cloud_enabled))
 	quiet_start_input.text = str(autonomy.get("quiet_start", AUTONOMY_DEFAULTS.quiet_start))
 	quiet_end_input.text = str(autonomy.get("quiet_end", AUTONOMY_DEFAULTS.quiet_end))
+	autonomy_min_gap.value = float(autonomy.get("min_seconds_between", AUTONOMY_DEFAULTS.min_seconds_between))
+	autonomy_max_hour.value = float(autonomy.get("max_per_hour", AUTONOMY_DEFAULTS.max_per_hour))
 	_select_quiet_minutes(int(autonomy.get("default_quiet_minutes", AUTONOMY_DEFAULTS.default_quiet_minutes)))
 	var behavior := _group(settings, "behavior")
 	behavior_enabled.button_pressed = bool(behavior.get("enabled", BEHAVIOR_DEFAULTS.enabled))
@@ -675,9 +747,8 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	_select_policy(fullscreen_policy, str(desktop.get("fullscreen_policy", DESKTOP_DEFAULTS.fullscreen_policy)))
 	_select_policy(work_focus_policy, str(desktop.get("work_focus_policy", DESKTOP_DEFAULTS.work_focus_policy)))
 	_select_policy(idle_policy, str(desktop.get("idle_policy", DESKTOP_DEFAULTS.idle_policy)))
-	# Keep service-only values so saving does not overwrite them.
-	_desktop_poll_seconds = int(desktop.get("poll_seconds", DESKTOP_DEFAULTS.poll_seconds))
-	_desktop_dnd_policy = str(desktop.get("dnd_policy", DESKTOP_DEFAULTS.dnd_policy))
+	desktop_poll.value = float(desktop.get("poll_seconds", DESKTOP_DEFAULTS.poll_seconds))
+	_select_policy(dnd_policy, str(desktop.get("dnd_policy", DESKTOP_DEFAULTS.dnd_policy)))
 	# The schema version decides whether the desktop controls are editable.
 	_refresh_controls()
 	_request_desktop_status()
@@ -699,7 +770,9 @@ func _save() -> void:
 		"scale": size_slider.value,
 		"screen_id": _display_ids[display_choice.selected],
 		"ai": {
+			"provider": ai_provider.text.strip_edges(),
 			"base_url": ai_base_url.text.strip_edges(),
+			"chat_path": ai_chat_path.text.strip_edges(),
 			"model": ai_model.text.strip_edges(),
 			"temperature": ai_temperature.value,
 			"connect_timeout_ms": int(ai_connect_timeout.value),
@@ -708,6 +781,9 @@ func _save() -> void:
 			"monthly_cost_budget": ai_monthly_budget.value,
 			"max_tokens": int(ai_max_tokens.value),
 			"max_retries": int(ai_max_retries.value),
+			"currency": ai_currency.text.strip_edges().to_upper(),
+			"input_price_per_million": ai_input_price.value,
+			"output_price_per_million": ai_output_price.value,
 			"embedding": {
 				"enabled": embedding_enabled.button_pressed,
 				"model": embedding_model.text.strip_edges(),
@@ -717,6 +793,8 @@ func _save() -> void:
 		"memory": {
 			"enabled": memory_enabled.button_pressed,
 			"auto_capture": memory_auto_capture.button_pressed,
+			"max_injected": int(memory_max_injected.value),
+			"max_entry_chars": int(memory_max_entry_chars.value),
 			"compaction": {
 				"enabled": compaction_enabled.button_pressed,
 				"model_compress": compaction_model_compress.button_pressed,
@@ -756,15 +834,19 @@ func _save() -> void:
 	if _supports_desktop() and _desktop_available:
 		patch["desktop"] = {
 			"enabled": desktop_enabled.button_pressed,
-			"poll_seconds": _desktop_poll_seconds,
+			"poll_seconds": int(desktop_poll.value),
 			"idle_after_seconds": int(desktop_idle.value),
 			"fullscreen_policy": _policy_value(fullscreen_policy, DESKTOP_DEFAULTS.fullscreen_policy),
-			"dnd_policy": _desktop_dnd_policy,
+			"dnd_policy": _policy_value(dnd_policy, DESKTOP_DEFAULTS.dnd_policy),
 			"work_focus_policy": _policy_value(work_focus_policy, DESKTOP_DEFAULTS.work_focus_policy),
 			"idle_policy": _policy_value(idle_policy, DESKTOP_DEFAULTS.idle_policy),
 		}
 	if expression_panel:
-		patch["expression"] = {"style": expression_panel.style_values()}
+		patch["expression"] = {
+			"enabled": expression_enabled.button_pressed,
+			"phrases_enabled": expression_phrases.button_pressed,
+			"style": expression_panel.style_values(),
+		}
 	save_requested.emit(patch)
 
 ## True only when the connected service understands the keys introduced at
@@ -782,6 +864,8 @@ func _autonomy_patch(quiet_start: String, quiet_end: String) -> Dictionary:
 		"enabled": autonomy_enabled.button_pressed,
 		"quiet_start": quiet_start,
 		"quiet_end": quiet_end,
+		"min_seconds_between": int(autonomy_min_gap.value),
+		"max_per_hour": int(autonomy_max_hour.value),
 	}
 	if _supports_desktop():
 		patch["cloud_enabled"] = cloud_proactive.button_pressed

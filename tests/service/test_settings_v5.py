@@ -1,4 +1,5 @@
-"""Settings schema v5 contracts: desktop group, cloud switch and migrations."""
+"""Settings schema v5/v6 contracts: desktop group, cloud switch, behavior,
+performance and migrations."""
 
 from copy import deepcopy
 import json
@@ -7,12 +8,14 @@ import pytest
 
 from service.settings import (
     AUTONOMY_DEFAULTS,
+    BEHAVIOR_DEFAULTS,
     DEFAULTS,
     DESKTOP_DEFAULTS,
     GROWTH_DEFAULTS,
     AI_EMBEDDING_DEFAULTS,
     MEMORY_ARCHIVE_DEFAULTS,
     MEMORY_COMPACTION_DEFAULTS,
+    PERFORMANCE_DEFAULTS,
     SCHEMA_VERSION,
     SettingsStore,
     ValidationError,
@@ -21,11 +24,15 @@ from service.settings import (
 
 
 def _v4_document():
-    """A realistic v4 document: no desktop group, the original six autonomy keys."""
+    """A realistic v4 document: no desktop/behavior/performance groups, the
+    original six autonomy keys."""
     document = deepcopy(DEFAULTS)
     document['schema_version'] = 4
     del document['desktop']
+    del document['behavior']
+    del document['performance']
     del document['autonomy']['cloud_enabled']
+    del document['autonomy']['default_quiet_minutes']
     document['scale'] = 0.75
     document['screen_id'] = 'monitor-2'
     document['user_name'] = '小明'
@@ -49,13 +56,20 @@ def _write(tmp_path, document):
 
 
 def test_default_document_and_fresh_store_validate(tmp_path):
-    assert SCHEMA_VERSION == 5
+    assert SCHEMA_VERSION == 6
     assert validate_document(deepcopy(DEFAULTS)) == DEFAULTS
     store = SettingsStore(tmp_path)
     assert store.settings == DEFAULTS
     assert validate_document(store.settings) == DEFAULTS
     assert store.settings['desktop'] == DESKTOP_DEFAULTS
+    assert store.settings['behavior'] == {'enabled': True}
+    assert store.settings['behavior'] == BEHAVIOR_DEFAULTS
+    assert store.settings['performance'] == {
+        'idle_fps': 30, 'drag_fps': 60, 'hidden_fps': 5,
+    }
+    assert store.settings['performance'] == PERFORMANCE_DEFAULTS
     assert store.settings['autonomy']['cloud_enabled'] is True
+    assert store.settings['autonomy']['default_quiet_minutes'] == 30
     assert json.loads((tmp_path / 'settings.json').read_text('utf-8')) == DEFAULTS
 
 
@@ -64,9 +78,12 @@ def test_v4_document_migrates_and_fills_desktop_and_cloud_enabled(tmp_path):
     path = _write(tmp_path, v4)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 5
+    assert store.settings['schema_version'] == 6
     assert store.settings['desktop'] == DESKTOP_DEFAULTS
+    assert store.settings['behavior'] == BEHAVIOR_DEFAULTS
+    assert store.settings['performance'] == PERFORMANCE_DEFAULTS
     assert store.settings['autonomy']['cloud_enabled'] is True
+    assert store.settings['autonomy']['default_quiet_minutes'] == 30
     # Every value already stored in v4 survives the migration unchanged.
     for key in ('character_id', 'persona_id', 'scale', 'screen_id', 'user_name',
                 'placement'):
@@ -81,12 +98,12 @@ def test_v4_document_migrates_and_fills_desktop_and_cloud_enabled(tmp_path):
     assert store.settings['autonomy']['max_per_hour'] == 5
     assert store.settings['growth']['min_sessions'] == 5
     assert store.settings['privacy']['log_prompts'] is True
-    assert any('schema version 5' in warning for warning in store.warnings)
+    assert any('schema version 6' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 
 
-def test_v3_document_migrates_to_v5_and_preserves_values(tmp_path):
+def test_v3_document_migrates_to_v6_and_preserves_values(tmp_path):
     v3 = {
         'schema_version': 3, 'character_id': 'godette', 'persona_id': 'godette',
         'scale': 0.75, 'screen_id': 'monitor-2', 'user_name': '小明',
@@ -116,7 +133,7 @@ def test_v3_document_migrates_to_v5_and_preserves_values(tmp_path):
     path = _write(tmp_path, v3)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 5
+    assert store.settings['schema_version'] == 6
     assert store.settings['scale'] == 0.75
     assert store.settings['ai']['temperature'] == 0.3
     assert store.settings['ai']['embedding'] == AI_EMBEDDING_DEFAULTS
@@ -127,11 +144,82 @@ def test_v3_document_migrates_to_v5_and_preserves_values(tmp_path):
     assert store.settings['autonomy']['enabled'] is True
     assert store.settings['autonomy']['quiet_start'] == '22:00'
     assert store.settings['autonomy']['cloud_enabled'] is True
+    assert store.settings['autonomy']['default_quiet_minutes'] == 30
     assert store.settings['growth'] == GROWTH_DEFAULTS
     assert store.settings['desktop'] == DESKTOP_DEFAULTS
+    assert store.settings['behavior'] == BEHAVIOR_DEFAULTS
+    assert store.settings['performance'] == PERFORMANCE_DEFAULTS
     assert store.settings['privacy']['log_prompts'] is True
-    assert any('schema version 5' in warning for warning in store.warnings)
+    assert any('schema version 6' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
+
+
+def _v5_document(with_voice=True):
+    """A schema 5 document, with or without the late-added voice group."""
+    document = deepcopy(DEFAULTS)
+    document['schema_version'] = 5
+    del document['behavior']
+    del document['performance']
+    del document['autonomy']['default_quiet_minutes']
+    if not with_voice:
+        del document['voice']
+    document['scale'] = 0.8
+    document['user_name'] = '阿明'
+    document['ai']['temperature'] = 0.25
+    document['autonomy']['enabled'] = True
+    document['autonomy']['quiet_start'] = '21:30'
+    document['autonomy']['max_per_hour'] = 4
+    return document
+
+
+@pytest.mark.parametrize('with_voice', [True, False])
+def test_v5_document_migrates_to_v6_and_fills_new_keys(tmp_path, with_voice):
+    v5 = _v5_document(with_voice)
+    if with_voice:
+        v5['voice'] = {'enabled': False, 'voice': 'zh-CN-XiaoxiaoNeural',
+                       'rate': 3, 'volume': 40}
+    path = _write(tmp_path, v5)
+
+    store = SettingsStore(tmp_path)
+    assert store.settings['schema_version'] == 6
+    assert store.settings['behavior'] == {'enabled': True}
+    assert store.settings['performance'] == {
+        'idle_fps': 30, 'drag_fps': 60, 'hidden_fps': 5,
+    }
+    assert store.settings['autonomy']['default_quiet_minutes'] == 30
+    # Everything the v5 file already stored survives the migration.
+    assert store.settings['scale'] == 0.8
+    assert store.settings['user_name'] == '阿明'
+    assert store.settings['ai']['temperature'] == 0.25
+    assert store.settings['autonomy']['enabled'] is True
+    assert store.settings['autonomy']['quiet_start'] == '21:30'
+    assert store.settings['autonomy']['max_per_hour'] == 4
+    if with_voice:
+        assert store.settings['voice'] == {
+            'enabled': False, 'voice': 'zh-CN-XiaoxiaoNeural',
+            'rate': 3, 'volume': 40,
+        }
+    else:
+        assert store.settings['voice'] == DEFAULTS['voice']
+    assert any('schema version 6' in warning for warning in store.warnings)
+    assert json.loads(path.read_text('utf-8')) == store.settings
+    # The migrated file is already v6, so a second open has nothing to do.
+    assert SettingsStore(tmp_path).warnings == []
+
+
+def test_v5_with_voice_values_keeps_them_through_migration(tmp_path):
+    # The voice group was added to schema 5 by another change; a v5 file that
+    # already carries it must not be reset to defaults or treated as invalid.
+    v5 = _v5_document(with_voice=True)
+    v5['voice']['enabled'] = False
+    v5['voice']['volume'] = 0
+    _write(tmp_path, v5)
+
+    store = SettingsStore(tmp_path)
+    assert store.settings['schema_version'] == 6
+    assert store.settings['voice']['enabled'] is False
+    assert store.settings['voice']['volume'] == 0
+    assert all('Invalid settings' not in warning for warning in store.warnings)
 
 
 @pytest.mark.parametrize('patch', [
@@ -157,8 +245,29 @@ def test_v3_document_migrates_to_v5_and_preserves_values(tmp_path):
     {'desktop': {'unknown': True}},
     {'autonomy': {'cloud_enabled': 1}},
     {'autonomy': {'cloud_enabled': 'true'}},
+    {'behavior': {'enabled': 1}},
+    {'behavior': {'enabled': 'true'}},
+    {'behavior': {'enabled': None}},
+    {'behavior': {'unknown': True}},
+    {'behavior': True},
+    {'performance': {'idle_fps': 9}},
+    {'performance': {'idle_fps': 61}},
+    {'performance': {'idle_fps': 30.0}},
+    {'performance': {'idle_fps': True}},
+    {'performance': {'drag_fps': 29}},
+    {'performance': {'drag_fps': 121}},
+    {'performance': {'drag_fps': 60.0}},
+    {'performance': {'hidden_fps': 0}},
+    {'performance': {'hidden_fps': 16}},
+    {'performance': {'hidden_fps': False}},
+    {'performance': {'unknown': 1}},
+    {'autonomy': {'default_quiet_minutes': 4}},
+    {'autonomy': {'default_quiet_minutes': 241}},
+    {'autonomy': {'default_quiet_minutes': 30.0}},
+    {'autonomy': {'default_quiet_minutes': True}},
+    {'autonomy': {'default_quiet_minutes': '30'}},
 ])
-def test_invalid_desktop_and_cloud_values_are_rejected(tmp_path, patch):
+def test_invalid_new_and_desktop_values_are_rejected(tmp_path, patch):
     store = SettingsStore(tmp_path)
     before = store.settings
     raw = (tmp_path / 'settings.json').read_bytes()
@@ -166,6 +275,28 @@ def test_invalid_desktop_and_cloud_values_are_rejected(tmp_path, patch):
         store.update(patch)
     assert store.settings == before
     assert (tmp_path / 'settings.json').read_bytes() == raw
+
+
+def test_new_keys_accept_inclusive_boundaries_and_round_trip(tmp_path):
+    store = SettingsStore(tmp_path)
+    saved = store.update({
+        'behavior': {'enabled': False},
+        'performance': {'idle_fps': 10, 'drag_fps': 30, 'hidden_fps': 1},
+        'autonomy': {'default_quiet_minutes': 5},
+    })
+    assert saved['behavior']['enabled'] is False
+    assert saved['performance'] == {'idle_fps': 10, 'drag_fps': 30, 'hidden_fps': 1}
+    assert saved['autonomy']['default_quiet_minutes'] == 5
+    assert SettingsStore(tmp_path).settings == saved
+
+    saved = store.update({
+        'behavior': {'enabled': True},
+        'performance': {'idle_fps': 60, 'drag_fps': 120, 'hidden_fps': 15},
+        'autonomy': {'default_quiet_minutes': 240},
+    })
+    assert saved['behavior']['enabled'] is True
+    assert saved['performance'] == {'idle_fps': 60, 'drag_fps': 120, 'hidden_fps': 15}
+    assert saved['autonomy']['default_quiet_minutes'] == 240
 
 
 def test_desktop_boundaries_and_every_policy_choice_are_accepted(tmp_path):

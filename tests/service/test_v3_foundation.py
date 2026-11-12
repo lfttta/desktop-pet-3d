@@ -32,11 +32,11 @@ def test_v2_settings_migrate_to_v5_and_keep_old_fields(tmp_path):
     store = SettingsStore(tmp_path)
     old_fields = {key: value for key, value in v2.items() if key != 'schema_version'}
     assert {key: store.settings[key] for key in old_fields} == old_fields
-    assert store.settings['schema_version'] == 5
+    assert store.settings['schema_version'] == 6
     for group in ('ai', 'memory', 'expression', 'autonomy', 'privacy', 'growth',
                   'desktop'):
         assert store.settings[group] == DEFAULTS[group]
-    assert any('schema version 5' in warning for warning in store.warnings)
+    assert any('schema version 6' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 
@@ -129,10 +129,10 @@ def test_hello_advertises_v3_features_and_personas(tmp_path):
     event, payload = dispatch({'type': 'hello', 'id': 'hello',
                                'payload': {'protocol_version': 1}}, store)
     assert event == 'ready'
-    assert payload['settings']['schema_version'] == 5
-    assert set(payload['features']) == {'chat', 'memory', 'state', 'autonomy',
-                                        'expression', 'growth', 'usage', 'diag',
-                                        'desktop'}
+    assert payload['settings']['schema_version'] == 6
+    assert sorted(payload['features']) == sorted([
+        'chat', 'memory', 'state', 'autonomy', 'expression', 'growth', 'usage',
+        'diag', 'desktop', 'voice'])
     expected = {
         'chat': ['chat.send', 'chat.cancel', 'chat.history'],
         'memory': ['memory.search', 'memory.propose', 'memory.correct',
@@ -208,7 +208,7 @@ def test_one_request_can_emit_delta_frames_then_done(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('command', [
-    'voice.synthesize', 'tts.synthesize', 'tts.cancel',
+    'voice.synthesize', 'tts.cancel',
     'action.perform', 'personality.get', 'memory.fuzzy.search',
     'memory.index.rebuild', 'user.profile', 'memory.get', 'memory.update',
 ])

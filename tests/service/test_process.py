@@ -145,11 +145,20 @@ def test_fragmented_utf8_multiple_lines_persist_cancel_and_shutdown(launch, tmp_
     restarted.finish()
 
 
-@pytest.mark.parametrize('command', ['tts.synthesize', 'memory.update', 'user.profile'])
+@pytest.mark.parametrize('command', ['memory.update', 'user.profile'])
 def test_unavailable_features_are_explicit_errors(launch, command):
     client = launch()
     reply = client.request(command, {'text': 'hello'})
     assert reply['type'] == 'error' and reply['payload']['code'] == 'not_available'
+    client.finish()
+
+
+def test_tts_synthesize_is_no_longer_reserved(launch):
+    client = launch()
+    reply = client.request('tts.synthesize', {'text': ''})
+    assert reply['type'] == 'error'
+    assert reply['payload']['code'] == 'invalid_request'
+    assert 'not_available' not in json.dumps(reply, ensure_ascii=False)
     client.finish()
 
 

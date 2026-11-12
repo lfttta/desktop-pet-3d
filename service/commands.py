@@ -8,13 +8,13 @@ transport loop and error envelopes stay unchanged.
 
 from service import PROTOCOL_VERSION, SERVICE_VERSION
 from service.features import (ai, autonomy, capabilities, chat, desktop, diag, expression,
-                              growth, memory, state, usage)
+                              growth, memory, state, usage, voice)
 from service.persona import public_catalog
 from service.protocol import ProtocolError
 from service.settings import ValidationError
 
 
-RESERVED_COMMANDS = frozenset({'tts.synthesize'})
+RESERVED_COMMANDS = frozenset()
 RESERVED_PREFIXES = (
     'voice', 'tts', 'action', 'personality',
     'memory', 'memory.fuzzy', 'memory.index', 'user',
@@ -98,6 +98,7 @@ HANDLERS = {
     **usage.COMMANDS,
     **diag.COMMANDS,
     **desktop.COMMANDS,
+    **voice.COMMANDS,
 }
 
 

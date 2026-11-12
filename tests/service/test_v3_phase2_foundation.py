@@ -47,8 +47,9 @@ def test_hello_advertises_phase2_feature_groups(tmp_path):
     _, payload = dispatch({'type': 'hello', 'id': 'hello',
                            'payload': {'protocol_version': 1}}, store)
     features = payload['features']
-    assert set(features) == {'chat', 'memory', 'state', 'autonomy',
-                             'expression', 'growth', 'usage', 'diag', 'desktop'}
+    assert sorted(features) == sorted([
+        'chat', 'memory', 'state', 'autonomy', 'expression', 'growth', 'usage',
+        'diag', 'desktop', 'voice'])
     expected = {
         'expression': ['expression.phrases.list', 'expression.phrases.set_enabled'],
         'growth': ['growth.list', 'growth.approve', 'growth.reject', 'growth.history',

@@ -14,7 +14,7 @@ from service.jsonutil import MAX_FRAME_BYTES, dumps, loads
 from service.character_catalog import ALLOWED_CHARACTER_IDS
 from service.persona import ALLOWED_PERSONA_IDS, DEFAULT_PERSONA_ID
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 DEFAULTS_V1 = {
     'schema_version': 1, 'character_id': 'godette', 'scale': 1.0,
     'screen_id': '', 'user_name': '你',
@@ -89,6 +89,15 @@ AUTONOMY_DEFAULTS = {
     'max_per_hour': 2,
     'manual_quiet_until': '',
     'cloud_enabled': True,
+    'default_quiet_minutes': 30,
+}
+BEHAVIOR_DEFAULTS = {
+    'enabled': True,
+}
+PERFORMANCE_DEFAULTS = {
+    'idle_fps': 30,
+    'drag_fps': 60,
+    'hidden_fps': 5,
 }
 DESKTOP_DEFAULTS = {
     'enabled': True,
@@ -110,6 +119,12 @@ GROWTH_DEFAULTS = {
     'cooldown_days': 7,
     'locked_traits': [],
 }
+VOICE_DEFAULTS = {
+    'enabled': True,
+    'voice': '',
+    'rate': 0,
+    'volume': 70,
+}
 GROUP_DEFAULTS = {
     'ai': AI_DEFAULTS,
     'memory': MEMORY_DEFAULTS,
@@ -118,6 +133,9 @@ GROUP_DEFAULTS = {
     'privacy': PRIVACY_DEFAULTS,
     'growth': GROWTH_DEFAULTS,
     'desktop': DESKTOP_DEFAULTS,
+    'voice': VOICE_DEFAULTS,
+    'behavior': BEHAVIOR_DEFAULTS,
+    'performance': PERFORMANCE_DEFAULTS,
 }
 DEFAULTS = {
     'schema_version': SCHEMA_VERSION, 'character_id': 'godette',
@@ -273,6 +291,12 @@ def _group(name, value, partial):
             result[key] = _validate_growth(key, item)
         elif name == 'desktop':
             result[key] = _validate_desktop(key, item)
+        elif name == 'voice':
+            result[key] = _validate_voice(key, item)
+        elif name == 'behavior':
+            result[key] = _validate_behavior(key, item)
+        elif name == 'performance':
+            result[key] = _validate_performance(key, item)
         else:
             result[key] = _boolean(item)
     return result
@@ -363,6 +387,8 @@ def _validate_autonomy(key, value):
         return _integer(value, 0, 1000)
     if key == 'manual_quiet_until':
         return _optional_timestamp(value)
+    if key == 'default_quiet_minutes':
+        return _integer(value, 5, 240)
     raise ValidationError('unsupported autonomy setting')
 
 
@@ -384,6 +410,34 @@ def _validate_desktop(key, value):
     if key in DESKTOP_POLICY_CHOICES:
         return _choice(value, DESKTOP_POLICY_CHOICES[key], f'desktop.{key}')
     raise ValidationError('unsupported desktop setting')
+
+
+def _validate_voice(key, value):
+    if key == 'enabled':
+        return _boolean(value)
+    if key == 'voice':
+        return _string(value, 200)
+    if key == 'rate':
+        return _integer(value, -10, 10)
+    if key == 'volume':
+        return _integer(value, 0, 100)
+    raise ValidationError('unsupported voice setting')
+
+
+def _validate_behavior(key, value):
+    if key == 'enabled':
+        return _boolean(value)
+    raise ValidationError('unsupported behavior setting')
+
+
+def _validate_performance(key, value):
+    if key == 'idle_fps':
+        return _integer(value, 10, 60)
+    if key == 'drag_fps':
+        return _integer(value, 30, 120)
+    if key == 'hidden_fps':
+        return _integer(value, 1, 15)
+    raise ValidationError('unsupported performance setting')
 
 
 def _choice(value, choices, label):
@@ -451,7 +505,7 @@ def validate_document(document):
     return normalized
 
 
-def _add_v5_groups(document):
+def _add_default_groups(document):
     """Fill every settings group from defaults; used by the v1/v2 paths."""
     document['schema_version'] = SCHEMA_VERSION
     for key, value in GROUP_DEFAULTS.items():
@@ -459,20 +513,37 @@ def _add_v5_groups(document):
     return document
 
 
-# v3 had every group except growth and desktop.
-V3_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'growth', 'desktop'}
-# v4 added growth but neither the desktop group nor autonomy.cloud_enabled.
-V4_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'desktop'}
+# v3 had every group except growth, desktop, voice, behavior and performance.
+V3_TOP_LEVEL_KEYS = DEFAULTS.keys() - {
+    'growth', 'desktop', 'voice', 'behavior', 'performance',
+}
+# v4 added growth but neither the desktop/behavior/performance groups nor
+# autonomy.cloud_enabled. The voice group was added to v5 later, so a v4
+# document may or may not carry it.
+V4_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'desktop', 'behavior', 'performance'}
+V4_TOP_LEVEL_KEYS_WITHOUT_VOICE = V4_TOP_LEVEL_KEYS - {'voice'}
 V4_AUTONOMY_KEYS = frozenset({
     'enabled', 'quiet_start', 'quiet_end', 'min_seconds_between',
     'max_per_hour', 'manual_quiet_until',
 })
+# v5 added the desktop group and autonomy.cloud_enabled. The voice group was
+# added to v5 after the fact, so a v5 document may or may not carry it.
+V5_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'behavior', 'performance'}
+V5_TOP_LEVEL_KEYS_WITHOUT_VOICE = V5_TOP_LEVEL_KEYS - {'voice'}
+
+
+def _add_missing_groups(document):
+    """Add the v4/v5/v6 groups while preserving every value already stored."""
+    migrated = deepcopy(document)
+    migrated['schema_version'] = SCHEMA_VERSION
+    for name in ('voice', 'behavior', 'performance'):
+        migrated.setdefault(name, deepcopy(GROUP_DEFAULTS[name]))
+    return migrated
 
 
 def _upgrade_v3(document):
-    """Add v4/v5 fields while preserving every value already stored in v3."""
-    migrated = deepcopy(document)
-    migrated['schema_version'] = SCHEMA_VERSION
+    """Add v4/v5/v6 fields while preserving every value already stored in v3."""
+    migrated = _add_missing_groups(document)
     migrated.setdefault('growth', deepcopy(GROWTH_DEFAULTS))
     migrated.setdefault('desktop', deepcopy(DESKTOP_DEFAULTS))
     memory = migrated.get('memory')
@@ -485,17 +556,34 @@ def _upgrade_v3(document):
     autonomy = migrated.get('autonomy')
     if type(autonomy) is dict:
         autonomy.setdefault('cloud_enabled', AUTONOMY_DEFAULTS['cloud_enabled'])
+        autonomy.setdefault('default_quiet_minutes',
+                            AUTONOMY_DEFAULTS['default_quiet_minutes'])
     return migrated
 
 
 def _upgrade_v4(document):
-    """Add the desktop group and autonomy.cloud_enabled to a v4 document."""
-    migrated = deepcopy(document)
-    migrated['schema_version'] = SCHEMA_VERSION
-    migrated['desktop'] = deepcopy(DESKTOP_DEFAULTS)
+    """Add the desktop group and the new groups/keys to a v4 document."""
+    migrated = _add_missing_groups(document)
+    migrated.setdefault('desktop', deepcopy(DESKTOP_DEFAULTS))
     autonomy = migrated.get('autonomy')
     if type(autonomy) is dict:
-        autonomy['cloud_enabled'] = AUTONOMY_DEFAULTS['cloud_enabled']
+        autonomy.setdefault('cloud_enabled', AUTONOMY_DEFAULTS['cloud_enabled'])
+        autonomy.setdefault('default_quiet_minutes',
+                            AUTONOMY_DEFAULTS['default_quiet_minutes'])
+    return migrated
+
+
+def _upgrade_v5(document):
+    """Add the v6 groups and autonomy.default_quiet_minutes to a v5 document.
+
+    The voice group was added to schema v5 after the fact, so a v5 file may
+    already carry it; it must survive untouched.
+    """
+    migrated = _add_missing_groups(document)
+    autonomy = migrated.get('autonomy')
+    if type(autonomy) is dict:
+        autonomy.setdefault('default_quiet_minutes',
+                            AUTONOMY_DEFAULTS['default_quiet_minutes'])
     return migrated
 
 
@@ -507,18 +595,22 @@ def migrate_document(document):
             and document.keys() == DEFAULTS_V1.keys()):
         migrated = deepcopy(document)
         migrated['persona_id'] = DEFAULT_PERSONA_ID
-        return _add_v5_groups(migrated), True
+        return _add_default_groups(migrated), True
     if (document.get('schema_version') == 2
             and document.keys() == DEFAULTS_V2.keys()):
-        return _add_v5_groups(deepcopy(document)), True
+        return _add_default_groups(deepcopy(document)), True
     if (document.get('schema_version') == 3
             and document.keys() == V3_TOP_LEVEL_KEYS):
         return _upgrade_v3(document), True
     if (document.get('schema_version') == 4
-            and document.keys() == V4_TOP_LEVEL_KEYS
+            and document.keys() in (V4_TOP_LEVEL_KEYS, V4_TOP_LEVEL_KEYS_WITHOUT_VOICE)
             and type(document.get('autonomy')) is dict
             and document['autonomy'].keys() == V4_AUTONOMY_KEYS):
         return _upgrade_v4(document), True
+    if (document.get('schema_version') == 5
+            and document.keys() in (V5_TOP_LEVEL_KEYS,
+                                    V5_TOP_LEVEL_KEYS_WITHOUT_VOICE)):
+        return _upgrade_v5(document), True
     return document, False
 
 
@@ -594,8 +686,8 @@ class SettingsStore:
         if migrated_character:
             self.warnings.append('Character changed to Godette; all other settings preserved.')
         if migrated_schema:
-            self.warnings.append('Settings migrated to schema version 5; '
-                                 'desktop sensing and autonomy.cloud_enabled defaults added.')
+            self.warnings.append(f'Settings migrated to schema version {SCHEMA_VERSION}; '
+                                 'missing defaults added.')
 
     def _backup(self):
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')

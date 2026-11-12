@@ -23,6 +23,7 @@ func _run() -> void:
 	await _test_legacy_schema()
 	await _test_behavior_performance_settings()
 	await _test_behavior_legacy_schema()
+	await _test_bubble_greeting_settings()
 	_test_runtime_settings()
 	print("DESKTOP_SETTINGS_TESTS checks=", checks, " failures=", failures)
 	quit(0 if failures == 0 else 1)
@@ -371,6 +372,98 @@ func _test_behavior_legacy_schema() -> void:
 	check(not patches[0].has("performance"), "a v5 service receives no performance group")
 	check(not patches[0].autonomy.has("default_quiet_minutes"),
 		"a v5 service receives no autonomy.default_quiet_minutes")
+	check(not patches[0].has("bubble") and not patches[0].has("greeting"),
+		"a v5 service receives neither the bubble nor the greeting group")
+	check(window.bubble_enabled.disabled and window.greeting_enabled.disabled,
+		"a v5 service leaves the bubble and greeting switches locked")
+	window.free()
+	host.free()
+
+
+## Schema 7 bubble/greeting controls: their defaults, the backfilled values,
+## the service ranges, and all six keys in the save patch.
+func _test_bubble_greeting_settings() -> void:
+	var host := Node.new()
+	root.add_child(host)
+	var fake := FakeService.new()
+	host.add_child(fake)
+	var window := SettingsWindow.new()
+	window.visible = false
+	host.add_child(window)
+	await process_frame
+	window.show_status("ready", "后台服务已连接")
+
+	# A settings document without the two groups must fall back to the service
+	# defaults, and those defaults must be what the save sends.
+	var settings := _settings()
+	settings["schema_version"] = 7
+	window.populate(settings, [])
+	await process_frame
+	check(window.bubble_enabled != null, "autonomy page has a bubble switch")
+	check(window.bubble_duration != null, "autonomy page has a bubble duration spin box")
+	check(window.bubble_show_replies != null, "autonomy page has a reply bubble switch")
+	check(window.greeting_enabled != null, "autonomy page has a greeting switch")
+	check(window.greeting_on_start != null, "autonomy page has a start greeting switch")
+	check(window.greeting_cooldown != null, "autonomy page has a greeting cooldown spin box")
+	check(window.bubble_duration.min_value == 2 and window.bubble_duration.max_value == 15,
+		"bubble duration covers the service range 2 to 15 seconds")
+	check(window.greeting_cooldown.min_value == 5 and window.greeting_cooldown.max_value == 1440,
+		"greeting cooldown covers the service range 5 to 1440 minutes")
+	check(not window.bubble_enabled.disabled and window.bubble_duration.editable,
+		"a v7 service unlocks the bubble controls")
+	check(not window.greeting_enabled.disabled and window.greeting_cooldown.editable,
+		"a v7 service unlocks the greeting controls")
+	check(window.bubble_enabled.button_pressed, "bubble is on by default")
+	check(window.bubble_duration.value == 4, "bubble duration defaults to 4 seconds")
+	check(window.bubble_show_replies.button_pressed, "chat replies show in the bubble by default")
+	check(window.greeting_enabled.button_pressed, "greeting is on by default")
+	check(window.greeting_on_start.button_pressed, "a start greeting is on by default")
+	check(window.greeting_cooldown.value == 60, "greeting cooldown defaults to 60 minutes")
+
+	var patches: Array = []
+	window.save_requested.connect(func(value: Dictionary): patches.append(value))
+	window._save()
+	check(patches.size() == 1, "a v7 save emits one patch")
+	var patch: Dictionary = patches[0]
+	check(patch.has("bubble") and patch.has("greeting"),
+		"save patch includes the bubble and greeting groups")
+	check(patch.bubble.enabled == true and patch.bubble.show_replies == true,
+		"the default bubble switches travel in the patch")
+	check(int(patch.bubble.duration_seconds) == 4,
+		"the default bubble duration travels in the patch")
+	check(patch.greeting.enabled == true and patch.greeting.on_start == true,
+		"the default greeting switches travel in the patch")
+	check(int(patch.greeting.cooldown_minutes) == 60,
+		"the default greeting cooldown travels in the patch")
+
+	# Stored values must come back, and an out-of-range value clamps into the
+	# spin box instead of reaching the service and being rejected.
+	settings["bubble"] = {"enabled": false, "duration_seconds": 99, "show_replies": false}
+	settings["greeting"] = {"enabled": false, "on_start": false, "cooldown_minutes": 1}
+	window.populate(settings, [])
+	await process_frame
+	check(not window.bubble_enabled.button_pressed, "populate restores bubble.enabled")
+	check(not window.bubble_show_replies.button_pressed,
+		"populate restores bubble.show_replies")
+	check(window.bubble_duration.value == 15, "an oversized bubble duration clamps to 15")
+	check(not window.greeting_enabled.button_pressed, "populate restores greeting.enabled")
+	check(not window.greeting_on_start.button_pressed, "populate restores greeting.on_start")
+	check(window.greeting_cooldown.value == 5, "an undersized greeting cooldown clamps to 5")
+
+	window.bubble_duration.value = 12
+	window.greeting_cooldown.value = 240
+	patches.clear()
+	window._save()
+	check(patches.size() == 1, "a second v7 save emits one patch")
+	patch = patches[0]
+	check(patch.bubble.enabled == false and patch.bubble.show_replies == false,
+		"save patch carries the edited bubble switches")
+	check(int(patch.bubble.duration_seconds) == 12, "save patch carries the bubble duration")
+	check(patch.greeting.enabled == false and patch.greeting.on_start == false,
+		"save patch carries the edited greeting switches")
+	check(int(patch.greeting.cooldown_minutes) == 240,
+		"save patch carries the greeting cooldown")
+
 	window.free()
 	host.free()
 

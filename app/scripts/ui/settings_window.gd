@@ -95,6 +95,22 @@ const DRAG_FPS_MIN := 30
 const DRAG_FPS_MAX := 120
 const HIDDEN_FPS_MIN := 1
 const HIDDEN_FPS_MAX := 15
+# Defaults mirror service/settings.py BUBBLE_DEFAULTS/GREETING_DEFAULTS; the
+# spin box bounds mirror _validate_bubble and _validate_greeting.
+const BUBBLE_DEFAULTS := {
+	"enabled": true,
+	"duration_seconds": 4,
+	"show_replies": true,
+}
+const GREETING_DEFAULTS := {
+	"enabled": true,
+	"on_start": true,
+	"cooldown_minutes": 60,
+}
+const BUBBLE_DURATION_MIN := 2
+const BUBBLE_DURATION_MAX := 15
+const GREETING_COOLDOWN_MIN := 5
+const GREETING_COOLDOWN_MAX := 1440
 ## Offsets offered for the manual quiet action; the service accepts 5..240,
 ## and a stored value outside this list is kept as an extra option.
 const QUIET_MINUTE_CHOICES := [15, 30, 60, 120]
@@ -207,6 +223,12 @@ var work_focus_policy: OptionButton
 var idle_policy: OptionButton
 var cloud_proactive: CheckButton
 var desktop_state_label: Label
+var bubble_enabled: CheckButton
+var bubble_duration: SpinBox
+var bubble_show_replies: CheckButton
+var greeting_enabled: CheckButton
+var greeting_on_start: CheckButton
+var greeting_cooldown: SpinBox
 var _display_ids: Array[String] = []
 var _service
 var _requests := {}
@@ -541,6 +563,23 @@ func _build_autonomy_page() -> void:
 	autonomy_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	quiet_row.add_child(autonomy_status)
 	page.add_child(quiet_row)
+	_section(page, "气泡与问候")
+	bubble_enabled = CheckButton.new()
+	bubble_enabled.text = "在头顶显示气泡"
+	_row(page, "气泡", bubble_enabled)
+	bubble_duration = _spin(BUBBLE_DURATION_MIN, BUBBLE_DURATION_MAX, 1)
+	_row(page, "显示时长（秒）", bubble_duration)
+	bubble_show_replies = CheckButton.new()
+	bubble_show_replies.text = "聊天回复也显示气泡"
+	_row(page, "回复气泡", bubble_show_replies)
+	greeting_enabled = CheckButton.new()
+	greeting_enabled.text = "启用问候"
+	_row(page, "问候", greeting_enabled)
+	greeting_on_start = CheckButton.new()
+	greeting_on_start.text = "启动后先打个招呼"
+	_row(page, "启动问候", greeting_on_start)
+	greeting_cooldown = _spin(GREETING_COOLDOWN_MIN, GREETING_COOLDOWN_MAX, 1)
+	_row(page, "问候冷却（分钟）", greeting_cooldown)
 
 func _policy_option(labels: Array, values: Array) -> OptionButton:
 	var button := OptionButton.new()
@@ -749,6 +788,16 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	_select_policy(idle_policy, str(desktop.get("idle_policy", DESKTOP_DEFAULTS.idle_policy)))
 	desktop_poll.value = float(desktop.get("poll_seconds", DESKTOP_DEFAULTS.poll_seconds))
 	_select_policy(dnd_policy, str(desktop.get("dnd_policy", DESKTOP_DEFAULTS.dnd_policy)))
+	var bubble := _group(settings, "bubble")
+	bubble_enabled.button_pressed = bool(bubble.get("enabled", BUBBLE_DEFAULTS.enabled))
+	bubble_duration.value = clampf(float(bubble.get("duration_seconds", BUBBLE_DEFAULTS.duration_seconds)),
+		float(BUBBLE_DURATION_MIN), float(BUBBLE_DURATION_MAX))
+	bubble_show_replies.button_pressed = bool(bubble.get("show_replies", BUBBLE_DEFAULTS.show_replies))
+	var greeting := _group(settings, "greeting")
+	greeting_enabled.button_pressed = bool(greeting.get("enabled", GREETING_DEFAULTS.enabled))
+	greeting_on_start.button_pressed = bool(greeting.get("on_start", GREETING_DEFAULTS.on_start))
+	greeting_cooldown.value = clampf(float(greeting.get("cooldown_minutes", GREETING_DEFAULTS.cooldown_minutes)),
+		float(GREETING_COOLDOWN_MIN), float(GREETING_COOLDOWN_MAX))
 	# The schema version decides whether the desktop controls are editable.
 	_refresh_controls()
 	_request_desktop_status()
@@ -840,6 +889,19 @@ func _save() -> void:
 			"dnd_policy": _policy_value(dnd_policy, DESKTOP_DEFAULTS.dnd_policy),
 			"work_focus_policy": _policy_value(work_focus_policy, DESKTOP_DEFAULTS.work_focus_policy),
 			"idle_policy": _policy_value(idle_policy, DESKTOP_DEFAULTS.idle_policy),
+		}
+	# bubble/greeting are schema v7 groups; an older service rejects the whole
+	# patch when it sees keys it does not know.
+	if _supports_schema(7):
+		patch["bubble"] = {
+			"enabled": bubble_enabled.button_pressed,
+			"duration_seconds": int(bubble_duration.value),
+			"show_replies": bubble_show_replies.button_pressed,
+		}
+		patch["greeting"] = {
+			"enabled": greeting_enabled.button_pressed,
+			"on_start": greeting_on_start.button_pressed,
+			"cooldown_minutes": int(greeting_cooldown.value),
 		}
 	if expression_panel:
 		patch["expression"] = {
@@ -1074,6 +1136,15 @@ func _refresh_controls() -> void:
 	idle_fps.editable = local_ready
 	drag_fps.editable = local_ready
 	hidden_fps.editable = local_ready
+	# bubble/greeting exist from schema v7; a v6 service rejects the whole patch
+	# if it receives them.
+	var bubble_ready := ready and _supports_schema(7)
+	bubble_enabled.disabled = not bubble_ready
+	bubble_duration.editable = bubble_ready
+	bubble_show_replies.disabled = not bubble_ready
+	greeting_enabled.disabled = not bubble_ready
+	greeting_on_start.disabled = not bubble_ready
+	greeting_cooldown.editable = bubble_ready
 	# cloud_enabled only exists from schema v5; a legacy service would reject it.
 	cloud_proactive.disabled = not (ready and _supports_desktop())
 	# Desktop controls stay unavailable once the service reported the command

@@ -12,7 +12,8 @@ import math
 import socket
 
 from service.ai.budget import parse_usage
-from service.ai.provider import TransportError, UrllibTransport
+from service.ai.provider import (TransportError, UrllibTransport,
+                                 read_response_body, translate_transport_error)
 from service.jsonutil import dumps
 
 DEFAULT_EMBEDDINGS_PATH = '/v1/embeddings'
@@ -39,60 +40,8 @@ class EmbeddingResult:
     dim: int
 
 
-def _status_error(status, body=b''):
-    message = _error_message(body)
-    if status == 402:
-        return EmbeddingError('payment_required',
-                              message or 'Payment is required.', False, status)
-    if status in (401, 403):
-        return EmbeddingError('auth_error', message or 'Authentication failed.',
-                              False, status)
-    if status == 404:
-        return EmbeddingError('model_not_found', message or 'Model not found.',
-                              False, status)
-    if status == 408:
-        return EmbeddingError('timeout', message or 'The provider timed out.',
-                              True, status)
-    if status == 429:
-        return EmbeddingError('rate_limited', message or 'Rate limited.', True, status)
-    if 500 <= status <= 599:
-        return EmbeddingError('server_error', message or 'The provider failed.',
-                              True, status)
-    if 400 <= status <= 499:
-        return EmbeddingError('provider_rejected',
-                              message or 'The provider rejected the request.',
-                              False, status)
-    return EmbeddingError('provider_error', message or 'Provider error.', False, status)
-
-
-def _error_message(body):
-    if not body:
-        return ''
-    try:
-        value = json.loads(body.decode('utf-8', errors='replace'))
-    except (ValueError, UnicodeError):
-        return ''
-    if not isinstance(value, dict):
-        return ''
-    error = value.get('error')
-    if isinstance(error, dict):
-        text = error.get('message') or error.get('type') or ''
-    else:
-        text = error or value.get('message') or ''
-    if not isinstance(text, str):
-        return ''
-    return text.strip()[:MAX_ERROR_MESSAGE_CHARS]
-
-
 def _translate(exc):
-    if exc.kind == 'timeout':
-        return EmbeddingError('timeout', 'The provider timed out.', True)
-    if exc.kind == 'connection':
-        return EmbeddingError('connection_error',
-                              'The provider could not be reached.', True)
-    if exc.kind == 'http':
-        return _status_error(exc.status, exc.body)
-    return EmbeddingError('provider_error', 'Provider error.', False)
+    return translate_transport_error(exc, EmbeddingError)
 
 
 def _vector(value, expected_dim):
@@ -191,24 +140,7 @@ class EmbeddingClient:
 
     @staticmethod
     def _read_body(response):
-        chunks = []
-        total = 0
-        while True:
-            try:
-                chunk = response.read(65536)
-            except (socket.timeout, TimeoutError):
-                raise EmbeddingError('timeout', 'The provider timed out.', True) from None
-            except OSError:
-                raise EmbeddingError('connection_error',
-                                     'The provider connection dropped.', True) from None
-            if not chunk:
-                break
-            total += len(chunk)
-            if total > MAX_BODY_BYTES:
-                raise EmbeddingError('invalid_response',
-                                     'The provider reply was too large.', True)
-            chunks.append(chunk)
-        return b''.join(chunks)
+        return read_response_body(response, EmbeddingError, MAX_BODY_BYTES)
 
     def _parse(self, body, count):
         try:

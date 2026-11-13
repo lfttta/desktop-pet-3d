@@ -49,30 +49,64 @@ class Completion:
     finish_reason: str = ''
 
 
-def _status_error(status, body=b''):
+def _status_error(status, body=b'', error_cls=ProviderError):
     message = _error_message(body)
     if status == 402:
-        return ProviderError('payment_required',
-                             message or 'Payment is required.', False, status)
+        return error_cls('payment_required',
+                         message or 'Payment is required.', False, status)
     if status in (401, 403):
-        return ProviderError('auth_error', message or 'Authentication failed.',
-                             False, status)
+        return error_cls('auth_error', message or 'Authentication failed.',
+                         False, status)
     if status == 404:
-        return ProviderError('model_not_found', message or 'Model not found.',
-                             False, status)
+        return error_cls('model_not_found', message or 'Model not found.',
+                         False, status)
     if status == 408:
-        return ProviderError('timeout', message or 'The provider timed out.',
-                             True, status)
+        return error_cls('timeout', message or 'The provider timed out.',
+                         True, status)
     if status == 429:
-        return ProviderError('rate_limited', message or 'Rate limited.', True, status)
+        return error_cls('rate_limited', message or 'Rate limited.', True, status)
     if 500 <= status <= 599:
-        return ProviderError('server_error',
-                             message or 'The provider failed.', True, status)
+        return error_cls('server_error',
+                         message or 'The provider failed.', True, status)
     if 400 <= status <= 499:
-        return ProviderError('provider_rejected',
-                             message or 'The provider rejected the request.',
-                             False, status)
-    return ProviderError('provider_error', message or 'Provider error.', False, status)
+        return error_cls('provider_rejected',
+                         message or 'The provider rejected the request.',
+                         False, status)
+    return error_cls('provider_error', message or 'Provider error.', False, status)
+
+
+def translate_transport_error(exc, error_cls=ProviderError):
+    """把传输层错误归一化为 provider/embedding 共用的错误码。"""
+    if exc.kind == 'timeout':
+        return error_cls('timeout', 'The provider timed out.', True)
+    if exc.kind == 'connection':
+        return error_cls('connection_error',
+                         'The provider could not be reached.', True)
+    if exc.kind == 'http':
+        return _status_error(exc.status, exc.body, error_cls)
+    return error_cls('provider_error', 'Provider error.', False)
+
+
+def read_response_body(response, error_cls=ProviderError, max_bytes=MAX_BODY_BYTES):
+    """按块读取响应体；超时/断连/超限归一化为对应错误类。"""
+    chunks = []
+    total = 0
+    while True:
+        try:
+            chunk = response.read(65536)
+        except (socket.timeout, TimeoutError):
+            raise error_cls('timeout', 'The provider timed out.', True) from None
+        except OSError:
+            raise error_cls('connection_error',
+                            'The provider connection dropped.', True) from None
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise error_cls('invalid_response',
+                            'The provider reply was too large.', True)
+        chunks.append(chunk)
+    return b''.join(chunks)
 
 
 def _error_message(body):
@@ -199,14 +233,7 @@ class OpenAICompatibleProvider:
 
     @staticmethod
     def _translate(exc):
-        if exc.kind == 'timeout':
-            return ProviderError('timeout', 'The provider timed out.', True)
-        if exc.kind == 'connection':
-            return ProviderError('connection_error',
-                                 'The provider could not be reached.', True)
-        if exc.kind == 'http':
-            return _status_error(exc.status, exc.body)
-        return ProviderError('provider_error', 'Provider error.', False)
+        return translate_transport_error(exc, ProviderError)
 
     def _payload(self, messages, stream, max_tokens=None):
         return {
@@ -217,7 +244,8 @@ class OpenAICompatibleProvider:
             'max_tokens': self.max_tokens if max_tokens is None else max_tokens,
         }
 
-    def stream_chat(self, messages, key, on_delta=None, cancel_event=None):
+    def stream_chat(self, messages, key, on_delta=None, cancel_event=None,
+                    on_usage=None):
         response = self._open(self._payload(messages, True), key, cancel_event)
         try:
             content_type = _header(response, 'Content-Type').lower()
@@ -225,8 +253,11 @@ class OpenAICompatibleProvider:
                 completion = self._read_json(response)
                 if completion.text and on_delta is not None:
                     on_delta(completion.text)
+                if on_usage is not None and completion.usage.get('total_tokens'):
+                    on_usage(completion.usage, completion.model)
                 return completion
-            return self._read_stream(response, on_delta, cancel_event)
+            return self._read_stream(response, on_delta, cancel_event,
+                                     on_usage=on_usage)
         finally:
             close = getattr(response, 'close', None)
             if close is not None:
@@ -251,7 +282,7 @@ class OpenAICompatibleProvider:
                 except Exception:
                     pass
 
-    def _read_stream(self, response, on_delta, cancel_event):
+    def _read_stream(self, response, on_delta, cancel_event, on_usage=None):
         pieces = []
         usage = {}
         model = ''
@@ -301,6 +332,10 @@ class OpenAICompatibleProvider:
             model = str(chunk.get('model') or model)
             if isinstance(chunk.get('usage'), dict):
                 usage = chunk['usage']
+                if on_usage is not None:
+                    normalized = parse_usage(usage)
+                    if normalized.get('total_tokens'):
+                        on_usage(normalized, model)
             choices = chunk.get('choices')
             if isinstance(choices, list) and choices and isinstance(choices[0], dict):
                 finish_reason = str(choices[0].get('finish_reason') or finish_reason)
@@ -346,21 +381,4 @@ class OpenAICompatibleProvider:
 
     @staticmethod
     def _read_body(response):
-        chunks = []
-        total = 0
-        while True:
-            try:
-                chunk = response.read(65536)
-            except (socket.timeout, TimeoutError):
-                raise ProviderError('timeout', 'The provider timed out.', True) from None
-            except OSError:
-                raise ProviderError('connection_error',
-                                    'The provider connection dropped.', True) from None
-            if not chunk:
-                break
-            total += len(chunk)
-            if total > MAX_BODY_BYTES:
-                raise ProviderError('invalid_response',
-                                    'The provider reply was too large.', True)
-            chunks.append(chunk)
-        return b''.join(chunks)
+        return read_response_body(response, ProviderError, MAX_BODY_BYTES)

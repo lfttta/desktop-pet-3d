@@ -5,13 +5,17 @@ thread performs only the network call. Events are queued from the worker and
 drained by ``poll`` on the service thread, which owns SQLite writes and frame
 emission. One repair retry is allowed for an invalid structured reply; provider
 failures retry per ``ai.max_retries`` before the circuit sees the failure.
+
+并发聊天受固定大小的工作线程池限制；预算检查-预留是原子的，在途请求的
+最坏用量会被后续请求看见。``close`` 在退出前取消并限时等待工作线程，然后
+把已知的在途用量尽力写入账本，避免付费调用漏记账。
 """
 
 import queue
-import re
 import sqlite3
 import threading
 import time
+import traceback
 
 from service.ai.budget import BudgetLedger, reservation
 from service.ai.circuit import CircuitBreaker
@@ -19,6 +23,7 @@ from service.ai.prompt import build_messages
 from service.ai.provider import OpenAICompatibleProvider, ProviderError
 from service.ai.router import Router
 from service.ai.schema import SchemaError, parse_structured, repair_instruction
+from service.ai.stream_text import TextGate as _TextGate
 from service.expression import style
 from service.memory import writer
 from service.memory.store import DEFAULT_CATEGORY, DEFAULT_IMPORTANCE, MemoryStore
@@ -33,6 +38,7 @@ SAFE_ERRORS = {
     'secrets_unreadable': '保存的密钥读取失败，请重新填写。',
     'circuit_open': '我有点累了，稍后再试好吗？',
     'rate_limited': '我现在有点忙，稍后再试好吗？',
+    'busy': '我现在有点忙，稍后再试好吗？',
     'payment_required': 'AI 服务暂时不可用，请检查账户余额。',
     'auth_error': 'AI 密钥无效，请重新填写。',
     'timeout': '等得太久了，稍后再试好吗？',
@@ -46,10 +52,9 @@ SAFE_ERRORS = {
     'internal_error': '我这边出了点小问题，稍后再试好吗？',
 }
 LOCAL_ONLY_REPLY = '今天的对话额度用完了，我先陪你聊到这里。'
-
-_TEXT_MARKER = re.compile(r'(?:^|[,{])\s*"text"\s*:\s*"')
-_SIMPLE_ESCAPES = {'"': '"', '\\': '\\', '/': '/', 'b': '\b',
-                   'f': '\f', 'n': '\n', 'r': '\r', 't': '\t'}
+# 同时进行的聊天网络请求上限；超出时立即回复 busy，而不是无限开线程。
+MAX_CHAT_WORKERS = 4
+SHUTDOWN_JOIN_SECONDS = 0.2
 
 
 def _safe_message(code):
@@ -67,7 +72,7 @@ class _Event:
 
 class _Active:
     __slots__ = ('request_id', 'conversation_id', 'ctx', 'settings', 'cancel',
-                 'on_final')
+                 'on_final', 'worker', 'usage', 'model', 'recorded')
 
     def __init__(self, request_id, conversation_id, ctx, settings, on_final):
         self.request_id = request_id
@@ -76,86 +81,19 @@ class _Active:
         self.settings = settings
         self.cancel = threading.Event()
         self.on_final = on_final
-
-
-class _TextGate:
-    """Best-effort incremental extraction of the JSON ``text`` value."""
-
-    def __init__(self):
-        self.raw = ''
-        self.emitted = ''
-
-    def start_attempt(self):
-        self.raw = ''
-
-    def feed(self, chunk):
-        self.raw += chunk
-        prefix = _extract_text_prefix(self.raw)
-        if not prefix.startswith(self.emitted):
-            return ''
-        delta = prefix[len(self.emitted):]
-        self.emitted = prefix
-        return delta
-
-
-def _extract_text_prefix(raw):
-    marker = _TEXT_MARKER.search(raw)
-    if marker is None:
-        return ''
-    value, _complete = _decode_partial_string(raw, marker.end())
-    return value
-
-
-def _decode_partial_string(raw, index):
-    result = []
-    i = index
-    length = len(raw)
-    while i < length:
-        char = raw[i]
-        if char == '"':
-            return ''.join(result), True
-        if char != '\\':
-            result.append(char)
-            i += 1
-            continue
-        if i + 1 >= length:
-            break
-        escape = raw[i + 1]
-        if escape in _SIMPLE_ESCAPES:
-            result.append(_SIMPLE_ESCAPES[escape])
-            i += 2
-            continue
-        if escape != 'u':
-            break
-        if i + 6 > length:
-            break
-        code = raw[i + 2:i + 6]
-        if not re.fullmatch(r'[0-9a-fA-F]{4}', code):
-            break
-        number = int(code, 16)
-        i += 6
-        if 0xD800 <= number <= 0xDBFF:
-            if i + 6 <= length and raw[i:i + 2] == '\\u':
-                low_code = raw[i + 2:i + 6]
-                if re.fullmatch(r'[0-9a-fA-F]{4}', low_code):
-                    low = int(low_code, 16)
-                    if 0xDC00 <= low <= 0xDFFF:
-                        number = 0x10000 + ((number - 0xD800) << 10) + (low - 0xDC00)
-                        i += 6
-            if 0xD800 <= number <= 0xDFFF:
-                continue
-        elif 0xDC00 <= number <= 0xDFFF:
-            continue
-        result.append(chr(number))
-    return ''.join(result), False
+        self.worker = None
+        self.usage = None
+        self.model = ''
+        self.recorded = False
 
 
 class ChatOrchestrator:
     def __init__(self, store, database=None, transport=None, circuit=None,
                  budget=None, retry_delay=None, provider_factory=None,
-                 router=None):
+                 router=None, memory_store=None):
         self.store = store
         self.database = database
+        self.memory_store = memory_store
         self.transport = transport if transport is not None else getattr(store, 'ai_transport', None)
         self.circuit = circuit if circuit is not None else getattr(store, 'ai_circuit', None)
         if self.circuit is None:
@@ -169,6 +107,8 @@ class ChatOrchestrator:
         self._active = {}
         self._events = queue.Queue()
         self._tick_registered = False
+        self._slots = threading.BoundedSemaphore(MAX_CHAT_WORKERS)
+        self._closed = False
 
     def _default_provider(self, ai_settings):
         return OpenAICompatibleProvider(ai_settings, transport=self.transport)
@@ -217,7 +157,8 @@ class ChatOrchestrator:
             messages = build_messages(self.database, conversation_id, text,
                                       settings, self.store)
         self._log_prompt(settings, messages)
-        budget = self.budget.status(ai_settings, reservation(messages, ai_settings))
+        reserve = reservation(messages, ai_settings)
+        budget = self.budget.status(ai_settings, reserve)
         if budget['local_only']:
             self._events.put(_Event('local_only', request_id, budget))
             return
@@ -240,12 +181,25 @@ class ChatOrchestrator:
             }))
             return
 
+        if self._closed or not self._slots.acquire(blocking=False):
+            self._events.put(_Event('error', request_id, {
+                'code': 'busy',
+                'message': _safe_message('busy'),
+                'retryable': True,
+            }))
+            return
+        # 检查通过后立即原子预留在途用量，后续并发请求能看到这笔预留。
+        self.budget.reserve(request_id, reserve)
+
         worker = threading.Thread(target=self._worker,
                                   args=(active, messages, settings, key, budget),
                                   name='chat-' + request_id, daemon=True)
+        active.worker = worker
         try:
             worker.start()
         except RuntimeError:
+            self._slots.release()
+            self.budget.release(request_id)
             self._events.put(_Event('error', request_id, {
                 'code': 'internal_error',
                 'message': _safe_message('internal_error'),
@@ -253,6 +207,12 @@ class ChatOrchestrator:
             }))
 
     def _worker(self, active, messages, settings, key, budget_status):
+        try:
+            self._worker_inner(active, messages, settings, key, budget_status)
+        finally:
+            self._slots.release()
+
+    def _worker_inner(self, active, messages, settings, key, budget_status):
         ai_settings = settings.get('ai') if isinstance(settings.get('ai'), dict) else {}
         try:
             provider = self.provider_factory(ai_settings)
@@ -272,6 +232,13 @@ class ChatOrchestrator:
         current_messages = messages
         last_usage = {}
         model = ''
+
+        def note_usage(usage, usage_model=''):
+            # 流式过程中一旦拿到用量就记到 active 上，退出时尽力补账。
+            active.usage = usage
+            if usage_model:
+                active.model = usage_model
+
         while True:
             if active.cancel.is_set():
                 self._events.put(_Event('cancelled', active.request_id, {}))
@@ -289,7 +256,7 @@ class ChatOrchestrator:
             try:
                 completion = provider.stream_chat(
                     current_messages, key, on_delta=on_delta,
-                    cancel_event=active.cancel)
+                    cancel_event=active.cancel, on_usage=note_usage)
             except ProviderError as exc:
                 if exc.code == 'cancelled' or active.cancel.is_set():
                     self._events.put(_Event('cancelled', active.request_id, {}))
@@ -316,6 +283,8 @@ class ChatOrchestrator:
 
             last_usage = completion.usage
             model = completion.model
+            active.usage = last_usage
+            active.model = model
             try:
                 structured = parse_structured(completion.text)
             except SchemaError as exc:
@@ -373,14 +342,26 @@ class ChatOrchestrator:
                 return
             try:
                 self._handle_event(event)
-            except Exception:
+            except Exception as exc:
+                self._log_error('chat poll failed: %s\n%s'
+                                % (exc, traceback.format_exc()))
                 active = self._active.pop(event.request_id, None)
                 if active is not None:
+                    self.budget.release(active.request_id)
                     self._emit(active.ctx, 'chat.error', {
                         'code': 'internal_error',
                         'message': _safe_message('internal_error'),
                         'retryable': False,
                     })
+
+    def _log_error(self, message):
+        log = getattr(self.store, 'log', None)
+        if log is None:
+            return
+        try:
+            log.write(message)
+        except Exception:
+            pass
 
     def _handle_event(self, event):
         active = self._active.get(event.request_id)
@@ -392,6 +373,8 @@ class ChatOrchestrator:
             self._emit(active.ctx, 'chat.delta',
                        {'text': event.data.get('text', '')})
             return
+        # 终态事件：释放该请求的在途预算预留（幂等）。
+        self.budget.release(active.request_id)
         if event.kind == 'local_done':
             route = event.data
             text = route.reply
@@ -494,8 +477,20 @@ class ChatOrchestrator:
             else:
                 usage['local'] = True
         else:
-            usage = self.budget.record(active.request_id, data.get('model', ''),
-                                       data.get('usage') or {}, ai_settings)
+            if active.recorded:
+                # 退出前的尽力补账已经写过这笔用量，避免重复记账。
+                usage = {
+                    'prompt_tokens': (active.usage or {}).get('prompt_tokens', 0),
+                    'completion_tokens': (active.usage or {}).get('completion_tokens', 0),
+                    'total_tokens': (active.usage or {}).get('total_tokens', 0),
+                    'cost': 0.0,
+                    'currency': ai_settings.get('currency') or 'USD',
+                    'recorded': True,
+                }
+            else:
+                usage = self.budget.record(active.request_id, data.get('model', ''),
+                                           data.get('usage') or {}, ai_settings)
+                active.recorded = True
             usage['provider'] = ai_settings.get('provider') or 'deepseek'
             if data.get('budget_warning'):
                 usage['budget_warning'] = True
@@ -683,7 +678,12 @@ class ChatOrchestrator:
         if self.database is None:
             return None
         try:
-            store = getattr(self.database, 'memory_store_v3', None)
+            # An explicitly injected store wins; otherwise reuse the shared
+            # per-database cache so each propose does not rerun the schema
+            # check and dedupe-key backfill.
+            store = self.memory_store
+            if store is None:
+                store = getattr(self.database, 'memory_store_v3', None)
             if store is None:
                 store = MemoryStore(self.database)
                 setattr(self.database, 'memory_store_v3', store)
@@ -742,6 +742,34 @@ class ChatOrchestrator:
             return False
         active.cancel.set()
         return True
+
+    def close(self):
+        """退出前取消在途请求，限时等待，并把已知用量尽力写入账本。"""
+        self._closed = True
+        active_list = list(self._active.values())
+        for active in active_list:
+            active.cancel.set()
+        for active in active_list:
+            worker = active.worker
+            if worker is not None and worker.is_alive():
+                try:
+                    worker.join(timeout=SHUTDOWN_JOIN_SECONDS)
+                except RuntimeError:
+                    pass
+        for active in active_list:
+            self.budget.release(active.request_id)
+            if active.recorded or not active.usage:
+                continue
+            settings = active.settings if isinstance(active.settings, dict) else {}
+            ai_settings = settings.get('ai') if isinstance(settings.get('ai'), dict) else {}
+            try:
+                self.budget.record(active.request_id, active.model or '',
+                                   active.usage, ai_settings)
+                active.recorded = True
+            except Exception:
+                # 补账是尽力而为：失败也不能阻塞退出。
+                continue
+        self._active.clear()
 
     def pending_count(self):
         return len(self._active)

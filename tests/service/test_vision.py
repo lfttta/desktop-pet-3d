@@ -1,8 +1,9 @@
 """Vision (3-E) tests: fake capture + fake transport, no network, Linux-safe.
 
-The command handler is registered into commands.HANDLERS per test (the real
-registration diff is applied by the integrator), so dispatch and runtime
-integration behave exactly as they will after wiring.
+``vision.analyze`` is registered in ``service.commands.HANDLERS`` by the real
+import of ``service.vision``, so these tests exercise the same dispatch path the
+service uses. Capture is injected everywhere; the real Windows seam is never
+called on non-Windows hosts.
 """
 
 import base64
@@ -30,11 +31,6 @@ from service.vision import (DEFAULT_PROMPT, IMAGE_TOKEN_RESERVE, SYSTEM_PROMPT,
                             encode_png, read_vision_settings, should_capture)
 
 FAKE_KEY = 'test-key-not-real'
-
-
-@pytest.fixture(autouse=True)
-def register_vision_command(monkeypatch):
-    monkeypatch.setitem(commands.HANDLERS, 'vision.analyze', vision.analyze)
 
 
 class VisionStore(SettingsStore):
@@ -843,7 +839,7 @@ def test_runtime_tick_drains_vision_frames(tmp_path):
     output = io.BytesIO()
     runtime = Runtime(store, output, BoundedLog(io.BytesIO()), database,
                       tick_seconds=0.01)
-    service.bind(runtime)  # the startup wiring proposed for runtime.py
+    service.bind(runtime)  # the same wiring service.runtime.serve() performs
     try:
         assert runtime.run(FrameThenIdleInput(frame)) == 0
     finally:
@@ -866,3 +862,57 @@ def test_build_vision_messages_shape():
     assert parts[0] == {'type': 'text', 'text': '自定义问题'}
     assert parts[1]['type'] == 'image_url'
     assert parts[1]['image_url']['url'].startswith('data:image/png;base64,')
+
+
+def test_serve_registers_and_closes_the_vision_tick(tmp_path, monkeypatch):
+    """The wiring itself: serve() must register vision.tick and close it."""
+    from service import runtime as runtime_module
+    from service import vision as vision_module
+
+    created = []
+
+    class FakeVision:
+        def __init__(self, runtime):
+            self.runtime = runtime
+            self.closed = 0
+            self.bound = 0
+            created.append(self)
+
+        def bind(self, runtime):
+            self.bound += 1
+            runtime.register_tick(self.tick)
+
+        def tick(self, now=None):
+            pass
+
+        def close(self):
+            self.closed += 1
+
+    monkeypatch.setattr(vision_module, 'get_vision_service',
+                        lambda store, database=None, runtime=None: FakeVision(runtime))
+    output, errors = io.BytesIO(), io.BytesIO()
+    assert runtime_module.serve(tmp_path, io.BytesIO(b''), output, errors) == 0
+    assert len(created) == 1
+    assert created[0].bound == 1
+    assert created[0].closed == 1
+    assert created[0].tick in created[0].runtime._tick_hooks
+
+
+def test_vision_tick_throttles_the_proactive_check(tmp_path):
+    """A 100 ms tick must not re-read settings on every call."""
+    clock = [1000.0]
+    capture = FakeCapture()
+    store, database, service, ctx = make_env(tmp_path, capture=capture,
+                                             clock=lambda: clock[0])
+
+    try:
+        for _ in range(5):
+            service.tick()
+        # The first tick captures; the rest fall inside the 1 s check window.
+        assert len(capture.calls) == 1
+        clock[0] += 1.0
+        service.tick()
+        # Interval (1800 s) still not elapsed, so no second capture.
+        assert len(capture.calls) == 1
+    finally:
+        database.close()

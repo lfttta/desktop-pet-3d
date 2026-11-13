@@ -133,7 +133,7 @@ def test_hello_advertises_v3_features_and_personas(tmp_path):
     assert payload['settings']['schema_version'] == SETTINGS_SCHEMA_VERSION
     assert sorted(payload['features']) == sorted([
         'chat', 'memory', 'state', 'autonomy', 'expression', 'growth', 'timers',
-        'usage', 'diag', 'desktop', 'voice'])
+        'usage', 'diag', 'desktop', 'voice', 'vision'])
     expected = {
         'chat': ['chat.send', 'chat.cancel', 'chat.history'],
         'memory': ['memory.search', 'memory.propose', 'memory.correct',

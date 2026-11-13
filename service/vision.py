@@ -78,6 +78,10 @@ MAX_CAPTURE_PIXELS = 64_000_000
 PROACTIVE_REQUEST_ID = 'vision'
 PROACTIVE_EVENT = 'vision.proactive'
 JOIN_TIMEOUT_SECONDS = 1.0
+# Minimum wall-clock spacing between proactive checks made by ``tick``. The
+# configured interval is at least MIN_PROACTIVE_INTERVAL (60s), so a 1 Hz check
+# is amply precise while avoiding a settings deepcopy every 100 ms tick.
+PROACTIVE_CHECK_SECONDS = 1.0
 
 # Chinese event messages for vision-specific codes; provider codes reuse the
 # orchestrator's SAFE_ERRORS vocabulary (imported lazily so that settings.py
@@ -435,6 +439,7 @@ class VisionService:
         self._tick_registered = False
         self._closed = False
         self._last_proactive_capture = None
+        self._last_proactive_check = None
 
     # -- public surface -------------------------------------------------
 
@@ -564,6 +569,27 @@ class VisionService:
                 self._deliver(result)
             except Exception:
                 self._log('deliver_failed')
+
+    def tick(self, now=None):
+        """Service-thread heartbeat: drain results, then consider one capture.
+
+        ``now`` is the runtime's monotonic tick clock and is deliberately not
+        forwarded: proactive intervals are measured against wall-clock time via
+        ``self.clock``, and mixing the two bases would fire captures early or
+        never. The proactive check itself is throttled to PROACTIVE_CHECK_SECONDS
+        so a 100 ms tick does not deep-copy settings ten times a second.
+        Everything here runs on the service thread, so the worker started by
+        ``maybe_capture`` still hands its result back through ``poll``.
+        """
+        self.poll()
+        if self._closed:
+            return
+        moment = float(self.clock())
+        last = self._last_proactive_check
+        if last is not None and moment - last < PROACTIVE_CHECK_SECONDS:
+            return
+        self._last_proactive_check = moment
+        self.maybe_capture(now=moment)
 
     def close(self):
         """Cancel pending work; no new request starts after this call."""

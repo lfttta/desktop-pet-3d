@@ -359,13 +359,16 @@ def serve(directory, input_stream, output_stream, error_stream):
             log.write(warning)
         runtime = Runtime(store, output_stream, log, database)
         # Service-initiated tick hooks need the runtime, so they are attached
-        # after construction and before the loop starts. The scheduler owns a
-        # background provider worker, so it is always closed on the way out.
+        # after construction and before the loop starts. Both the scheduler and
+        # the vision service own background workers, so both are closed on the
+        # way out.
         store.log = log
         from service.behavior.proactive import ProactiveScheduler
         from service.features import timers
+        from service.vision import get_vision_service
         scheduler = None
         speech = None
+        vision = None
         try:
             scheduler = ProactiveScheduler(runtime, store, database)
             runtime.register_tick(scheduler.tick)
@@ -375,11 +378,17 @@ def serve(directory, input_stream, output_stream, error_stream):
             speech = TtsWorker(runtime, directory)
             speech.start()
             runtime.speech = speech
+            # Registers its own tick (drain + throttled proactive capture); the
+            # command path reaches the same instance through the store cache.
+            vision = get_vision_service(store, database, runtime=runtime)
+            vision.bind(runtime)
             return runtime.run(input_stream)
         except ProtocolError as exc:
             emit_error(output_stream, exc)
             return 2 if exc.fatal else 0
         finally:
+            if vision is not None:
+                vision.close()
             if scheduler is not None:
                 scheduler.close()
             if speech is not None:

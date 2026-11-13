@@ -6,7 +6,7 @@ feature means registering its commands here and publishing a capability; the
 transport loop and error envelopes stay unchanged.
 """
 
-from service import PROTOCOL_VERSION, SERVICE_VERSION
+from service import PROTOCOL_VERSION, SERVICE_VERSION, vision
 from service.features import (ai, autonomy, capabilities, chat, desktop, diag, expression,
                               growth, memory, state, timers, usage, voice)
 from service.persona import public_catalog
@@ -100,6 +100,7 @@ HANDLERS = {
     **diag.COMMANDS,
     **desktop.COMMANDS,
     **voice.COMMANDS,
+    **vision.COMMANDS,
 }
 
 

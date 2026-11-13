@@ -49,7 +49,7 @@ def test_hello_advertises_phase2_feature_groups(tmp_path):
     features = payload['features']
     assert sorted(features) == sorted([
         'chat', 'memory', 'state', 'autonomy', 'expression', 'growth', 'timers',
-        'usage', 'diag', 'desktop', 'voice'])
+        'usage', 'diag', 'desktop', 'voice', 'vision'])
     expected = {
         'expression': ['expression.phrases.list', 'expression.phrases.set_enabled'],
         'growth': ['growth.list', 'growth.approve', 'growth.reject', 'growth.history',

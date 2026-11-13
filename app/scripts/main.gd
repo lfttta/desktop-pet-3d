@@ -716,6 +716,10 @@ func _on_connected(settings: Dictionary, warnings: Array) -> void:
 func _on_settings_received(settings: Dictionary) -> void:
 	var previous := saved_settings
 	saved_settings = settings.duplicate(true)
+	# Applied before the _app_ready gate: the handshake arrives during _ready(),
+	# before _app_ready is set, and a restart must honour the saved switch as
+	# soon as the first settings document lands.
+	_apply_behavior_settings()
 	if not _app_ready:
 		return
 	_applying = true
@@ -732,6 +736,17 @@ func _on_settings_received(settings: Dictionary) -> void:
 		chat_window.update_settings(saved_settings)
 	if emotion_presenter:
 		emotion_presenter.apply_now()
+
+## Applies the `behavior` group to the controller. A service older than schema
+## v6 sends no such group; the defaults then keep walking enabled, which is the
+## pre-v6 behaviour.
+func _apply_behavior_settings() -> void:
+	var group: Variant = saved_settings.get("behavior")
+	if not group is Dictionary:
+		return
+	var enabled: Variant = group.get("walk_enabled")
+	if enabled is bool:
+		behavior.walk_enabled = enabled
 
 func _on_request_finished(id: String, type: String, payload: Dictionary) -> void:
 	if not _saving.has(id):

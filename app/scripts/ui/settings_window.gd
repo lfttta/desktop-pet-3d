@@ -96,8 +96,11 @@ const AUTONOMY_DEFAULTS := {
 	"min_seconds_between": 1800,
 	"max_per_hour": 2,
 }
+# Mirrors service/settings.py BEHAVIOR_DEFAULTS (schema v6). Sent only when the
+# connected service reports v6 or later; an older service rejects the group.
 const BEHAVIOR_DEFAULTS := {
 	"enabled": true,
+	"walk_enabled": true,
 }
 # Mirrors service/settings.py PERFORMANCE_DEFAULTS and its ranges.
 const PERFORMANCE_DEFAULTS := {
@@ -249,6 +252,7 @@ var fullscreen_policy: OptionButton
 var work_focus_policy: OptionButton
 var idle_policy: OptionButton
 var cloud_proactive: CheckButton
+var walk_enabled: CheckButton
 var desktop_state_label: Label
 var bubble_enabled: CheckButton
 var bubble_duration: SpinBox
@@ -574,6 +578,10 @@ func _build_autonomy_page() -> void:
 	quiet_end_input.max_length = 5
 	quiet_end_input.placeholder_text = "HH:MM"
 	_row(page, "安静结束", quiet_end_input)
+	_section(page, "自主行为")
+	walk_enabled = CheckButton.new()
+	walk_enabled.text = "允许自主行走"
+	_row(page, "自主行走", walk_enabled)
 	_section(page, "桌面感知")
 	desktop_enabled = CheckButton.new()
 	desktop_enabled.text = "启用桌面感知"
@@ -809,6 +817,7 @@ func populate(settings: Dictionary) -> void:
 	_select_quiet_minutes(int(autonomy.get("default_quiet_minutes", AUTONOMY_DEFAULTS.default_quiet_minutes)))
 	var behavior := _group(settings, "behavior")
 	behavior_enabled.button_pressed = bool(behavior.get("enabled", BEHAVIOR_DEFAULTS.enabled))
+	walk_enabled.button_pressed = bool(behavior.get("walk_enabled", BEHAVIOR_DEFAULTS.walk_enabled))
 	# Autostart lives in the registry, not the settings document.
 	var autostart_ready := Autostart.supported()
 	autostart_enabled.disabled = not autostart_ready
@@ -916,7 +925,10 @@ func _save() -> void:
 		"privacy": {"log_prompts": privacy_log_prompts.button_pressed},
 	}
 	if _supports_schema(6):
-		patch["behavior"] = {"enabled": behavior_enabled.button_pressed}
+		patch["behavior"] = {
+			"enabled": behavior_enabled.button_pressed,
+			"walk_enabled": walk_enabled.button_pressed,
+		}
 		patch["performance"] = {
 			"idle_fps": int(idle_fps.value),
 			"drag_fps": int(drag_fps.value),
@@ -1025,6 +1037,11 @@ func _supports_schema(minimum: int) -> bool:
 
 func _supports_desktop() -> bool:
 	return _supports_schema(5)
+
+## The behavior group arrived with schema v6; sending it to an older service
+## would get the entire patch rejected.
+func _supports_behavior() -> bool:
+	return _schema_version >= 6
 
 func _autonomy_patch(quiet_start: String, quiet_end: String) -> Dictionary:
 	var patch := {
@@ -1279,6 +1296,8 @@ func _refresh_controls() -> void:
 	expression_tone.disabled = not (ready and _supports_schema(9))
 	# cloud_enabled only exists from schema v5; a legacy service would reject it.
 	cloud_proactive.disabled = not (ready and _supports_desktop())
+	# The behavior group arrived with schema v6.
+	walk_enabled.disabled = not (ready and _supports_behavior())
 	# Desktop controls stay unavailable once the service reported the command
 	# as missing, or when the service is too old to accept the desktop group:
 	# saving a setting the service cannot honour silently drops the choice.

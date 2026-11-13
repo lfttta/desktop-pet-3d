@@ -27,6 +27,7 @@ func run() -> void:
 	_test_edge_gating()
 	_test_walk_sizing()
 	_test_cooldowns()
+	_test_walk_disabled()
 	print("BEHAVIOR_CONTROLLER_TESTS checks=", checks, " failures=", failures)
 	quit(1 if failures else 0)
 
@@ -161,6 +162,45 @@ func _test_cooldowns() -> void:
 	check(float(idle.decide(_library(), 1000.0, 1000.0, 100.0).cooldown) > 0.0, "idle reports a positive cooldown")
 	var walk := _pinned(0.90)
 	check(float(walk.decide(_library(), 1000.0, 1000.0, 100.0).cooldown) > 0.0, "a walk reports a positive cooldown")
+
+
+## `walk_enabled` (settings schema v6) removes only the walk branch. A walk roll
+## must fall back to an ambient action, or to idle when nothing is eligible —
+## exactly what a pet with no room does.
+func _test_walk_disabled() -> void:
+	# Baseline: the same pin walks while the switch is on.
+	var walking := _pinned(0.90)
+	check(walking.walk_enabled, "walking is enabled by default")
+	var decision := walking.decide(_library(), 1000.0, 1000.0, 100.0)
+	check(str(decision.kind) == Behavior.KIND_WALK, "the walk band walks when enabled, got %s" % decision.kind)
+
+	# Switched off: the walk band falls back to an action instead.
+	var still := _pinned(0.90)
+	still.walk_enabled = false
+	decision = still.decide(_library(), 1000.0, 1000.0, 100.0)
+	check(str(decision.kind) != Behavior.KIND_WALK, "a disabled walk band never walks, got %s" % decision.kind)
+	check(str(decision.kind) == Behavior.KIND_ACTION, "it falls back to an ambient action, got %s" % decision.kind)
+	check(str(decision.action) in ["thinking", "looking_around", "happy"], "the fallback action comes from the allow list, got %s" % decision.action)
+
+	# Switched off with nothing to act out: standing still, never a walk.
+	var bare := _pinned(0.90)
+	bare.walk_enabled = false
+	decision = bare.decide({}, 1000.0, 1000.0, 100.0)
+	check(str(decision.kind) == Behavior.KIND_IDLE, "no action available means idle, got %s" % decision.kind)
+
+	# Room is irrelevant while walking is off: wide-open space still cannot walk.
+	var roomy := _pinned(0.90)
+	roomy.walk_enabled = false
+	decision = roomy.decide(_library(), 5000.0, 5000.0, 100.0)
+	check(str(decision.kind) != Behavior.KIND_WALK, "plenty of room does not re-enable walking, got %s" % decision.kind)
+
+	# The other bands are untouched by the switch.
+	var idle := _pinned(0.10)
+	idle.walk_enabled = false
+	check(str(idle.decide(_library(), 1000.0, 1000.0, 100.0).kind) == Behavior.KIND_IDLE, "the idle band still idles with walking off")
+	var acting := _pinned(0.50)
+	acting.walk_enabled = false
+	check(str(acting.decide(_library(), 1000.0, 1000.0, 100.0).kind) == Behavior.KIND_ACTION, "the action band still acts with walking off")
 
 
 ## RNG with a fixed branch roll. The controller exposes `roll_override` for

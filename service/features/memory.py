@@ -143,6 +143,13 @@ def _register_tick(database, memory_store, ctx):
         return
     settings_source = getattr(ctx, 'store', None)
     state = {'at': None}
+    # Model compaction performs a provider call. It must not run on the service
+    # thread, so the driver owns it while `jobs.tick` skips those jobs. Without
+    # a settings source (direct dispatch in tests) there is nothing to drive.
+    driver = None
+    if settings_source is not None:
+        from service.memory.driver import ModelCompactDriver
+        driver = ModelCompactDriver(settings_source, memory_store)
 
     def hook(now):
         writer.process_outbox(memory_store)
@@ -154,20 +161,22 @@ def _register_tick(database, memory_store, ctx):
         settings = getattr(settings_source, 'settings', None)
         if not isinstance(settings, dict):
             settings = {}
-        compressor = None
-        compaction = settings.get('memory', {}).get('compaction', {})
-        if isinstance(compaction, dict) and compaction.get('model_compress'):
-            source = settings_source if settings_source is not None else memory_store
-            compressor = compact.build_compressor(source, settings.get('ai'))
+        deferred = driver is not None
         jobs.tick(memory_store, settings,
                   now=None if isinstance(now, (int, float)) else now,
-                  compressor=compressor)
+                  defer_model_compact=deferred)
+        if driver is not None:
+            driver.tick(now)
 
     try:
         register(hook)
     except RuntimeError:
         # Contexts without a runtime (direct dispatch in tests) cannot tick.
         return
+    if driver is not None:
+        # serve() closes it during teardown so the worker never outlives the
+        # SQLite connection it reports into.
+        setattr(database, 'memory_compact_driver', driver)
     setattr(database, 'memory_tick_v3', True)
 
 

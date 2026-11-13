@@ -393,3 +393,9 @@ def serve(directory, input_stream, output_stream, error_stream):
                 scheduler.close()
             if speech is not None:
                 speech.close()
+            # Registered lazily by the first memory command; it owns a worker
+            # thread that reports into this database, so it must stop before
+            # ExitStack closes the connection.
+            compact_driver = getattr(database, 'memory_compact_driver', None)
+            if compact_driver is not None:
+                compact_driver.close()

@@ -95,6 +95,12 @@ var roll_override := Callable()
 ## Highest cycle count a walk may ask for; `cycles_that_fit` lowers it.
 var max_walk_cycles := WalkPlan.MAX_CYCLES
 
+## Settings gate (`behavior.walk_enabled`, schema v6, default true). False
+## removes the autonomous walk branch: the roll falls back to an ambient action
+## or idle, exactly like a pet with no room to walk. User-triggered walks do not
+## route through `decide()` and are unaffected.
+var walk_enabled := true
+
 
 func _init(generator: RandomNumberGenerator = null) -> void:
 	rng = generator if generator != null else RandomNumberGenerator.new()
@@ -128,10 +134,11 @@ func decide(available: Dictionary, room_left: float, room_right: float, stride_p
 		# a silent substitution would hide a broken action table.
 		return _idle()
 
-	var direction := _pick_direction(room_left, room_right, stride_px)
+	var direction := _pick_direction(room_left, room_right, stride_px) if walk_enabled else 0
 	if direction == 0:
-		# Both sides are walled in. Acting out a short clip is still possible,
-		# so try that before giving up and standing still.
+		# Both sides are walled in (or walking is switched off). Acting out a
+		# short clip is still possible, so try that before giving up and standing
+		# still.
 		var fallback := pick_ambient(available)
 		if not fallback.is_empty():
 			return _action(fallback, available)

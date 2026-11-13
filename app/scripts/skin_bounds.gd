@@ -1,6 +1,10 @@
 extends RefCounted
 ## Cache CPU mesh data once. Bounds follow the current skeleton without GPU
 ## readback. Only indexed/rendered vertices participate; hidden props do not.
+##
+## The cached copy is compacted to the referenced vertices at configure time,
+## so the permanent memory cost is the drawn surface, not the whole mesh, and
+## the per-sample loop walks the smaller array.
 
 var surfaces: Array = []
 var cached := AABB()
@@ -35,7 +39,23 @@ func configure(meshes: Array[MeshInstance3D], skeleton: Skeleton3D) -> void:
 				used = PackedInt32Array(unique.keys())
 			if used.is_empty():
 				used = PackedInt32Array(range(vertices.size()))
-			surfaces.append({"mesh": mesh, "vertices": vertices, "weights": weights, "bones": bones, "used": used, "binds": binds, "influences": weights.size() / maxi(1, vertices.size())})
+			var influences := weights.size() / maxi(1, vertices.size())
+			# Drop the unreferenced vertices (and their bone slots) for good: the
+			# full arrays returned by surface_get_arrays are released here.
+			var kept_vertices := PackedVector3Array()
+			var kept_weights := PackedFloat32Array()
+			var kept_bones := PackedInt32Array()
+			kept_vertices.resize(used.size())
+			if influences > 0:
+				kept_weights.resize(used.size() * influences)
+				kept_bones.resize(used.size() * influences)
+			for j in used.size():
+				var source := used[j]
+				kept_vertices[j] = vertices[source]
+				for slot in influences:
+					kept_weights[j * influences + slot] = weights[source * influences + slot]
+					kept_bones[j * influences + slot] = bones[source * influences + slot]
+			surfaces.append({"mesh": mesh, "vertices": kept_vertices, "weights": kept_weights, "bones": kept_bones, "binds": binds, "influences": influences})
 	_last_update = -1000000
 
 func sample(skeleton: Skeleton3D, force := false, interval_usec := 100000) -> AABB:
@@ -58,7 +78,7 @@ func sample(skeleton: Skeleton3D, force := false, interval_usec := 100000) -> AA
 		var bones: PackedInt32Array = surface.bones
 		var weights: PackedFloat32Array = surface.weights
 		var influences: int = surface.influences
-		for index: int in surface.used:
+		for index in vertices.size():
 			var point: Vector3 = mesh.global_transform * vertices[index]
 			if influences > 0 and not transforms.is_empty():
 				point = Vector3.ZERO

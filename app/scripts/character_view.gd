@@ -80,6 +80,21 @@ var _suggested_hold_remaining := 0.0
 ## Request id returned by `request_action` for the suggested clip, released when
 ## the hold expires. -1 when no suggestion is running.
 var _suggested_request := -1
+## Bounds sampling is the expensive part of a moving frame (per-vertex bone
+## weighting in GDScript). 10 Hz is plenty for window clamping; an action change
+## arms one immediate post-modifier sample so a new pose is never measured late.
+const BOUNDS_INTERVAL_USEC := 100000
+var _bounds_refresh_pending := false
+## Pre-resolved at load: bone indices, facial binding targets, hit-region
+## skeletons and spring-bone indices. The per-frame paths only do arithmetic
+## and writes — no find_bone, no get_node_or_null, no Dictionary rebuilding.
+var _bone_indices := {}
+var _face_targets: Array[Dictionary] = []
+var _emotion_bindings := {}
+var _channel_bindings := {}
+var _hit_specs: Array[Dictionary] = []
+var _hit_cache: Array = []
+var _spring_bone_indices: Array[int] = []
 
 func load_character(entry: Dictionary) -> bool:
 	var path := str(entry.get("config", ""))
@@ -112,6 +127,10 @@ func load_character(entry: Dictionary) -> bool:
 			push_error("Missing essential humanoid bone: " + required)
 			return false
 	_collect(model)
+	_resolve_bone_indices()
+	_resolve_face_bindings()
+	_resolve_hit_regions()
+	_resolve_spring_bones()
 	for node in model.find_children("*", "AnimationPlayer", true, false):
 		node.stop()
 		node.active = false
@@ -157,6 +176,9 @@ func load_character(entry: Dictionary) -> bool:
 	action_controller = ActionController.new()
 	action_controller.action_changed.connect(func(next: String):
 		action = next
+		# Measure the new pose on the next post-modifier update, not a tenth of
+		# a second later: action start and end both land here.
+		_bounds_refresh_pending = true
 		action_changed.emit(next)
 	)
 	action_controller.configure(player, manifest.actions)
@@ -189,6 +211,82 @@ func _collect(root: Node) -> void:
 			vrm_instances.append(root)
 	for child in root.get_children():
 		_collect(child)
+
+
+## Bone name lookups are string hashes; resolve every mapped profile once.
+func _resolve_bone_indices() -> void:
+	_bone_indices.clear()
+	for profile in bone_map.keys():
+		_bone_indices[str(profile)] = skeleton.find_bone(str(bone_map[profile]))
+
+
+## Flattens the expression bindings into shared blend-shape targets plus
+## per-emotion / per-channel binding lists. The keys are built once here instead
+## of being string-concatenated every frame.
+func _resolve_face_bindings() -> void:
+	_face_targets.clear()
+	_emotion_bindings.clear()
+	_channel_bindings.clear()
+	var slots := {}
+	var expressions: Dictionary = config.get("expressions", {})
+	for name_ in expressions.keys():
+		var resolved: Array[Dictionary] = []
+		for binding in expressions[name_]:
+			var key := str(binding.mesh_path) + ":" + str(binding.index)
+			if not slots.has(key):
+				slots[key] = _face_targets.size()
+				_face_targets.append({
+					"mesh": model.get_node_or_null(str(binding.mesh_path)) as MeshInstance3D,
+					"index": int(binding.index),
+					"value": 0.0,
+				})
+			resolved.append({
+				"slot": int(slots[key]),
+				"weight": float(binding.get("weight", 1)),
+				"vowel": int(binding.index) in [5, 6, 7, 8, 9],
+			})
+		if str(name_) in ["blink", "mouth_a"]:
+			_channel_bindings[str(name_)] = resolved
+		else:
+			_emotion_bindings[str(name_)] = resolved
+
+
+## The hit-region layout is fixed by the bone map; only the projected points
+## move. Specs and result dictionaries are built once and updated in place,
+## including the reaction id each region reports to `HitRegions.id_at`.
+func _resolve_hit_regions() -> void:
+	_hit_specs.clear()
+	_hit_cache.clear()
+	var chest := "Chest" if bone_map.has("Chest") else "Spine"
+	_append_hit_spec("Hips", chest, 0.16, "body")
+	_append_hit_spec(chest, "Head", 0.10, "body")
+	# A head joint commonly sits at the neck, especially in stylized models.
+	# Fit the visible head height instead of treating that joint as its center.
+	_hit_specs.append({"head": true, "id": "head"})
+	_hit_cache.append({"id": "head", "a": Vector2.ZERO, "b": Vector2.ZERO, "radius": 0.0})
+	for side in ["Left", "Right"]:
+		_append_hit_spec(side + "Shoulder", side + "UpperArm", 0.065, "hand")
+		_append_hit_spec(side + "UpperArm", side + "LowerArm", 0.065, "hand")
+		_append_hit_spec(side + "LowerArm", side + "Hand", 0.065, "hand")
+		_append_hit_spec(side + "UpperLeg", side + "LowerLeg", 0.09, "leg")
+		_append_hit_spec(side + "LowerLeg", side + "Foot", 0.075, "leg")
+		_append_hit_spec(side + "Foot", side + "Toes", 0.065, "foot")
+
+
+func _append_hit_spec(start: String, end: String, radius_scale: float, id: String) -> void:
+	if not bone_map.has(start) or not bone_map.has(end):
+		return
+	_hit_specs.append({"head": false, "id": id, "a": int(_bone_indices.get(start, -1)), "b": int(_bone_indices.get(end, -1)), "scale": radius_scale})
+	_hit_cache.append({"id": id, "a": Vector2.ZERO, "b": Vector2.ZERO, "radius": 0.0})
+
+
+## Spring-bone observation only cares about hair and skirt; find them once.
+func _resolve_spring_bones() -> void:
+	_spring_bone_indices.clear()
+	for i in skeleton.get_bone_count():
+		var lower := skeleton.get_bone_name(i).to_lower()
+		if "hair" in lower or "skirt" in lower:
+			_spring_bone_indices.append(i)
 
 
 ## Installs the leg correction below the skeleton, where SkeletonModifier3D
@@ -593,40 +691,41 @@ func update_face() -> void:
 		mouth = mouth_override
 	if paused:
 		mouth = 0.0
-	# Rebuild weights each frame so switching emotions cannot leave old morphs.
-	var weights := {}
-	var expressions: Dictionary = config.get("expressions", {})
-	for bindings in expressions.values():
-		for binding in bindings:
-			weights[str(binding.mesh_path) + ":" + str(binding.index)] = {"binding": binding, "value": 0.0}
+	# Targets and bindings were resolved at load; the per-frame work is only
+	# arithmetic plus the blend-shape writes. Values are rebuilt each frame so
+	# switching emotions cannot leave old morphs behind.
+	var mute_vowels := _mouth_controls_vowels or speaking or paused or mouth_override >= 0
+	for target: Dictionary in _face_targets:
+		target.value = 0.0
 	# `emotion` may be a rich label (`excited`, `tired`, `upset`); the face it
 	# shows is always one of the configured expression channels.
-	for binding in expressions.get(expression_for_label(emotion), []):
-		var key := str(binding.mesh_path) + ":" + str(binding.index)
+	for binding: Dictionary in _emotion_bindings.get(expression_for_label(emotion), []):
 		# Once audio owns the mouth, stopping must keep every vowel closed.
-		var vowel := int(binding.index) in [5, 6, 7, 8, 9]
-		weights[key].value = float(binding.weight) * emotion_weight * (0.0 if vowel and (_mouth_controls_vowels or speaking or paused or mouth_override >= 0) else 1.0)
-	for channel in ["blink", "mouth_a"]:
-		for binding in expressions.get(channel, []):
-			var key := str(binding.mesh_path) + ":" + str(binding.index)
-			var value := (blink if channel == "blink" else mouth) * float(binding.weight)
-			weights[key].value = maxf(weights[key].value, value)
-	for item in weights.values():
-		var mesh := model.get_node_or_null(str(item.binding.mesh_path)) as MeshInstance3D
+		var value := float(binding.weight) * emotion_weight * (0.0 if binding.vowel and mute_vowels else 1.0)
+		_face_targets[int(binding.slot)].value = value
+	for binding: Dictionary in _channel_bindings.get("blink", []):
+		var target: Dictionary = _face_targets[int(binding.slot)]
+		target.value = maxf(float(target.value), blink * float(binding.weight))
+	for binding: Dictionary in _channel_bindings.get("mouth_a", []):
+		var target: Dictionary = _face_targets[int(binding.slot)]
+		target.value = maxf(float(target.value), mouth * float(binding.weight))
+	for target: Dictionary in _face_targets:
+		var mesh: MeshInstance3D = target.mesh
 		if mesh:
-			mesh.set_blend_shape_value(int(item.binding.index), clampf(item.value, 0, 1))
+			mesh.set_blend_shape_value(int(target.index), clampf(float(target.value), 0, 1))
 
 func _observe_secondary_motion() -> void:
 	# Observe the final post-modifier pose; the plugin owns the simulation.
 	if skeleton:
-		_skin_bounds.sample(skeleton, action != "idle", 100000)
-		for i in skeleton.get_bone_count():
-			var name_ := skeleton.get_bone_name(i)
-			if "hair" in name_.to_lower() or "skirt" in name_.to_lower():
-				var pose := skeleton.get_bone_pose_rotation(i)
-				if _last_spring_pose.has(i):
-					spring_motion_max = maxf(spring_motion_max, pose.angle_to(_last_spring_pose[i]))
-				_last_spring_pose[i] = pose
+		# Throttled: full vertex weighting every frame is the main CPU spike
+		# during walks and actions. Action changes force one immediate sample.
+		_skin_bounds.sample(skeleton, _bounds_refresh_pending, BOUNDS_INTERVAL_USEC)
+		_bounds_refresh_pending = false
+		for i in _spring_bone_indices:
+			var pose := skeleton.get_bone_pose_rotation(i)
+			if _last_spring_pose.has(i):
+				spring_motion_max = maxf(spring_motion_max, pose.angle_to(_last_spring_pose[i]))
+			_last_spring_pose[i] = pose
 		visible_bounds_changed.emit()
 
 func project_visible_rect(camera: Camera3D, refresh := false) -> Rect2:
@@ -640,35 +739,31 @@ func project_visible_rect(camera: Camera3D, refresh := false) -> Rect2:
 	return rectangle.grow(1.0)
 
 func _bone_position(profile: String) -> Vector3:
-	var index := skeleton.find_bone(str(bone_map.get(profile, "")))
+	return _bone_point(int(_bone_indices.get(profile, -1)))
+
+func _bone_point(index: int) -> Vector3:
 	if index < 0:
 		return global_position
 	return skeleton.global_transform * skeleton.get_bone_global_pose(index).origin
 
 func project_hit_regions(camera: Camera3D) -> Array:
-	var result: Array = []
 	var center := _bone_position("Hips")
 	var pixel_scale := camera.unproject_position(center).distance_to(camera.unproject_position(center + Vector3.UP))
-	var chest := "Chest" if bone_map.has("Chest") else "Spine"
-	_add_region(result, camera, "Hips", chest, 0.16 * pixel_scale, "body")
-	_add_region(result, camera, chest, "Head", 0.10 * pixel_scale, "body")
-	# A head joint commonly sits at the neck, especially in stylized models.
-	# Fit the visible head height instead of treating that joint as its center.
-	var head := _bone_position("Head")
-	result.append({"id": "head", "a": camera.unproject_position(head + Vector3.UP * _head_height * 0.3), "b": camera.unproject_position(head + Vector3.UP * _head_height * 0.7), "radius": _head_height * 0.33 * pixel_scale})
-	for side in ["Left", "Right"]:
-		_add_region(result, camera, side + "Shoulder", side + "UpperArm", 0.065 * pixel_scale, "hand")
-		_add_region(result, camera, side + "UpperArm", side + "LowerArm", 0.065 * pixel_scale, "hand")
-		_add_region(result, camera, side + "LowerArm", side + "Hand", 0.065 * pixel_scale, "hand")
-		_add_region(result, camera, side + "UpperLeg", side + "LowerLeg", 0.09 * pixel_scale, "leg")
-		_add_region(result, camera, side + "LowerLeg", side + "Foot", 0.075 * pixel_scale, "leg")
-		_add_region(result, camera, side + "Foot", side + "Toes", 0.065 * pixel_scale, "foot")
-	return result
-
-func _add_region(regions: Array, camera: Camera3D, start: String, end: String, radius: float,
-		id := "body") -> void:
-	if bone_map.has(start) and bone_map.has(end):
-		regions.append({"id": id, "a": camera.unproject_position(_bone_position(start)), "b": camera.unproject_position(_bone_position(end)), "radius": radius})
+	# The region dictionaries are reused frame to frame; consumers only read
+	# them, so updating in place avoids ~15 allocations per frame.
+	for i in _hit_specs.size():
+		var spec: Dictionary = _hit_specs[i]
+		var region: Dictionary = _hit_cache[i]
+		if bool(spec.head):
+			var head := _bone_position("Head")
+			region.a = camera.unproject_position(head + Vector3.UP * _head_height * 0.3)
+			region.b = camera.unproject_position(head + Vector3.UP * _head_height * 0.7)
+			region.radius = _head_height * 0.33 * pixel_scale
+		else:
+			region.a = camera.unproject_position(_bone_point(int(spec.a)))
+			region.b = camera.unproject_position(_bone_point(int(spec.b)))
+			region.radius = float(spec.scale) * pixel_scale
+	return _hit_cache
 
 func describe() -> Dictionary:
 	var positions := {}

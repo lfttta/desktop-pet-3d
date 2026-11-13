@@ -1,19 +1,55 @@
-"""Convert the seven Stage 2 FBX candidates into normalized skeleton-only GLBs."""
+"""Convert the seven Stage 2 FBX candidates into normalized skeleton-only GLBs.
+
+Paths are reproducible on any machine: --repo-root/--fbx-source (passed to this
+script after Blender's ``--``) override PET3D_REPO_ROOT/PET3D_FBX_SOURCE, which
+override the default project paths.
+"""
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import shutil
 import struct
+import sys
 
 import bpy
 from mathutils import Matrix, Quaternion, Vector
 
 
-ROOT = Path(__file__).resolve().parents[2]
-SOURCE_ROOT = Path(r"D:\danjigame\模型all\pet动作模型")
+DEFAULT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SOURCE_ROOT = Path(r"D:\danjigame\模型all\pet动作模型")
+
+
+def resolve_paths(argv: list[str], environ: dict) -> tuple[Path, Path]:
+    """CLI wins over the environment override, which wins over the defaults.
+
+    Blender keeps its own options in sys.argv and passes the script's options
+    after a ``--`` separator. ``argparse`` treats everything after ``--`` as
+    positional, so the separator is split off here first; without it the whole
+    argv is parsed.
+    """
+    if "--" in argv:
+        argv = argv[argv.index("--") + 1:]
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--repo-root", type=Path, default=None)
+    parser.add_argument("--fbx-source", type=Path, default=None)
+    args, _ = parser.parse_known_args(argv)
+    root = args.repo_root
+    if root is None:
+        value = environ.get("PET3D_REPO_ROOT", "")
+        root = Path(value) if value else DEFAULT_ROOT
+    source = args.fbx_source
+    if source is None:
+        value = environ.get("PET3D_FBX_SOURCE", "")
+        source = Path(value) if value else DEFAULT_SOURCE_ROOT
+    return root, source
+
+
+ROOT, SOURCE_ROOT = resolve_paths(sys.argv[1:], os.environ)
 OUTPUT = ROOT / "build/stage2/motions"
 
 

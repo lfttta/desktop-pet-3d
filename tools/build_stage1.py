@@ -34,9 +34,13 @@ def safe_clean_output(path: Path) -> None:
 def run_command(name: str, command: list[str], timeout: int = 180, cwd: Path = ROOT) -> str:
     REPORT.mkdir(parents=True, exist_ok=True)
     log = REPORT / f"build-{name}.log"
-    with log.open("w", encoding="utf-8") as output:
-        result = subprocess.run(command, cwd=cwd, stdout=output, stderr=subprocess.STDOUT,
-                                timeout=timeout, creationflags=CREATE_NO_WINDOW)
+    try:
+        with log.open("w", encoding="utf-8") as output:
+            result = subprocess.run(command, cwd=cwd, stdout=output, stderr=subprocess.STDOUT,
+                                    timeout=timeout, creationflags=CREATE_NO_WINDOW)
+    except subprocess.TimeoutExpired:
+        print(f"{name}: timed out after {timeout}s; child stopped; partial log: {log}")
+        raise SystemExit(1) from None
     text = log.read_text(encoding="utf-8", errors="replace")
     print(f"{name}: exit={result.returncode}; {log}")
     if result.returncode:
@@ -49,9 +53,13 @@ def run_godot(engine: Path, name: str, arguments: list[str], marker: str | None 
     log = REPORT / f"build-{name}.log"
     engine_log = REPORT / f"build-{name}-engine.log"
     command = [str(engine), "--headless", "--path", str(PROJECT), "--log-file", str(engine_log.resolve()), *arguments]
-    with log.open("w", encoding="utf-8") as output:
-        result = subprocess.run(command, cwd=PROJECT, stdout=output, stderr=subprocess.STDOUT,
-                                timeout=timeout, creationflags=CREATE_NO_WINDOW)
+    try:
+        with log.open("w", encoding="utf-8") as output:
+            result = subprocess.run(command, cwd=PROJECT, stdout=output, stderr=subprocess.STDOUT,
+                                    timeout=timeout, creationflags=CREATE_NO_WINDOW)
+    except subprocess.TimeoutExpired:
+        print(f"{name}: timed out after {timeout}s; child stopped; partial log: {log}")
+        raise SystemExit(1) from None
     text = log.read_text(encoding="utf-8", errors="replace")
     clean = re.sub(r"\x1b\[[0-9;]*m", "", text)
     errors = [line for line in clean.splitlines() if line.lstrip().startswith(("ERROR:", "SCRIPT ERROR:"))]
@@ -87,7 +95,8 @@ def write_manifest() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--engine", type=Path, default=DEFAULT_ENGINE)
+    parser.add_argument("--engine", type=Path,
+                        default=Path(os.environ.get("PET3D_ENGINE") or str(DEFAULT_ENGINE)))
     parser.add_argument("--check-only", action="store_true")
     args = parser.parse_args()
     if os.name != "nt":

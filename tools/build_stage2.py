@@ -1,4 +1,9 @@
-"""Build and verify Godette only. Optional --rebuild-assets uses Blender."""
+"""Build and verify Godette only. Optional --rebuild-assets uses Blender.
+
+Engine/Blender paths: --engine/--blender override PET3D_ENGINE/PET3D_BLENDER,
+which override the default project paths. Asset source paths for the Blender
+conversion are parameterized in tools/assets/convert_stage2.py.
+"""
 from __future__ import annotations
 
 import argparse
@@ -19,11 +24,33 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / 'app'
 REPORT = ROOT / 'build/stage2/reports'
 OUTPUT = ROOT / 'dist/stage-2-godette'
-ENGINE = Path(r'D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe')
-BLENDER = Path(r'D:\steam\steamapps\common\Blender\blender.exe')
+DEFAULT_ENGINE = Path(r'D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64_console.exe')
+DEFAULT_BLENDER = Path(r'D:\steam\steamapps\common\Blender\blender.exe')
+# Resolved in main() from --engine/--blender or PET3D_ENGINE/PET3D_BLENDER.
+ENGINE = DEFAULT_ENGINE
+BLENDER = DEFAULT_BLENDER
+CREATE_NO_WINDOW = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
 # The delivered package ships exactly these characters; everything else is an
 # asset-line contract that must still bake and verify.
 PACKAGE_CHARACTER_IDS = ['godette']
+
+
+def resolve_path(cli: Path | None, env: str, default: Path) -> Path:
+    """CLI wins over the environment override, which wins over the default."""
+    if cli is not None:
+        return cli
+    value = os.environ.get(env, '')
+    return Path(value) if value else default
+
+
+def check_python(version: tuple, virtualenv: bool) -> str:
+    """Require the project venv on Python 3.13; warn on a different patch level."""
+    if not virtualenv or tuple(version[:2]) != (3, 13):
+        raise SystemExit('Use .venv/Scripts/python.exe (Python 3.13)')
+    if tuple(version[:3]) != (3, 13, 14):
+        return ('WARN: Python ' + '.'.join(map(str, version[:3])) +
+                ' differs from the validated 3.13.14 patch level')
+    return ''
 
 
 def humanoid_contracts() -> dict[str, dict]:
@@ -49,11 +76,17 @@ def manifest_actions() -> int:
 def run(name: str, command: list[str], marker: str = '', timeout: int = 300) -> str:
     REPORT.mkdir(parents=True, exist_ok=True)
     log = REPORT / (name + '.log')
-    with log.open('w', encoding='utf-8') as stream:
-        result = subprocess.run(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT,
-                                timeout=timeout, creationflags=subprocess.CREATE_NO_WINDOW)
+    try:
+        with log.open('w', encoding='utf-8') as stream:
+            result = subprocess.run(command, cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT,
+                                    timeout=timeout, creationflags=CREATE_NO_WINDOW)
+    except subprocess.TimeoutExpired:
+        text = log.read_text('utf-8', errors='replace') if log.is_file() else ''
+        raise RuntimeError(f'{name} timed out after {timeout}s; child stopped; partial log:\n{text[-6000:]}') from None
     text = log.read_text('utf-8', errors='replace')
-    if result.returncode or (marker and marker not in text) or 'SCRIPT ERROR:' in text or '\nERROR:' in text:
+    # Line-start detection so an ERROR on the very first line is not missed.
+    has_error = any(line.lstrip().startswith(('ERROR:', 'SCRIPT ERROR:')) for line in text.splitlines())
+    if result.returncode or (marker and marker not in text) or has_error:
         raise RuntimeError(f'{name} failed ({result.returncode}):\n{text[-6000:]}')
     print('PASS ' + name, flush=True)
     return text
@@ -73,12 +106,34 @@ def manifest(package: Path) -> None:
     (package / 'manifest.json').write_text(json.dumps(files, indent=2), 'utf-8')
 
 
+def cleanup_candidate(candidate: Path) -> None:
+    """Remove only the timestamped candidate directory this run created."""
+    base = (ROOT / 'build/stage2').resolve()
+    if candidate.is_symlink() or not candidate.is_dir():
+        return
+    if candidate.resolve().parent != base or not candidate.name.startswith('package-'):
+        return
+    shutil.rmtree(candidate)
+
+
 def main() -> None:
+    global ENGINE, BLENDER
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--rebuild-assets', action='store_true')
+    parser.add_argument('--engine', type=Path, default=None,
+                        help='Godot console executable (default: PET3D_ENGINE or the project path)')
+    parser.add_argument('--blender', type=Path, default=None,
+                        help='Blender executable (default: PET3D_BLENDER or the project path)')
     args = parser.parse_args()
-    if sys.prefix == sys.base_prefix or sys.version_info[:3] != (3, 13, 14):
-        raise SystemExit('Use .venv/Scripts/python.exe (Python 3.13.14)')
+    warning = check_python(sys.version_info[:3], sys.prefix != sys.base_prefix)
+    if warning:
+        print(warning, flush=True)
+    ENGINE = resolve_path(args.engine, 'PET3D_ENGINE', DEFAULT_ENGINE)
+    BLENDER = resolve_path(args.blender, 'PET3D_BLENDER', DEFAULT_BLENDER)
+    if not ENGINE.is_file():
+        raise SystemExit(f'Godot engine not found: {ENGINE}')
+    if args.rebuild_assets and not BLENDER.is_file():
+        raise SystemExit(f'Blender not found: {BLENDER}')
     REPORT.mkdir(parents=True, exist_ok=True)
     run('prepare', [sys.executable, '-B', 'tools/assets/prepare_stage2.py'])
     if args.rebuild_assets:
@@ -149,25 +204,30 @@ def main() -> None:
         print('WARN non-package contracts reported failures: ' + '; '.join(non_package_failures), flush=True)
     candidate = ROOT / ('build/stage2/package-' + time.strftime('%Y%m%d-%H%M%S'))
     candidate.mkdir(parents=True, exist_ok=False)
-    run('service-build', [sys.executable, '-B', 'tools/build_service.py', '--output', str(candidate / 'service')])
-    run('frozen-service-tests', [sys.executable, '-B', '-m', 'pytest', 'tests/service', '-q', '-p', 'no:cacheprovider', '--service-exe', str(candidate / 'service/pet-service.exe'), '--basetemp', str(ROOT / 'build/stage2/test-frozen')])
-    run('export', [str(ENGINE), '--headless', '--path', str(APP), '--export-release', 'Windows', str(candidate / 'Pet3D.exe')])
-    for filename in ['README-stage2.md', 'THIRD_PARTY_NOTICES.md']:
-        shutil.copy2(ROOT / filename, candidate / filename)
-    # The app reads data/expression/phrases.json at runtime (the line it says
-    # when clicked). The service carries its own copy under service/_internal/data,
-    # but the app looks next to the executable, so the package needs this too.
-    shutil.copytree(ROOT / 'data', candidate / 'data')
-    shutil.copy2(ROOT / 'tools/Preview.cmd', candidate / 'Preview.cmd')
-    licenses = candidate / 'licenses'
-    licenses.mkdir()
-    for filename, source in {'vrm-LICENSE': APP / 'addons/vrm/LICENSE', 'mtoon-LICENSE': APP / 'addons/mtoon/LICENSE', 'godot-LICENSE.txt': ROOT / 'native/vendor/godot/LICENSE.txt', 'assets-ATTRIBUTION.txt': APP / 'models/ATTRIBUTION.txt'}.items():
-        if source.is_file():
-            shutil.copy2(source, licenses / filename)
-    manifest(candidate)
-    verify_package(candidate, REPORT)
-    verify_visuals(candidate, REPORT / 'packaged-visuals')
-    verify_desktop(candidate, REPORT)
+    try:
+        run('service-build', [sys.executable, '-B', 'tools/build_service.py', '--output', str(candidate / 'service')])
+        run('frozen-service-tests', [sys.executable, '-B', '-m', 'pytest', 'tests/service', '-q', '-p', 'no:cacheprovider', '--service-exe', str(candidate / 'service/pet-service.exe'), '--basetemp', str(ROOT / 'build/stage2/test-frozen')])
+        run('export', [str(ENGINE), '--headless', '--path', str(APP), '--export-release', 'Windows', str(candidate / 'Pet3D.exe')])
+        for filename in ['README-stage2.md', 'THIRD_PARTY_NOTICES.md']:
+            shutil.copy2(ROOT / filename, candidate / filename)
+        # The app reads data/expression/phrases.json at runtime (the line it says
+        # when clicked). The service carries its own copy under service/_internal/data,
+        # but the app looks next to the executable, so the package needs this too.
+        shutil.copytree(ROOT / 'data', candidate / 'data')
+        shutil.copy2(ROOT / 'tools/Preview.cmd', candidate / 'Preview.cmd')
+        licenses = candidate / 'licenses'
+        licenses.mkdir()
+        for filename, source in {'vrm-LICENSE': APP / 'addons/vrm/LICENSE', 'mtoon-LICENSE': APP / 'addons/mtoon/LICENSE', 'godot-LICENSE.txt': ROOT / 'native/vendor/godot/LICENSE.txt', 'assets-ATTRIBUTION.txt': APP / 'models/ATTRIBUTION.txt'}.items():
+            if source.is_file():
+                shutil.copy2(source, licenses / filename)
+        manifest(candidate)
+        verify_package(candidate, REPORT)
+        verify_visuals(candidate, REPORT / 'packaged-visuals')
+        verify_desktop(candidate, REPORT)
+    except BaseException:
+        # Never leave a half-built candidate behind; only this run's dir is removed.
+        cleanup_candidate(candidate)
+        raise
     if OUTPUT.exists():
         archive = ROOT / ('build/stage2/previous-package-' + time.strftime('%Y%m%d-%H%M%S'))
         if OUTPUT.resolve().parent != (ROOT / 'dist').resolve():

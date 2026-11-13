@@ -13,13 +13,24 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def check_python(os_name: str, version: tuple) -> str:
+    """Require Windows Python 3.13; warn on a different patch level."""
+    if os_name != 'nt' or tuple(version[:2]) != (3, 13):
+        raise SystemExit('Use Windows Python 3.13: D:/phthon lang/python.exe')
+    if tuple(version[:3]) != (3, 13, 14):
+        return ('WARN: Python ' + '.'.join(map(str, version[:3])) +
+                ' differs from the validated 3.13.14 patch level')
+    return ''
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'dist/stage-1/service')
     parser.add_argument('--source-root', type=Path, default=ROOT)
     args = parser.parse_args()
-    if os.name != 'nt' or sys.version_info[:3] != (3, 13, 14):
-        raise SystemExit('Use Windows Python 3.13.14: D:/phthon lang/python.exe')
+    warning = check_python(os.name, sys.version_info[:3])
+    if warning:
+        print(warning)
     source_root = args.source_root.resolve()
     if not (source_root / 'service/main.py').is_file():
         raise SystemExit('Service source is missing')
@@ -29,6 +40,14 @@ def main():
     for path in (work, destination):
         if path.is_symlink():
             raise SystemExit('Refusing redirected build/output directory')
+    # The staging dir is cleaned before copying; never allow it to overlap the
+    # source tree or the PyInstaller work area that holds the fresh bundle.
+    service_source = source_root / 'service'
+    if (destination == service_source or destination.is_relative_to(service_source)
+            or destination in service_source.parents
+            or destination == work or destination in work.parents):
+        raise SystemExit('Refusing to clean an output directory that overlaps source or build files')
+    for path in (work, destination):
         path.mkdir(parents=True, exist_ok=True)
     environment = os.environ.copy()
     environment['PYTHONDONTWRITEBYTECODE'] = '1'
@@ -58,7 +77,11 @@ def main():
         raise SystemExit('PyInstaller did not produce pet-service.exe')
     if not (bundle / '_internal/data/persona/godette.json').is_file():
         raise SystemExit('PyInstaller did not bundle data/persona')
-    shutil.copytree(bundle, destination, dirs_exist_ok=True)
+    # Clean the staging dir so standalone runs never keep stale files from a
+    # previous build. Only the dedicated output dir is removed, never source.
+    if destination.exists():
+        shutil.rmtree(destination)
+    shutil.copytree(bundle, destination)
     print(destination / 'pet-service.exe')
     return 0
 

@@ -1,11 +1,20 @@
 ﻿extends SceneTree
 ## Run ONLY in tests/assets. Writes the agreed per-target AnimationLibrary caches.
 ## No source positions are copied to non-hip joints: target lengths remain exact.
+## Repo root: --repo-root=<path> (after --) or PET3D_REPO_ROOT override the
+## default project path so the bake is reproducible on other machines.
 
-const BASE := "D:/danjigame/3D-pet-gtpdo"
-const STAGE := BASE + "/prototypes/stage0"
+var BASE := "D:/danjigame/3D-pet-gtpdo"
+var STAGE := BASE + "/prototypes/stage0"
 
 func _initialize() -> void:
+	var root := OS.get_environment("PET3D_REPO_ROOT")
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--repo-root="):
+			root = arg.trim_prefix("--repo-root=")
+	if not root.is_empty():
+		BASE = root.replace("\\", "/")
+		STAGE = BASE + "/prototypes/stage0"
 	call_deferred("run")
 
 func find_node(n: Node, cls: String) -> Node:

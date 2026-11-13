@@ -501,6 +501,9 @@ func _ensure_speech_bubble() -> void:
 func _on_bubble_pressed() -> void:
 	if not is_instance_valid(speech_bubble) or not speech_bubble.visible:
 		return
+	# A click on the bubble is a user instruction like a click on the body: the
+	# pet stops walking so the bar opens where the bubble was and stays there.
+	_finish_walk(false)
 	var bubble_rect := Rect2(Vector2(get_window().position) + speech_bubble.position,
 		speech_bubble.get_bubble_size())
 	hide_bubble()
@@ -597,6 +600,10 @@ func _update_input() -> void:
 		bridge.set_interactive(interactive)
 		previous_interactive = interactive
 	if state.begin:
+		# A press anywhere but the field means the user is done typing; the bar
+		# must not float over the desktop while the pet is being dragged.
+		if not bubble_hit:
+			close_reply_bar()
 		# Remember where the press landed: a press that started on the bubble is
 		# a click on it, never a drag of the pet. A bubble that happens to be
 		# drawn over the body (a very narrow window) does not take that press;
@@ -1041,6 +1048,10 @@ func _finish_walk(completed: bool) -> void:
 
 func _update_behavior(delta: float) -> void:
 	if not behavior_enabled:
+		return
+	# The user is typing into the reply bar: walking away or playing an action
+	# now would move the pet out from under the bar they are using.
+	if is_instance_valid(reply_bar) and reply_bar.is_open():
 		return
 	if _behavior_cooldown > 0.0:
 		_behavior_cooldown -= delta

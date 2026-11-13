@@ -5,6 +5,7 @@ extends SceneTree
 
 const ReplyBar = preload("res://scripts/ui/reply_bar.gd")
 const PetWindow = preload("res://scripts/pet_window.gd")
+const FakeBridge = preload("res://tests/fake_bridge.gd")
 
 var checks := 0
 var failures := 0
@@ -24,6 +25,7 @@ func _initialize() -> void:
 func _run() -> void:
 	await _test_bar()
 	await _test_window_handoff()
+	await _test_bar_against_pet()
 	print("BUBBLE_INPUT_TESTS checks=", checks, " failures=", failures)
 	quit(0 if failures == 0 else 1)
 
@@ -108,4 +110,63 @@ func _test_window_handoff() -> void:
 	pet._on_bubble_pressed()
 	pet.set_bubble_enabled(false)
 	check(not pet.reply_bar.is_open(), "turning bubbles off closes the bar")
+	pet.free()
+
+
+## The bar must not float over a pet that keeps moving: clicking the bubble
+## stops a walk, the behaviour chain stays quiet while the bar is open, and a
+## press on the pet closes the bar.
+func _test_bar_against_pet() -> void:
+	var pet := PetWindow.new()
+	root.add_child(pet)
+	await process_frame
+	await process_frame
+	pet.behavior_enabled = false
+	pet.work_area_override = Rect2i(0, 0, 1920, 1080)
+	pet._ensure_motion_bounds()
+	pet.motion.settle_at(960.0)
+	pet._play_action("idle")
+
+	check(pet._begin_walk(1, 1), "the pet can walk for the test")
+	pet.show_bubble("在的")
+	pet._on_bubble_pressed()
+	check(not pet._walk_active, "a bubble click stops the walk")
+	check(pet.reply_bar.is_open(), "the bar still opens after stopping the walk")
+
+	pet.close_reply_bar()
+	pet._play_action("idle")
+	pet.behavior_enabled = true
+	pet._behavior_cooldown = 0.0
+	pet.behavior.roll_override = func(): return 0.99
+	pet.reply_bar.open_at(Vector2i(10, 10))
+	pet._update_behavior(1.0 / 60.0)
+	check(pet._behavior_cooldown == 0.0, "no decision while the reply bar is open")
+	pet.close_reply_bar()
+	pet._update_behavior(1.0 / 60.0)
+	check(pet._behavior_cooldown > 0.0, "decisions resume after the bar closes")
+
+	# Drive the real input loop with a stand-in bridge: a press on the pet closes
+	# the bar before the click/drag branch runs.
+	var fake := FakeBridge.new()
+	pet.bridge = fake
+	pet.drag.cancel()
+	pet._motion_active = false
+	pet._hold_pending = false
+	pet.reply_bar.open_at(Vector2i(10, 10))
+	pet.work_area_override = Rect2i(0, 0, 1920, 1000)
+	pet.regions = [{"a": Vector2(0, 0), "b": Vector2(400, 400), "radius": 400.0}]
+	fake.cursor = root.position + Vector2i(30, 30)
+	fake.down = false
+	pet._update_input()
+	fake.down = true
+	pet._update_input()
+	check(not pet.reply_bar.is_open(), "a press on the pet closes the reply bar")
+	fake.down = false
+	pet._update_input()
+
+	# Hiding the pet from the tray must not leave a focused bar on the desktop.
+	pet.reply_bar.open_at(Vector2i(10, 10))
+	pet._handle_tray(1)
+	check(not pet.reply_bar.is_open(), "hiding the pet closes the reply bar")
+	pet._handle_tray(1)
 	pet.free()

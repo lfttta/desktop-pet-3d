@@ -404,7 +404,8 @@ def run_job(store, job, settings, moment, compressor=None):
     raise ValueError('unsupported memory job type')
 
 
-def process(store, settings, now=None, limit=BATCH_LIMIT, compressor=None):
+def process(store, settings, now=None, limit=BATCH_LIMIT, compressor=None,
+            defer_model_compact=False):
     """Run due pending jobs up to ``limit``; returns per-job outcomes."""
     moment = _moment(now)
     limited = max(1, int(limit))
@@ -417,6 +418,9 @@ def process(store, settings, now=None, limit=BATCH_LIMIT, compressor=None):
         if len(processed) >= limited:
             break
         job = dict(zip(JOB_COLUMNS, raw))
+        if defer_model_compact and job.get('job_type') == JOB_COMPACT:
+            # 模型压缩由后台驱动器处理，tick 内不做网络调用。
+            continue
         if policy.timestamp_value(job.get('scheduled_at')) > moment.timestamp():
             continue
         if not _mark_running(store, job['id'], moment):
@@ -515,8 +519,13 @@ def _scan(store, settings, moment):
     return queued
 
 
-def tick(store, settings, now=None, force=False, compressor=None):
-    """One maintenance heartbeat; performs work only inside the run window."""
+def tick(store, settings, now=None, force=False, compressor=None,
+         defer_model_compact=False):
+    """One maintenance heartbeat; performs work only inside the run window.
+
+    ``defer_model_compact`` 为 True 时，模型压缩作业留给后台驱动器
+    （见 :func:`next_model_job`），tick 本身不做任何网络调用。
+    """
     moment = _moment(now)
     if is_paused(store):
         return []
@@ -525,4 +534,67 @@ def tick(store, settings, now=None, force=False, compressor=None):
     if not force and not should_run(store, settings, moment, pending):
         return []
     _scan(store, settings, moment)
-    return process(store, settings, moment, compressor=compressor)
+    return process(store, settings, moment, compressor=compressor,
+                   defer_model_compact=defer_model_compact)
+
+
+# -- 模型压缩的后台驱动 ----------------------------------------------------
+# 服务线程只负责选取/落库；网络调用由调用方放到工作线程执行。
+
+
+def next_model_job(store, settings, moment):
+    """选取一个到期的模型压缩作业并标记 running；没有则返回 None。"""
+    config = compact.compaction_config(settings)
+    if not config.get('enabled', False) or not config.get('model_compress'):
+        return None
+    if compact.daily_count(store, moment) >= int(config.get('daily_limit', 0)):
+        return None
+    rows = store.connection.execute(
+        "SELECT * FROM memory_jobs WHERE status='pending' AND attempts < ? "
+        "AND job_type=? ORDER BY scheduled_at, created_at, rowid LIMIT 4",
+        (MAX_ATTEMPTS, JOB_COMPACT)).fetchall()
+    for raw in rows:
+        job = dict(zip(JOB_COLUMNS, raw))
+        if policy.timestamp_value(job.get('scheduled_at')) > moment.timestamp():
+            continue
+        if _mark_running(store, job['id'], moment):
+            return job
+    return None
+
+
+def prepare_model_job(store, job, settings, moment):
+    """在服务线程准备模型压缩输入；返回 {'text','target'} 或 {'skip': result}。"""
+    memory_id = job.get('memory_id')
+    row = store.get_memory(memory_id)
+    config = compact.compaction_config(settings)
+    if row is None or row.get('deleted_at') or row.get('status') != 'active':
+        return {'skip': {'status': 'skipped', 'reason': 'not_active'}}
+    if int(row.get('protected') or 0):
+        return {'skip': {'status': 'skipped', 'reason': 'protected'}}
+    if float(row.get('importance') or 0.0) >= float(config.get('protect_importance', 0.8)):
+        return {'skip': {'status': 'skipped', 'reason': 'important'}}
+    if compact.daily_count(store, moment) >= int(config.get('daily_limit', 0)):
+        return {'skip': {'status': 'skipped', 'reason': 'daily_limit'}}
+    text = row.get('content') or ''
+    old_level = policy.clamp_fuzz_level(row.get('fuzz_level'))
+    _chosen, target = compact.deterministic_choice(text, old_level,
+                                                   compact.MAX_COMPACT_LEVEL)
+    if target is None:
+        target = min(compact.MAX_COMPACT_LEVEL,
+                     max(old_level + 1, policy.FUZZ_SUMMARY))
+    return {'text': text, 'target': target}
+
+
+def complete_model_job(store, job, settings, moment, raw):
+    """在服务线程用工作线程取回的原始回复完成压缩；失败时抛异常。"""
+    return compact.process_memory(store, job.get('memory_id'), settings, moment,
+                                  allow_model=True,
+                                  compressor=lambda text, level: raw)
+
+
+def finish_model_job(store, job, moment, result):
+    _mark_completed(store, job['id'], moment, result)
+
+
+def retry_model_job(store, job, moment, exc):
+    _mark_retry(store, job['id'], moment, _error_code(exc))

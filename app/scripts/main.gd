@@ -123,6 +123,8 @@ func _ready() -> void:
 		return
 	client = DesktopServiceClient.new()
 	add_child(client)
+	# The pet window's fps governor polls desktop attention through this client.
+	_desktop_client = client
 	client.connected.connect(_on_connected)
 	client.settings_received.connect(_on_settings_received)
 	client.status_changed.connect(_on_service_status)

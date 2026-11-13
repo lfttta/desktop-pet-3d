@@ -17,6 +17,7 @@ const ScreenMath = preload("res://scripts/screen_math.gd")
 const ActionMenu = preload("res://scripts/action_menu.gd")
 const MotionController = preload("res://scripts/motion/motion_controller.gd")
 const BehaviorController = preload("res://scripts/behavior/behavior_controller.gd")
+const FpsGovernor = preload("res://scripts/state/fps_governor.gd")
 const WalkPlan = preload("res://scripts/behavior/walk_plan.gd")
 const SpeechBubble = preload("res://scripts/ui/speech_bubble.gd")
 const ReplyBar = preload("res://scripts/ui/reply_bar.gd")
@@ -208,6 +209,18 @@ var hidden_fps := 5
 ## `--no-behavior` wins over the saved behavior.enabled value.
 var _behavior_forced_off := false
 
+## Roadmap 3-F frame tiering. The governor is pure logic; this class feeds it
+## the activity state and applies the result to Engine.max_fps.
+var fps_governor := FpsGovernor.new()
+## Last desktop attention state reported by the service ("fullscreen", "idle",
+## "active_work", …). "unknown" until the first successful poll.
+var desktop_state := "unknown"
+var _idle_seconds := 0.0
+var _desktop_poll_remaining := 2.0
+var _desktop_request_id := ""
+var _desktop_client: Variant = null
+const DESKTOP_POLL_SECONDS := 15.0
+
 func _ready() -> void:
 	_parse_options()
 	_behavior_forced_off = options.has("no-behavior")
@@ -223,6 +236,7 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	screen = maxi(0, DisplayServer.get_primary_screen())
 	dpi_scale = clampf(DisplayServer.screen_get_dpi(screen) / 96.0, 1.0, 3.0)
+	_connect_desktop_client()
 	# Install no-activate/passthrough before synchronous model/resource loading.
 	if not _initialize_native():
 		return
@@ -485,6 +499,9 @@ func _process(delta: float) -> void:
 			elif _walk_active:
 				status = "行走"
 			status_label.text = "Godette · %s\n%s" % [current_action, status]
+	# Frame tiering runs even while hidden: that is exactly when the drop to
+	# 5 fps matters. Walks and actions always get their 30 fps back immediately.
+	_update_fps_tier(delta)
 	if options.has("capture") and elapsed > float(options.get("capture-at", "3")) and not captured_image:
 		captured_image = true
 		_capture.call_deferred()
@@ -1085,6 +1102,19 @@ func _phrase_paths() -> PackedStringArray:
 	if not executable_dir.is_empty():
 		paths.append(executable_dir.path_join("data/expression/phrases.json"))
 	return paths
+
+
+## Event-driven click edges. The 30 fps poll can miss a press+release shorter
+## than one frame; while the cursor is over the body the HWND is interactive,
+## so Godot also receives the real button events. Sampling the same input path
+## on the event catches those fast clicks. Clicks that happen entirely between
+## polls while the window is still click-through (cursor not yet on the body)
+## remain undetectable without a native hook — a documented limitation.
+func _unhandled_input(event: InputEvent) -> void:
+	if quitting or hidden or bridge == null:
+		return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		_update_input()
 
 
 ## --- Hold / fall / land -------------------------------------------------------
@@ -1730,6 +1760,77 @@ func _work_area() -> Rect2i:
 	if work_area_override.size.x > 0 and work_area_override.size.y > 0:
 		return work_area_override
 	return DisplayServer.screen_get_usable_rect(screen)
+
+
+## --- Frame tiering & desktop state ---------------------------------------------
+#
+# Roadmap 3-F. The governor owns the tier decision; this class only feeds it the
+# activity state and applies the result. The occluded and service-idle tiers
+# read the service's desktop attention sample on a slow poll.
+
+## Feeds activity and the polled desktop state into the governor and applies
+## the resulting tier. Runs every frame, hidden included — that is exactly when
+## the 5 fps tier matters — so the manual `Engine.max_fps` writes elsewhere are
+## only same-frame shortcuts the governor confirms on the next frame.
+func _update_fps_tier(delta: float) -> void:
+	# The base tiers read the configurable caps (settings.performance) afresh
+	# each frame, so a settings change lands without extra wiring. The hidden
+	# cap goes through the virtual target so a subclass raising it while a
+	# utility window is open keeps its frame rate.
+	fps_governor.drag_fps = drag_fps
+	fps_governor.idle_fps = idle_fps
+	fps_governor.hidden_fps = _hidden_fps_target()
+	_poll_desktop_state(delta)
+	var dragging := drag.active or motion.is_held()
+	# Any action, walk, fall or drag keeps the active tier; only true idle
+	# accumulates the seconds the long-idle tier needs.
+	var active := dragging or _walk_active or _motion_active or current_action != "idle"
+	_idle_seconds = 0.0 if active else _idle_seconds + delta
+	var target := fps_governor.update(delta, hidden, dragging, active, _idle_seconds, desktop_state)
+	# A headless loop has no vsync to pace; clamping it would only slow the test
+	# suite, which drives its simulation with explicit updates instead.
+	if DisplayServer.get_name() != "headless" and Engine.max_fps != target:
+		Engine.max_fps = target
+
+
+## Slow-cadence poll of the service's desktop attention sample. One request is
+## in flight at a time; without an injected client (headless tests, the
+## verify-package run) this is a no-op.
+func _poll_desktop_state(delta: float) -> void:
+	if _desktop_client == null or not _desktop_client.has_method("request"):
+		return
+	if _desktop_request_id != "":
+		return # A poll is still awaiting its reply; the next fires on arrival.
+	_desktop_poll_remaining -= delta
+	if _desktop_poll_remaining > 0.0:
+		return
+	_desktop_poll_remaining = DESKTOP_POLL_SECONDS
+	_desktop_request_id = str(_desktop_client.request("desktop.status", {}, 10.0))
+
+
+## Reply to the poll, matched by id: replies carry the generic "result" or
+## "error" type, and the settings window shares this client, so a type match
+## would also catch its requests. A result updates the state; a timeout or
+## transport failure keeps the last known value and the next cadence tick
+## retries — the governor reads "unknown" as no service opinion.
+func _on_desktop_status(id: String, reply_type: String, payload: Dictionary) -> void:
+	if id.is_empty() or id != _desktop_request_id:
+		return
+	_desktop_request_id = ""
+	if reply_type != "result":
+		return
+	var state: Variant = payload.get("state")
+	if state is String and not (state as String).is_empty():
+		desktop_state = state
+
+
+## Attaches the poll to the injected service client. main.gd owns the instance
+## and assigns it before `super._ready()` runs.
+func _connect_desktop_client() -> void:
+	if _desktop_client == null or not _desktop_client.has_signal("request_finished"):
+		return
+	if not _desktop_client.is_connected("request_finished", _on_desktop_status):
+		_desktop_client.request_finished.connect(_on_desktop_status)
 
 
 func _subject_rect() -> Rect2:

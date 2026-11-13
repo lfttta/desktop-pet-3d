@@ -44,6 +44,11 @@ func _run() -> void:
 		"submit_text sends chat.send, got %s" % [fake.requests])
 	check(fake.requests[0]["payload"].get("text") == "你好",
 		"submit_text trims the bubble's line, got %s" % [fake.requests[0]["payload"]])
+	# The first send is still streaming; a second bubble line must not vanish.
+	var sent_before := fake.requests.size()
+	check(not window.submit_text("流式中"), "submit_text refuses while a reply streams")
+	check(fake.requests.size() == sent_before, "a refused streaming line sends nothing")
+	check(window.input.text == "流式中", "the streaming refusal keeps the text in the field")
 	window.free()
 
 	var service := FakeClient.new()

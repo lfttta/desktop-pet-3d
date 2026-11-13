@@ -159,8 +159,9 @@ func focus_input() -> void:
 
 ## Sends text that came from somewhere else (the desktop bubble) through the
 ## same path as the input box, so history, streaming and retry all apply.
-## Returns false when chat is not available; the text stays in the field so the
-## window can show it instead of silently dropping the line.
+## Returns false when the text was not sent (chat unavailable, or a reply is
+## still streaming); the text stays in the field so the window can show it
+## instead of silently dropping the line.
 func submit_text(text: String) -> bool:
 	if input == null:
 		return false
@@ -168,7 +169,7 @@ func submit_text(text: String) -> bool:
 	if body.is_empty():
 		return false
 	input.text = body
-	if not _chat_available():
+	if not _chat_available() or _streaming:
 		_refresh_availability()
 		return false
 	_send()

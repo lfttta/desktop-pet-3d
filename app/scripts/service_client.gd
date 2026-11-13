@@ -1,5 +1,12 @@
 extends Node
 ## Nonblocking stdio transport. Persistence acknowledgments come from the service.
+##
+## Writes go through a dedicated writer thread: a pipe whose reader stopped
+## consuming would otherwise block `store_buffer` on the main thread and freeze
+## the whole UI. Reads stay on the main thread. Both directions reach the same
+## FileAccess object but through different methods (`store_buffer`/`flush`/
+## `get_error` on the writer, `get_length`/`get_buffer` on the reader), and only
+## the writer thread ever writes, so the pipe's write end has a single user.
 
 signal connected(settings: Dictionary, warnings: Array)
 signal settings_received(settings: Dictionary)
@@ -16,6 +23,14 @@ const TERMINAL_EVENTS := ["chat.done", "chat.error"]
 # transport: those requests fail locally and the service keeps running. Other
 # commands keep the older behaviour where a timeout is a transport failure.
 const LOCAL_TIMEOUT_COMMANDS := ["chat.send", "state.get", "desktop.status"]
+## Persistent auto-reconnect: 1s, 2s, 4s … capped at 30s. A successful handshake
+## resets the backoff, so a service that crashes repeatedly is always retried
+## instead of leaving the pet inert after a single attempt.
+const RESTART_BASE_DELAY := 1.0
+const RESTART_MAX_DELAY := 30.0
+## OS.is_process_running is a syscall; once per second is plenty to notice a
+## crash, and it keeps the per-frame cost of the transport loop down.
+const LIVENESS_INTERVAL_MS := 1000
 var state := "stopped"
 var detail := "后台服务尚未启动"
 var process_pid := 0
@@ -31,10 +46,21 @@ var _arguments := PackedStringArray()
 var _guard: RefCounted
 var _generation := 0
 var _sequence := 0
-var _restart_count := 0
+var _restart_delay := RESTART_BASE_DELAY
 var _retry_at := 0
 var _stopping := false
 var _stderr_bytes := 0
+var _liveness := true
+var _liveness_at := 0
+## Outbound queue drained by the writer thread. Ordering is preserved by the
+## single queue + single writer; every chunk is flushed as soon as it is written.
+var _outbound: Array[PackedByteArray] = []
+var _outbound_mutex := Mutex.new()
+var _outbound_ready := Semaphore.new()
+var _writer_thread: Thread
+var _writer_stdio: FileAccess
+var _writer_stop := false
+var _writer_failed := false
 
 func configure(executable: String, arguments: PackedStringArray, guard: RefCounted = null) -> void:
 	_executable = executable
@@ -62,6 +88,9 @@ func start() -> bool:
 		_close_pipe()
 		_failure("无法建立后台进程回收保护")
 		return false
+	_liveness = true
+	_liveness_at = Time.get_ticks_msec()
+	_start_writer()
 	request("hello", {"protocol_version": 1}, 8.0)
 	return true
 
@@ -83,12 +112,76 @@ func request(type: String, payload: Dictionary, timeout := 8.0) -> String:
 		"deadline": Time.get_ticks_msec() + int(effective * 1000),
 		"timeout_ms": int(effective * 1000),
 	}
-	_pipe.stdio.store_buffer(bytes)
-	_pipe.stdio.flush()
-	if _pipe.stdio.get_error() != OK:
-		_failure("向后台服务发送消息失败")
+	if not _enqueue(bytes):
+		pending.erase(id)
 		return ""
 	return id
+
+## Hands one frame to the writer thread. A dead writer (broken pipe) refuses the
+## frame; the main loop notices the failure and tears the transport down.
+func _enqueue(bytes: PackedByteArray) -> bool:
+	_outbound_mutex.lock()
+	var healthy := not _writer_stop and not _writer_failed and _writer_thread != null
+	if healthy:
+		_outbound.append(bytes)
+	_outbound_mutex.unlock()
+	if healthy:
+		_outbound_ready.post()
+	return healthy
+
+func _start_writer() -> void:
+	_outbound_mutex.lock()
+	_outbound.clear()
+	_writer_stop = false
+	_writer_failed = false
+	_outbound_mutex.unlock()
+	_writer_stdio = _pipe.stdio
+	_writer_thread = Thread.new()
+	_writer_thread.start(_writer_loop)
+
+## The only place that writes to the pipe. A full pipe blocks this thread, never
+## the UI; killing the child breaks the pipe and unblocks it for shutdown.
+func _writer_loop() -> void:
+	while true:
+		_outbound_ready.wait()
+		_outbound_mutex.lock()
+		var stopping := _writer_stop
+		var chunk := PackedByteArray()
+		if not stopping and not _outbound.is_empty():
+			chunk = _outbound.pop_front()
+		_outbound_mutex.unlock()
+		if stopping:
+			return
+		if chunk.is_empty():
+			continue
+		_writer_stdio.store_buffer(chunk)
+		_writer_stdio.flush()
+		if _writer_stdio.get_error() != OK:
+			_outbound_mutex.lock()
+			_writer_failed = true
+			_outbound_mutex.unlock()
+			return
+
+func _writer_has_failed() -> bool:
+	_outbound_mutex.lock()
+	var failed := _writer_failed
+	_outbound_mutex.unlock()
+	return failed
+
+## Joins the writer before the pipe handles close. Callers must terminate the
+## child first: a writer blocked on a full pipe only unblocks once the reading
+## end of the pipe is gone.
+func _stop_writer() -> void:
+	if _writer_thread == null:
+		return
+	_outbound_mutex.lock()
+	_writer_stop = true
+	_outbound.clear()
+	_outbound_mutex.unlock()
+	_outbound_ready.post()
+	_writer_thread.wait_to_finish()
+	_writer_thread = null
+	_writer_stdio = null
 
 func update_settings(patch: Dictionary) -> String:
 	return request("settings.update", patch) if state == "ready" else ""
@@ -113,7 +206,8 @@ func feature(name: String) -> Dictionary:
 func retry() -> void:
 	if state == "ready" or state == "starting":
 		return
-	_restart_count = 0
+	_restart_delay = RESTART_BASE_DELAY
+	_retry_at = 0
 	start()
 
 func _process(_delta: float) -> void:
@@ -122,8 +216,15 @@ func _process(_delta: float) -> void:
 		start()
 	if process_pid == 0 or _pipe.is_empty():
 		return
-	if not OS.is_process_running(process_pid):
+	var now := Time.get_ticks_msec()
+	if now - _liveness_at >= LIVENESS_INTERVAL_MS:
+		_liveness_at = now
+		_liveness = OS.is_process_running(process_pid)
+	if not _liveness:
 		_process_exit()
+		return
+	if _writer_has_failed():
+		_failure("向后台服务发送消息失败")
 		return
 	var available: int = _pipe.stdio.get_length()
 	if available > 0:
@@ -135,19 +236,13 @@ func _process(_delta: float) -> void:
 			_dispatch(message)
 			if process_pid == 0:
 				return
-	if not OS.is_process_running(process_pid):
-		_process_exit()
-		return
 	var errors_available: int = _pipe.stderr.get_length()
 	if errors_available > 0:
 		var error_bytes: PackedByteArray = _pipe.stderr.get_buffer(mini(errors_available, 16384))
 		if _stderr_bytes < 65536:
 			print("[service] ", error_bytes.get_string_from_utf8().strip_edges())
 		_stderr_bytes += error_bytes.size()
-	if not OS.is_process_running(process_pid):
-		_process_exit()
-		return
-	_expire_requests(Time.get_ticks_msec())
+	_expire_requests(now)
 
 ## Fail every request whose deadline has passed.
 ##
@@ -207,6 +302,8 @@ func _dispatch(message: Dictionary) -> void:
 		features = payload.get("features", {}) if payload.get("features") is Dictionary else {}
 		personas = payload.get("personas", []) if payload.get("personas") is Array else []
 		last_warnings = payload.get("warnings", []) if payload.get("warnings") is Array else []
+		# A healthy handshake earns the full retry budget back.
+		_restart_delay = RESTART_BASE_DELAY
 		_set_status("ready", "后台服务已连接")
 		connected.emit(settings, last_warnings)
 		capabilities_received.emit(features, personas)
@@ -298,10 +395,12 @@ func _failure(message: String) -> void:
 	_set_status("failed", message)
 	for id: String in abandoned:
 		request_finished.emit(id, "error", {"code": "transport_error", "message": message, "retryable": true})
-	if not _stopping and _restart_count < 1:
-		_restart_count += 1
-		_retry_at = Time.get_ticks_msec() + 500
-		_set_status("restarting", message + "；正在尝试恢复")
+	if not _stopping:
+		# Persistent reconnect with capped exponential backoff. The state signal
+		# carries the wait so the UI can show a reconnecting status.
+		_retry_at = Time.get_ticks_msec() + int(_restart_delay * 1000)
+		_set_status("restarting", message + "；%d 秒后自动重连" % int(_restart_delay))
+		_restart_delay = minf(_restart_delay * 2.0, RESTART_MAX_DELAY)
 
 func _terminate_owned() -> void:
 	if process_pid == 0:
@@ -312,6 +411,7 @@ func _terminate_owned() -> void:
 		OS.kill(process_pid) # Isolated headless tests only, no UI/process discovery.
 
 func _close_pipe() -> void:
+	_stop_writer()
 	for key in ["stdio", "stderr"]:
 		if _pipe.has(key):
 			_pipe[key].close()

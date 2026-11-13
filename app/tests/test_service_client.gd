@@ -55,9 +55,18 @@ func _run() -> void:
 	check(await _wait_until(func(): return connected_count == 2 and client.state == "ready", 8), "one unexpected crash automatically restarts service")
 	check(client.settings.user_name == "中文测试 🐾", "restart reads saved settings without replaying requests")
 	OS.kill(client.process_pid)
-	check(await _wait_until(func(): return client.state == "failed" and client.process_pid == 0), "second crash stops automatic retries")
+	check(await _wait_until(func(): return connected_count == 3 and client.state == "ready", 8), "a second crash also reconnects instead of leaving the pet inert")
+	# The backoff resets on every successful handshake: the third crash must
+	# reconnect just as fast as the first, not after an accumulated delay.
+	var crash_at := Time.get_ticks_msec()
+	OS.kill(client.process_pid)
+	check(await _wait_until(func(): return connected_count == 4 and client.state == "ready", 8), "a third crash still reconnects")
+	check(Time.get_ticks_msec() - crash_at < 5000, "backoff resets after a successful connection")
+	# Manual retry keeps working, including from the reconnecting state.
+	OS.kill(client.process_pid)
+	check(await _wait_until(func(): return client.state == "restarting", 8), "a crash surfaces the reconnecting state")
 	client.retry()
-	check(await _wait_until(func(): return client.state == "ready"), "explicit retry can recover after retry budget")
+	check(await _wait_until(func(): return connected_count == 5 and client.state == "ready", 8), "explicit retry recovers without waiting out the backoff")
 	var final_pid := client.process_pid
 	await client.stop()
 	check(client.process_pid == 0 and not OS.is_process_running(final_pid), "shutdown acknowledgement leads to a fully exited child")

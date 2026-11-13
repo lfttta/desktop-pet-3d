@@ -1,4 +1,4 @@
-extends VBoxContainer
+extends "res://scripts/ui/panel_base.gd"
 ## Token usage, budget status and diagnostic bundle export.
 
 const UNAVAILABLE_TEXT := "未接入"
@@ -20,15 +20,11 @@ var open_button: Button
 var path_label: Label
 var included_label: Label
 var diag_status: Label
-var _service
-var _requests := {}
-var _service_state := "stopped"
-var _usage_available := false
 var _diag_available := false
 var _last_path := ""
 
 func _ready() -> void:
-	add_theme_constant_override("separation", 8)
+	super._ready()
 	var header := HBoxContainer.new()
 	add_child(header)
 	var title := Label.new()
@@ -82,12 +78,6 @@ func _ready() -> void:
 	status_label.text = "状态：后台服务未连接"
 	_refresh_controls()
 
-func _section(text: String) -> void:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", 17)
-	add_child(label)
-
 func _value_label(text: String) -> Label:
 	var label := Label.new()
 	label.text = text
@@ -96,24 +86,21 @@ func _value_label(text: String) -> Label:
 	add_child(label)
 	return label
 
-func configure(service) -> void:
-	_disconnect_service()
-	_service = service
-	if service != null:
-		if service.has_signal("request_finished") and not service.request_finished.is_connected(_on_request_finished):
-			service.request_finished.connect(_on_request_finished)
-		if service.has_signal("capabilities_received") and not service.capabilities_received.is_connected(_on_capabilities):
-			service.capabilities_received.connect(_on_capabilities)
-		_service_state = str(service.state)
-	_usage_available = _feature_available("usage")
+func _feature_key() -> String:
+	return "usage"
+
+## 用量与诊断是两个独立能力，分别缓存可用性。
+func _refresh_capabilities() -> void:
+	super._refresh_capabilities()
 	_diag_available = _feature_available("diag")
-	_refresh_controls()
-	if _usage_available and _service_state == "ready":
+
+func _after_configure() -> void:
+	if _ready_for_requests():
 		refresh()
 
-func set_service_state(state: String) -> void:
-	_service_state = state
-	_refresh_controls()
+func _after_capabilities() -> void:
+	if _ready_for_requests() and today_label.text.ends_with("—"):
+		refresh()
 
 func refresh() -> void:
 	if not _ready_for_usage():
@@ -129,25 +116,8 @@ func refresh() -> void:
 func folder_path() -> String:
 	return _last_path.get_base_dir() if not _last_path.is_empty() else ""
 
-func _disconnect_service() -> void:
-	if _service == null:
-		return
-	if _service.has_signal("request_finished") and _service.request_finished.is_connected(_on_request_finished):
-		_service.request_finished.disconnect(_on_request_finished)
-	if _service.has_signal("capabilities_received") and _service.capabilities_received.is_connected(_on_capabilities):
-		_service.capabilities_received.disconnect(_on_capabilities)
-
-func _feature_available(name: String) -> bool:
-	if _service == null:
-		return false
-	var features: Variant = _service.get("features")
-	if not features is Dictionary:
-		return false
-	var feature: Variant = features.get(name, {})
-	return feature is Dictionary and bool(feature.get("available", false))
-
 func _ready_for_usage() -> bool:
-	return _service != null and _service_state == "ready" and _usage_available
+	return _ready_for_requests()
 
 func _ready_for_diag() -> bool:
 	return _service != null and _service_state == "ready" and _diag_available
@@ -163,32 +133,20 @@ func _refresh_controls() -> void:
 		diag_status.text = ""
 	if _service == null or _service_state != "ready":
 		status_label.text = "状态：后台服务未连接"
-	elif not _usage_available:
+	elif not _available:
 		status_label.text = "状态：" + UNAVAILABLE_TEXT
 
-func _on_capabilities(_features: Dictionary, _personas: Array) -> void:
-	_usage_available = _feature_available("usage")
-	_diag_available = _feature_available("diag")
-	_refresh_controls()
-	if _usage_available and _service_state == "ready" and today_label.text.ends_with("—"):
-		refresh()
+func _mark_unavailable(command: String, _entry: Dictionary) -> void:
+	# 用量与诊断是两个能力，分别下线；控件刷新由基类统一执行。
+	if command == "usage.get":
+		_available = false
+		status_label.text = "状态：" + UNAVAILABLE_TEXT
+	else:
+		_diag_available = false
+		diag_status.text = DIAG_UNAVAILABLE_TEXT
 
-func _on_request_finished(id: String, type: String, payload: Dictionary) -> void:
-	if not _requests.has(id):
-		return
-	var command := str(_requests[id].get("type", ""))
-	_requests.erase(id)
+func _handle_reply(command: String, type: String, payload: Dictionary, _entry: Dictionary) -> void:
 	var message := str(payload.get("message", ""))
-	var code := str(payload.get("code", ""))
-	if type == "error" and code in ["not_available", "unknown_command"]:
-		if command == "usage.get":
-			_usage_available = false
-			status_label.text = "状态：" + UNAVAILABLE_TEXT
-		else:
-			_diag_available = false
-			diag_status.text = DIAG_UNAVAILABLE_TEXT
-		_refresh_controls()
-		return
 	if command == "usage.get":
 		if type == "result":
 			_render(payload)

@@ -1,4 +1,4 @@
-extends VBoxContainer
+extends "res://scripts/ui/panel_base.gd"
 ## Personality growth queue: pending candidates, applied history and trait
 ## locks. Every action is a service command; nothing is applied locally.
 
@@ -14,17 +14,13 @@ var refresh_button: Button
 var candidates_box: VBoxContainer
 var history_box: VBoxContainer
 var locks_box: VBoxContainer
-var _service
-var _requests := {}
-var _service_state := "stopped"
-var _available := false
 var _lock_available := true
 var _locked_traits := {}
 var _lock_checks := {}
 var _action_buttons: Array = []
 
 func _ready() -> void:
-	add_theme_constant_override("separation", 8)
+	super._ready()
 	var header := HBoxContainer.new()
 	add_child(header)
 	var title := Label.new()
@@ -59,29 +55,13 @@ func _ready() -> void:
 	status.text = "后台服务未连接。"
 	_refresh_controls()
 
-func _section(text: String) -> void:
-	var label := Label.new()
-	label.text = text
-	label.add_theme_font_size_override("font_size", 17)
-	add_child(label)
+func _feature_key() -> String:
+	return "growth"
 
-func configure(service) -> void:
-	_disconnect_service()
-	_service = service
-	if service != null:
-		if service.has_signal("request_finished") and not service.request_finished.is_connected(_on_request_finished):
-			service.request_finished.connect(_on_request_finished)
-		if service.has_signal("capabilities_received") and not service.capabilities_received.is_connected(_on_capabilities):
-			service.capabilities_received.connect(_on_capabilities)
-		_service_state = str(service.state)
-	_available = _feature_available()
-	_refresh_controls()
-	if _available:
+## 能力刚到达且列表还是空的时候补一次拉取。
+func _after_capabilities() -> void:
+	if _available and candidates_box.get_child_count() == 0 and history_box.get_child_count() == 0:
 		refresh()
-
-func set_service_state(state: String) -> void:
-	_service_state = state
-	_refresh_controls()
 
 func populate_locks(traits: Variant) -> void:
 	if not traits is Array:
@@ -112,26 +92,6 @@ func refresh() -> void:
 	_requests[id] = {"type": "growth.list"}
 	status.text = "正在加载成长数据…"
 
-func _disconnect_service() -> void:
-	if _service == null:
-		return
-	if _service.has_signal("request_finished") and _service.request_finished.is_connected(_on_request_finished):
-		_service.request_finished.disconnect(_on_request_finished)
-	if _service.has_signal("capabilities_received") and _service.capabilities_received.is_connected(_on_capabilities):
-		_service.capabilities_received.disconnect(_on_capabilities)
-
-func _feature_available() -> bool:
-	if _service == null:
-		return false
-	var features: Variant = _service.get("features")
-	if not features is Dictionary:
-		return false
-	var feature: Variant = features.get("growth", {})
-	return feature is Dictionary and bool(feature.get("available", false))
-
-func _ready_for_requests() -> bool:
-	return _service != null and _service_state == "ready" and _available
-
 func _refresh_controls() -> void:
 	if refresh_button == null:
 		return
@@ -149,45 +109,31 @@ func _refresh_controls() -> void:
 	elif not _available:
 		status.text = UNAVAILABLE_TEXT
 
-func _on_capabilities(_features: Dictionary, _personas: Array) -> void:
-	_available = _feature_available()
-	_refresh_controls()
-	if _available and candidates_box.get_child_count() == 0 and history_box.get_child_count() == 0:
-		refresh()
+## 锁定命令未接入只下线锁定开关；其余成长命令未接入则整个面板下线。
+func _mark_unavailable(command: String, entry: Dictionary) -> void:
+	if command == "personality.lock":
+		_lock_available = false
+		status.text = LOCK_UNAVAILABLE_TEXT
+		var check: CheckButton = _lock_checks.get(str(entry.get("trait", "")))
+		if check != null:
+			check.set_pressed_no_signal(false)
+		return
+	_available = false
+	status.text = UNAVAILABLE_TEXT
 
-func _on_request_finished(id: String, type: String, payload: Dictionary) -> void:
-	if not _requests.has(id):
-		return
-	var command := str(_requests[id].get("type", ""))
-	var button: Button = _requests[id].get("button")
-	var trait_name := str(_requests[id].get("trait", ""))
-	var locked := bool(_requests[id].get("locked", false))
-	_requests.erase(id)
+func _handle_reply(command: String, type: String, payload: Dictionary, entry: Dictionary) -> void:
+	var button: Button = entry.get("button")
+	var trait_name := str(entry.get("trait", ""))
+	var locked := bool(entry.get("locked", false))
 	var message := str(payload.get("message", ""))
-	var code := str(payload.get("code", ""))
-	if type == "error" and code in ["not_available", "unknown_command"]:
-		if command == "personality.lock":
-			_lock_available = false
-			status.text = LOCK_UNAVAILABLE_TEXT
-			var check: CheckButton = _lock_checks.get(trait_name)
-			if check != null:
-				check.set_pressed_no_signal(false)
-		else:
-			_available = false
-			status.text = UNAVAILABLE_TEXT
-		_refresh_controls()
-		return
 	if command == "growth.list":
 		if type == "result":
 			var candidates: Variant = payload.get("candidates", [])
 			var history: Variant = payload.get("history", [])
 			_render(candidates if candidates is Array else [], history if history is Array else [])
-		elif message.is_empty():
-			status.text = "成长列表加载失败。"
-			_refresh_controls()
-		else:
-			status.text = "成长列表加载失败：%s" % message
-			_refresh_controls()
+			return
+		status.text = _failure_text(message, "成长列表加载失败")
+		_refresh_controls()
 		return
 	if command == "personality.lock":
 		if button != null:
@@ -198,10 +144,8 @@ func _on_request_finished(id: String, type: String, payload: Dictionary) -> void
 			if check != null:
 				check.set_pressed_no_signal(bool(_locked_traits[trait_name]))
 			status.text = "人格锁定已更新。"
-		elif message.is_empty():
-			status.text = "人格锁定保存失败。"
 		else:
-			status.text = "人格锁定保存失败：%s" % message
+			status.text = _failure_text(message, "人格锁定保存失败")
 		_refresh_controls()
 		return
 	if type == "result":
@@ -209,12 +153,9 @@ func _on_request_finished(id: String, type: String, payload: Dictionary) -> void
 		if command == "growth.approve":
 			candidate_applied.emit()
 		refresh()
-	elif message.is_empty():
-		status.text = "操作失败。"
-		_refresh_controls()
-	else:
-		status.text = "操作失败：%s" % message
-		_refresh_controls()
+		return
+	status.text = _failure_text(message, "操作失败")
+	_refresh_controls()
 
 func _render(candidates: Array, history: Array) -> void:
 	_clear(candidates_box)

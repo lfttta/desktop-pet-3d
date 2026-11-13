@@ -8,6 +8,7 @@ const MemoryPanel = preload("res://scripts/ui/memory_panel.gd")
 const ExpressionPanel = preload("res://scripts/ui/expression_panel.gd")
 const GrowthPanel = preload("res://scripts/ui/growth_panel.gd")
 const UsagePanel = preload("res://scripts/ui/usage_panel.gd")
+const Autostart = preload("res://scripts/platform/autostart.gd")
 const AI_DEFAULTS := {
 	"provider": "deepseek",
 	"base_url": "https://api.deepseek.com",
@@ -213,6 +214,7 @@ var quiet_minutes: OptionButton
 var quiet_button: Button
 var autonomy_status: Label
 var behavior_enabled: CheckButton
+var autostart_enabled: CheckButton
 var idle_fps: SpinBox
 var drag_fps: SpinBox
 var hidden_fps: SpinBox
@@ -358,6 +360,9 @@ func _build_basic_page() -> void:
 	behavior_enabled = CheckButton.new()
 	behavior_enabled.text = "允许自己走动与演动作"
 	_row(page, "自主行为", behavior_enabled)
+	autostart_enabled = CheckButton.new()
+	autostart_enabled.text = "登录 Windows 后自动启动"
+	_row(page, "开机自启", autostart_enabled)
 	_section(page, "性能")
 	idle_fps = _spin(IDLE_FPS_MIN, IDLE_FPS_MAX, 1)
 	_row(page, "待机帧率", idle_fps)
@@ -775,6 +780,11 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	_select_quiet_minutes(int(autonomy.get("default_quiet_minutes", AUTONOMY_DEFAULTS.default_quiet_minutes)))
 	var behavior := _group(settings, "behavior")
 	behavior_enabled.button_pressed = bool(behavior.get("enabled", BEHAVIOR_DEFAULTS.enabled))
+	# Autostart lives in the registry, not the settings document.
+	var autostart_ready := Autostart.supported()
+	autostart_enabled.disabled = not autostart_ready
+	autostart_enabled.button_pressed = Autostart.is_enabled() if autostart_ready else false
+	autostart_enabled.tooltip_text = "" if autostart_ready else "只有打包版能写入开机自启"
 	# The spin boxes clamp an out-of-range saved value to their own bounds.
 	var performance := _group(settings, "performance")
 	idle_fps.value = clampf(float(performance.get("idle_fps", PERFORMANCE_DEFAULTS.idle_fps)), float(IDLE_FPS_MIN), float(IDLE_FPS_MAX))
@@ -909,7 +919,22 @@ func _save() -> void:
 			"phrases_enabled": expression_phrases.button_pressed,
 			"style": expression_panel.style_values(),
 		}
+	_apply_autostart()
 	save_requested.emit(patch)
+
+## Applies the autostart checkbox to the registry. This is not part of the
+## settings patch: the entry describes this installation, not the persona.
+func _apply_autostart() -> void:
+	if not Autostart.supported():
+		return
+	var wanted := autostart_enabled.button_pressed
+	if wanted == Autostart.is_enabled():
+		return
+	if not Autostart.set_enabled(wanted):
+		# Put the checkbox back to the state the registry is really in; a toggle
+		# that silently does nothing is worse than no toggle.
+		autostart_enabled.button_pressed = Autostart.is_enabled()
+		show_message("开机自启没能写入注册表。", true)
 
 ## True only when the connected service understands the keys introduced at
 ## `minimum`. An unknown schema (older service or no handshake yet) must not

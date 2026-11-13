@@ -4,6 +4,7 @@ extends SceneTree
 
 const SettingsWindow = preload("res://scripts/ui/settings_window.gd")
 const PetWindow = preload("res://scripts/pet_window.gd")
+const Autostart = preload("res://scripts/platform/autostart.gd")
 
 var checks := 0
 var failures := 0
@@ -463,6 +464,22 @@ func _test_bubble_greeting_settings() -> void:
 		"save patch carries the edited greeting switches")
 	check(int(patch.greeting.cooldown_minutes) == 240,
 		"save patch carries the greeting cooldown")
+
+	# Autostart is registry state, not part of the settings document: the
+	# control must be present, only editable where it can work, and its command
+	# builder must quote a path with spaces.
+	check(window.autostart_enabled != null, "the basic page has an autostart switch")
+	check(window.autostart_enabled.disabled == not Autostart.supported(),
+		"autostart is only editable where it can write the Run key")
+	check(Autostart.command_for("C:\\a b\\Pet3D.exe") == "\"C:\\a b\\Pet3D.exe\"",
+		"autostart quotes the executable path")
+	var reg_body := Autostart.reg_file_body()
+	check(reg_body.begins_with("Windows Registry Editor Version 5.00"),
+		"autostart writes a version 5 .reg file")
+	check(reg_body.contains("[HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run]"),
+		"autostart targets the current user's Run key")
+	check(reg_body.contains(OS.get_executable_path().replace("\\", "\\\\")),
+		"autostart points at this executable")
 
 	window.free()
 	host.free()

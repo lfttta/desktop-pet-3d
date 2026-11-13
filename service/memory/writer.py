@@ -12,6 +12,7 @@ import json
 import re
 import sqlite3
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from service.database import SUBJECT_USER_ID
 from service.memory import policy
@@ -34,6 +35,11 @@ MAX_CATEGORY_CHARS = 64
 MAX_TEXT_CHARS = 100000
 DEDUPE_SCAN_LIMIT = 200
 OUTBOX_BATCH_LIMIT = 50
+# 发件箱重试上限与指数退避：永久失败的条目被标记 failed_at（保留可查），
+# 不再每 100ms 重试，也不会饿死后面的健康条目。
+OUTBOX_MAX_ATTEMPTS = 5
+OUTBOX_BACKOFF_BASE_SECONDS = 30.0
+OUTBOX_BACKOFF_MAX_SECONDS = 1800.0
 
 _MEMORY_ID = re.compile(r'^[A-Za-z0-9_-]{1,128}$')
 
@@ -152,12 +158,19 @@ def propose(store, text, category=DEFAULT_CATEGORY, importance=DEFAULT_IMPORTANC
         return _rejected('invalid_source_type')
 
     incoming_key = policy.normalize_text(cleaned)
-    for row in store.find_active(subject_user_id, limit=DEDUPE_SCAN_LIMIT):
-        exact = policy.normalize_text(row.get('content', '')) == incoming_key
+    # 精确重复走 dedupe_key 索引；键被截断到 200 字符，命中后再做全文比对。
+    for row in store.find_by_dedupe_key(incoming_key[:200], subject_user_id):
+        if policy.normalize_text(row.get('content', '')) == incoming_key:
+            return _merge(store, row, cleaned, importance, source_type, subject_user_id)
+    # 短窗口内的主题合并只看最近活跃的行，不再全量扫描。
+    cutoff = (datetime.now(timezone.utc)
+              - timedelta(seconds=policy.DEDUPE_WINDOW_SECONDS)).strftime(
+                  '%Y-%m-%dT%H:%M:%S.%fZ')
+    for row in store.find_recent_active(cutoff, subject_user_id, limit=DEDUPE_SCAN_LIMIT):
         reference = (row.get('last_reinforced_at') or row.get('updated_at')
                      or row.get('created_at'))
-        recent = policy.within_window(reference)
-        if exact or (recent and policy.is_same_topic(row.get('content', ''), cleaned)):
+        if policy.within_window(reference) and \
+                policy.is_same_topic(row.get('content', ''), cleaned):
             return _merge(store, row, cleaned, importance, source_type, subject_user_id)
 
     memory_id = uuid.uuid4().hex
@@ -532,10 +545,21 @@ def _complete_correction(store, entry, payload):
     return SUPERSEDED
 
 
+def _outbox_backoff(attempts):
+    """第 attempts 次失败后的退避秒数（指数增长，封顶）。"""
+    delay = OUTBOX_BACKOFF_BASE_SECONDS * (2 ** max(0, attempts - 1))
+    return min(delay, OUTBOX_BACKOFF_MAX_SECONDS)
+
+
 def process_outbox(store, limit=OUTBOX_BATCH_LIMIT):
-    """Drain pending outbox rows; safe to call repeatedly from the tick."""
+    """Drain pending outbox rows; safe to call repeatedly from the tick.
+
+    失败条目按指数退避重试；达到上限后标记 ``failed_at`` 成为死信，
+    保留在表里可供检查，不再参与选取，也不会阻塞健康条目。
+    """
     processed = []
-    for entry in store.pending_outbox(limit):
+    now = utc_now()
+    for entry in store.pending_outbox(limit, now=now):
         operation = entry.get('operation')
         try:
             payload = json.loads(entry.get('payload') or '{}')
@@ -553,11 +577,24 @@ def process_outbox(store, limit=OUTBOX_BATCH_LIMIT):
         except (OSError, sqlite3.Error):
             outcome = 'failed'
         if outcome == 'failed':
+            attempts = int(entry.get('attempts') or 0) + 1
+            next_attempt_at = None
+            failed_at = None
+            if attempts >= OUTBOX_MAX_ATTEMPTS:
+                failed_at = now
+            else:
+                retry_at = datetime.now(timezone.utc) + timedelta(
+                    seconds=_outbox_backoff(attempts))
+                next_attempt_at = retry_at.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
             try:
                 with store.database.transaction() as connection:
-                    store.bump_outbox_attempt(connection, entry['id'])
+                    store.bump_outbox_attempt(connection, entry['id'],
+                                              next_attempt_at=next_attempt_at,
+                                              failed_at=failed_at)
             except sqlite3.Error:
                 pass
+            if failed_at is not None:
+                outcome = 'dead'
         processed.append({'outbox_id': entry['id'], 'operation': operation,
                           'status': outcome})
     return processed

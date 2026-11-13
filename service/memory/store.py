@@ -131,6 +131,20 @@ class MemoryStore:
                                'ON memories(subject_user_id, status, updated_at)')
             connection.execute('CREATE INDEX IF NOT EXISTS idx_memories_dedupe '
                                'ON memories(subject_user_id, dedupe_key)')
+            self._backfill_dedupe_keys(connection)
+
+    @staticmethod
+    def _backfill_dedupe_keys(connection):
+        """为历史行补算 dedupe_key，让精确去重可以走索引。"""
+        from service.memory import policy
+        rows = connection.execute(
+            "SELECT id, content FROM memories WHERE dedupe_key='' AND content<>''"
+        ).fetchall()
+        if rows:
+            connection.executemany(
+                'UPDATE memories SET dedupe_key=? WHERE id=?',
+                [(policy.normalize_text(content)[:200], memory_id)
+                 for memory_id, content in rows])
 
     # -- metadata -------------------------------------------------------
 
@@ -145,6 +159,59 @@ class MemoryStore:
             "SELECT * FROM memories WHERE subject_user_id=? AND status='active' "
             "AND deleted_at IS NULL ORDER BY updated_at DESC, created_at DESC LIMIT ?",
             (subject_user_id, limit))
+        return _rows(cursor)
+
+    def iter_active(self, subject_user_id=SUBJECT_USER_ID, batch_size=200):
+        """按 (updated_at, created_at, id) 键集分页遍历全部活跃记忆。
+
+        维护任务不再被 find_active 的 200 条上限截断；排序稳定且分页
+        不依赖 OFFSET，行数增长时代价保持线性。
+        """
+        batch_size = max(1, int(batch_size))
+        last = None
+        while True:
+            if last is None:
+                cursor = self.connection.execute(
+                    "SELECT * FROM memories WHERE subject_user_id=? AND status='active' "
+                    "AND deleted_at IS NULL ORDER BY updated_at, created_at, id LIMIT ?",
+                    (subject_user_id, batch_size))
+            else:
+                cursor = self.connection.execute(
+                    "SELECT * FROM memories WHERE subject_user_id=? AND status='active' "
+                    "AND deleted_at IS NULL AND (updated_at, created_at, id) > (?,?,?) "
+                    "ORDER BY updated_at, created_at, id LIMIT ?",
+                    (subject_user_id, *last, batch_size))
+            rows = _rows(cursor)
+            if not rows:
+                return
+            yield from rows
+            tail = rows[-1]
+            last = (tail.get('updated_at') or '', tail.get('created_at') or '',
+                    tail['id'])
+
+    def find_by_dedupe_key(self, dedupe_key, subject_user_id=SUBJECT_USER_ID):
+        """走 idx_memories_dedupe 索引的精确去重候选。"""
+        cursor = self.connection.execute(
+            "SELECT * FROM memories WHERE subject_user_id=? AND dedupe_key=? "
+            "AND status='active' AND deleted_at IS NULL",
+            (subject_user_id, dedupe_key))
+        return _rows(cursor)
+
+    def duplicate_dedupe_keys(self, subject_user_id=SUBJECT_USER_ID):
+        """一条 GROUP BY 查询找出存在重复的 dedupe_key，替代两两比较。"""
+        cursor = self.connection.execute(
+            "SELECT dedupe_key FROM memories WHERE subject_user_id=? "
+            "AND status='active' AND deleted_at IS NULL AND dedupe_key<>'' "
+            'GROUP BY dedupe_key HAVING COUNT(*) > 1', (subject_user_id,))
+        return [row[0] for row in cursor.fetchall()]
+
+    def find_recent_active(self, since, subject_user_id=SUBJECT_USER_ID, limit=200):
+        """短窗口内可能参与主题合并的活跃记忆（调用方再做精确判断）。"""
+        cursor = self.connection.execute(
+            "SELECT * FROM memories WHERE subject_user_id=? AND status='active' "
+            'AND deleted_at IS NULL AND (last_reinforced_at >= ? OR updated_at >= ? '
+            'OR created_at >= ?) ORDER BY updated_at DESC, created_at DESC LIMIT ?',
+            (subject_user_id, since, since, since, limit))
         return _rows(cursor)
 
     def list_memories(self, subject_user_id=SUBJECT_USER_ID, limit=20, category=None):
@@ -328,10 +395,13 @@ class MemoryStore:
             (memory_id, operation, json.dumps(payload or {}, ensure_ascii=False)))
         return cursor.lastrowid
 
-    def pending_outbox(self, limit=50):
+    def pending_outbox(self, limit=50, now=None):
+        """待处理发件箱行：跳过已失败（毒丸）与仍在退避窗口内的条目。"""
+        stamp = now or utc_now()
         cursor = self.connection.execute(
             'SELECT * FROM memory_outbox WHERE delivered_at IS NULL '
-            'ORDER BY id LIMIT ?', (limit,))
+            'AND failed_at IS NULL AND (next_attempt_at IS NULL OR next_attempt_at <= ?) '
+            'ORDER BY id LIMIT ?', (stamp, limit))
         return _rows(cursor)
 
     def mark_outbox_delivered(self, connection, outbox_id):
@@ -339,9 +409,27 @@ class MemoryStore:
             'UPDATE memory_outbox SET delivered_at=? WHERE id=? AND delivered_at IS NULL',
             (utc_now(), outbox_id))
 
-    def bump_outbox_attempt(self, connection, outbox_id):
+    def bump_outbox_attempt(self, connection, outbox_id, next_attempt_at=None,
+                            failed_at=None):
+        """失败一次：计数加一，并安排退避重试或标记为永久失败。"""
         connection.execute(
-            'UPDATE memory_outbox SET attempts=attempts+1 WHERE id=?', (outbox_id,))
+            'UPDATE memory_outbox SET attempts=attempts+1, next_attempt_at=?, '
+            'failed_at=? WHERE id=?', (next_attempt_at, failed_at, outbox_id))
+
+    def outbox_counts(self):
+        """发件箱可观测计数：待处理（含退避中）与永久失败。"""
+        pending = 0
+        failed = 0
+        for delivered, failed_at, count in self.connection.execute(
+                'SELECT delivered_at, failed_at, COUNT(*) FROM memory_outbox '
+                'GROUP BY delivered_at IS NULL, failed_at IS NULL'):
+            if delivered is not None:
+                continue
+            if failed_at is not None:
+                failed += int(count)
+            else:
+                pending += int(count)
+        return {'pending': pending, 'failed': failed}
 
     # -- Markdown bodies -------------------------------------------------
 

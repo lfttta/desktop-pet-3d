@@ -141,7 +141,8 @@ def enqueue(store, settings, memory_id=None, now=None,
             return {'queued': 0, 'jobs': [], 'reason': 'not_eligible'}
     else:
         candidates = []
-        for row in store.find_active(subject_user_id, limit=200):
+        # 分页遍历全部活跃记忆，候选不再被 200 条上限截断。
+        for row in store.iter_active(subject_user_id):
             if eligible(store, row, settings, now):
                 candidates.append(row)
             if len(candidates) >= int(config.get('max_per_run', 10)):
@@ -214,6 +215,19 @@ def build_compressor(store, ai_settings=None):
     return compress
 
 
+def deterministic_choice(text, old_level, level_limit):
+    """Pick the lowest next fidelity level whose deterministic rewrite changes
+    the text; a no-op format pass should not block a summary pass."""
+    for level in range(old_level + 1, int(level_limit) + 1):
+        candidate = policy.apply_fuzz(text, level)
+        if candidate is None:
+            continue
+        if policy.normalize_text(candidate) == policy.normalize_text(text):
+            continue
+        return candidate, level
+    return None, None
+
+
 def process_memory(store, memory_id, settings, now=None, level_limit=MAX_COMPACT_LEVEL,
                    allow_model=True, compressor=None):
     """Compact one memory; raises on failure so the job can be retried."""
@@ -234,19 +248,7 @@ def process_memory(store, memory_id, settings, now=None, level_limit=MAX_COMPACT
     old_level = policy.clamp_fuzz_level(row.get('fuzz_level'))
     text = row.get('content') or ''
 
-    # Pick the lowest next fidelity level whose deterministic rewrite actually
-    # changes the text; a no-op format pass should not block a summary pass.
-    chosen = None
-    target = None
-    for level in range(old_level + 1, int(level_limit) + 1):
-        candidate = policy.apply_fuzz(text, level)
-        if candidate is None:
-            continue
-        if policy.normalize_text(candidate) == policy.normalize_text(text):
-            continue
-        chosen = candidate
-        target = level
-        break
+    chosen, target = deterministic_choice(text, old_level, level_limit)
 
     if allow_model and config.get('model_compress') and compressor is not None:
         if target is None:

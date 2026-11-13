@@ -43,6 +43,13 @@ _GROWTH_ADDITIONS = (
     ('decision', "TEXT DEFAULT ''"),
 )
 
+# 发件箱重试上限与退避所需的列；failed_at 标记永久失败（毒丸）条目，
+# 行保留在表里可供检查，不会被静默删除。
+_OUTBOX_ADDITIONS = (
+    ('next_attempt_at', 'TEXT'),
+    ('failed_at', 'TEXT'),
+)
+
 
 class Database:
     def __init__(self, path, enable_fts=True):
@@ -161,6 +168,7 @@ class Database:
                            'delivered_at TEXT)')
         connection.execute('CREATE INDEX IF NOT EXISTS idx_memory_outbox_pending '
                            'ON memory_outbox(delivered_at, id)')
+        self._ensure_outbox_columns(connection)
         connection.execute('CREATE TABLE IF NOT EXISTS memory_jobs ('
                            'id TEXT PRIMARY KEY, memory_id TEXT,'
                            "job_type TEXT NOT NULL DEFAULT '',"
@@ -267,6 +275,13 @@ class Database:
             if name not in existing:
                 connection.execute(
                     f'ALTER TABLE growth_candidates ADD COLUMN {name} {declaration}')
+
+    def _ensure_outbox_columns(self, connection):
+        existing = {row[1] for row in connection.execute('PRAGMA table_info(memory_outbox)')}
+        for name, declaration in _OUTBOX_ADDITIONS:
+            if name not in existing:
+                connection.execute(
+                    f'ALTER TABLE memory_outbox ADD COLUMN {name} {declaration}')
 
     def _ensure_subject_columns(self, connection):
         for table in ('conversations', 'messages'):

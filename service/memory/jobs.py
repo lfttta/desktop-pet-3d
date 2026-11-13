@@ -304,8 +304,8 @@ def _run_dedupe(store, memory_id, moment):
     key = policy.normalize_text(row.get('content', ''))
     if not key:
         return {'status': 'skipped', 'reason': 'empty'}
-    rows = store.find_active(limit=200)
-    duplicates = [item for item in rows
+    # 精确重复候选走 dedupe_key 索引；键截断到 200 字符，命中后全文复核。
+    duplicates = [item for item in store.find_by_dedupe_key(key[:200])
                   if item['id'] != memory_id
                   and policy.normalize_text(item.get('content', '')) == key]
     if not duplicates:
@@ -363,7 +363,8 @@ def _run_archive(store, settings, moment, topic_key=None):
         return {'status': 'skipped', 'reason': 'disabled'}
     stale_days = int(config.get('topic_stale_days', 14))
     cutoff = moment.timestamp() - stale_days * 86400
-    groups = store.group_by_topic(store.find_active(limit=200))
+    # 分页遍历全部活跃记忆，主题分组不再被 200 条上限截断。
+    groups = store.group_by_topic(list(store.iter_active()))
     if topic_key is not None:
         groups = {topic_key: groups.get(topic_key, [])}
     archived = 0
@@ -459,12 +460,12 @@ def _scan(store, settings, moment):
     memory = _memory_settings(settings)
     compaction = memory.get('compaction', {})
     archive = memory.get('archive', {})
-    active = store.find_active(limit=200)
     queued = 0
 
     if compaction.get('enabled'):
         remaining = max(0, compact.daily_limit(settings) - compact.daily_usage(store, moment))
-        for row in active:
+        # 分页遍历全部活跃记忆，而不是只看最近更新的 200 条。
+        for row in store.iter_active():
             if queued >= MAX_PER_SCAN or remaining <= 0:
                 break
             if not compact.eligible(store, row, settings, moment):
@@ -479,16 +480,11 @@ def _scan(store, settings, moment):
                 if job_type == JOB_COMPACT:
                     remaining -= 1
 
-        seen = set()
-        for row in active:
-            key = policy.normalize_text(row.get('content', ''))
-            if not key or key in seen:
-                continue
-            seen.add(key)
-            duplicates = [item for item in active
-                          if item['id'] != row['id']
-                          and policy.normalize_text(item.get('content', '')) == key]
-            for duplicate in duplicates:
+        # 精确去重用一条 GROUP BY 找出重复键，替代 O(n²) 两两比较。
+        for key in store.duplicate_dedupe_keys():
+            if queued >= MAX_PER_SCAN:
+                break
+            for duplicate in store.find_by_dedupe_key(key):
                 if queued >= MAX_PER_SCAN:
                     break
                 if _has_pending(store, duplicate['id'], JOB_DEDUPE):
@@ -500,8 +496,11 @@ def _scan(store, settings, moment):
     if archive.get('enabled', True):
         stale_days = int(archive.get('topic_stale_days', 14))
         cutoff = moment.timestamp() - stale_days * 86400
-        unprotected = [item for item in active if not int(item.get('protected') or 0)]
-        groups = store.group_by_topic(unprotected)
+        groups = {}
+        for item in store.iter_active():
+            if int(item.get('protected') or 0):
+                continue
+            groups.setdefault(store.topic_key_for(item), []).append(item)
         for key, members in groups.items():
             if queued >= MAX_PER_SCAN or not members:
                 break

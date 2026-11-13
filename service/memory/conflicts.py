@@ -16,7 +16,6 @@ from service.memory.store import utc_now
 STATUS_OPEN = 'open'
 STATUS_RESOLVED = 'resolved'
 CONFLICT_THRESHOLD = 0.5
-SCAN_LIMIT = 200
 
 
 def _same_topic(first, second):
@@ -65,18 +64,32 @@ def _topic_of(first, second):
 
 
 def detect(store, subject_user_id=SUBJECT_USER_ID):
-    """Scan active memories and record new conflicts; returns created rows."""
-    rows = store.find_active(subject_user_id, limit=SCAN_LIMIT)
+    """Scan active memories and record new conflicts; returns created rows.
+
+    开放冲突一次性批量载入内存集合（替代每对记忆 2 条 SQL，200 条不再
+    产生约 4 万次查询）；分页遍历全部活跃记忆，不再被 200 条上限截断。
+    候选仍按 ``_same_topic`` 判定，保持与逐对查询完全一致的检出语义。
+    """
+    rows = list(store.iter_active(subject_user_id))
+    disputed = set()
+    pairs = set()
+    for memory_a, memory_b in store.connection.execute(
+            'SELECT memory_a, memory_b FROM memory_conflicts WHERE status=?',
+            (STATUS_OPEN,)):
+        disputed.add(memory_a)
+        disputed.add(memory_b)
+        pairs.add((memory_a, memory_b))
+        pairs.add((memory_b, memory_a))
     created = []
     for index, first in enumerate(rows):
-        if _has_open_conflict(store, first['id']):
+        if first['id'] in disputed:
             continue
         for second in rows[index + 1:]:
-            if _has_open_conflict(store, second['id']):
+            if second['id'] in disputed:
                 continue
             if not _conflicting(first, second):
                 continue
-            if _existing_pair(store, first['id'], second['id']):
+            if (first['id'], second['id']) in pairs:
                 continue
             conflict_id = uuid.uuid4().hex
             now = utc_now()
@@ -99,6 +112,10 @@ def detect(store, subject_user_id=SUBJECT_USER_ID):
                         'conflict_id': conflict_id})
             except sqlite3.Error:
                 continue
+            disputed.add(first['id'])
+            disputed.add(second['id'])
+            pairs.add((first['id'], second['id']))
+            pairs.add((second['id'], first['id']))
             created.append({
                 'id': conflict_id,
                 'memory_a': first['id'],

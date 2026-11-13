@@ -24,8 +24,8 @@ func _initialize() -> void:
 
 func _run() -> void:
 	await _test_bar()
-	await _test_window_handoff()
 	await _test_bar_against_pet()
+	await _test_window_handoff()
 	print("BUBBLE_INPUT_TESTS checks=", checks, " failures=", failures)
 	quit(0 if failures == 0 else 1)
 
@@ -88,11 +88,15 @@ func _test_window_handoff() -> void:
 	pet.bubble_reply_submitted.connect(func(text: String): replies.append(text))
 	pet.bubble_chat_requested.connect(func(): chats[0] += 1)
 
+	# A 1.5x window must get a 1.5x bar; the design height is 560 px.
+	pet.get_window().size = Vector2i(720, 840)
 	pet.show_bubble("在的")
 	pet._on_bubble_pressed()
 	await process_frame
 	check(is_instance_valid(pet.reply_bar), "a bubble click creates the reply bar")
 	check(pet.reply_bar.is_open(), "a bubble click opens the reply bar")
+	check(pet.reply_bar.size == Vector2i(Vector2(ReplyBar.BAR_SIZE) * 1.5),
+		"the bar is sized for the display, got %s" % [pet.reply_bar.size])
 	check(not pet.speech_bubble.visible, "the bubble gives way to the bar")
 	check(pet.reply_bar.position.x >= 0 and pet.reply_bar.position.y >= 0,
 		"the bar opens inside the work area, got %s" % [pet.reply_bar.position])

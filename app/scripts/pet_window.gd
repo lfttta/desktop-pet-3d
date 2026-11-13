@@ -515,6 +515,11 @@ func _ensure_reply_bar() -> void:
 		return
 	reply_bar = ReplyBar.new()
 	add_child(reply_bar)
+	# Scale with the window the bar belongs to (560 px is the 1x design height).
+	# The window already folds in display DPI and the user's size setting, so
+	# deriving from it keeps the bar proportional to the pet at every scale.
+	var ui_scale := maxf(1.0, float(get_window().size.y) / 560.0)
+	reply_bar.size = Vector2i(Vector2(ReplyBar.BAR_SIZE) * ui_scale)
 	reply_bar.submitted.connect(func(text: String): bubble_reply_submitted.emit(text))
 	reply_bar.chat_requested.connect(func(): bubble_chat_requested.emit())
 

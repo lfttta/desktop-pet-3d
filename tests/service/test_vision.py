@@ -524,7 +524,9 @@ def test_attach_registers_tick_once(tmp_path):
     try:
         service.attach(ctx)
         service.attach(ctx)
-        assert ctx.hooks == [service.poll]
+        # The heartbeat hook must be tick, not poll: poll only drains results,
+        # while the proactive capture is decided in tick.
+        assert ctx.hooks == [service.tick]
     finally:
         database.close()
 
@@ -544,7 +546,9 @@ def test_bind_registers_once_and_attach_is_noop(tmp_path):
         service.bind(runtime)
         service.bind(runtime)
         service.attach(ctx)
-        assert hooks == [service.poll]
+        # One heartbeat hook total, and it must be tick: attach() after bind()
+        # is a no-op because the proactive capture lives in tick, not poll.
+        assert hooks == [service.tick]
         assert ctx.hooks == []
         assert service.runtime is runtime
     finally:

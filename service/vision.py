@@ -454,7 +454,7 @@ class VisionService:
         if register is None:
             return
         try:
-            register(self.poll)
+            register(self.tick)
         except RuntimeError:
             return
         self._tick_registered = True
@@ -470,7 +470,7 @@ class VisionService:
         if self._tick_registered:
             return
         try:
-            runtime.register_tick(self.poll)
+            runtime.register_tick(self.tick)
         except (RuntimeError, TypeError):
             return
         self._tick_registered = True
@@ -557,7 +557,7 @@ class VisionService:
             return None
 
     def poll(self, now=None):
-        """Drain finished work on the service thread (tick hook)."""
+        """Drain finished work on the service thread (called from tick)."""
         if self._closed:
             return
         while True:

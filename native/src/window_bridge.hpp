@@ -43,6 +43,9 @@ public:
     int64_t configure_hotkeys(uint32_t recover_mods, uint32_t recover_vk,
             uint32_t exit_mods, uint32_t exit_vk,
             uint32_t chat_mods, uint32_t chat_vk);
+    // Diagnostic snapshot: explicit validity/registration flags so callers can
+    // tell fallback values (DPI 1.0, cursor (0,0)) apart from real readings.
+    std::string get_status_json() const;
     void shutdown();
     int64_t acquire_instance(const std::string &key);
     bool adopt_service_process(int64_t pid);

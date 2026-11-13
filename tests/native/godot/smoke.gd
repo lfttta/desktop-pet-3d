@@ -30,9 +30,10 @@ func _initialize() -> void:
 		"get_displays_json": [TYPE_STRING, []],
 		"set_menu_actions": [TYPE_BOOL, [TYPE_STRING]],
 		"configure_hotkeys": [TYPE_INT, [TYPE_STRING]],
+		"get_status_json": [TYPE_STRING, []],
 	}
 	var methods := ClassDB.class_get_method_list("PetWindowBridge", true)
-	check(methods.size() == expected.size(), "original ten plus seven stage1 public native methods")
+	check(methods.size() == expected.size(), "eighteen public native methods")
 	for method in methods:
 		var key: String = method.name
 		check(expected.has(key), "unexpected method " + key)
@@ -66,6 +67,16 @@ func _initialize() -> void:
 		bridge.shutdown()
 	var owner = ClassDB.instantiate("PetWindowBridge")
 	var other = ClassDB.instantiate("PetWindowBridge")
+	check(not owner.set_menu_actions(""), "empty menu payload rejected")
+	check(owner.set_menu_actions("测试|甲|乙\n动作|丙"), "menu payload String Variant accepted")
+	var status = JSON.parse_string(owner.get_status_json())
+	check(status is Dictionary, "status JSON String Variant parses")
+	if status is Dictionary:
+		check(status.get("configured") == false and status.get("dpi_valid") == false,
+			"status distinguishes unconfigured fallback values")
+		check(status.get("dropped_actions") == 0, "status reports zero dropped actions")
+		check(status.has("tray_added") and status.has("recover_hotkey") and status.has("exit_hotkey"),
+			"status exposes tray/hotkey registration state")
 	var instance_key := "native-api-中文-😀-\\\"-" + str(OS.get_process_id())
 	check(owner.acquire_instance("") == -1, "empty instance key rejected")
 	check(owner.acquire_instance(instance_key) == 1, "String Variant acquire before configure")
@@ -117,5 +128,5 @@ func _initialize() -> void:
 	var typed = load("res://typed_smoke.gd").new()
 	typed.run()
 	if failures.is_empty():
-		print("PASS: seventeen-method API, original ten preserved, Variant and ptrcall, 50 RefCounted lifecycles")
+		print("PASS: eighteen-method API, original ten preserved, Variant and ptrcall, 50 RefCounted lifecycles")
 	quit(0 if failures.is_empty() else 1)

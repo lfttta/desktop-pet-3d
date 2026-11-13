@@ -237,6 +237,14 @@ void display_tests() {
     check(json.find(size) != std::string::npos, "JSON uses physical monitor size even for unaware caller");
     check(json.find("\"primary\":true") != std::string::npos, "JSON identifies primary");
     check(json == bridge.get_displays_json(), "display identity stable across repeated queries and DPI contexts");
+    // A monitor without a device interface falls back to its enumeration index,
+    // which repeats for an unchanged topology (never a renumberable source name).
+    pet3d::testing::fail_next(pet3d::testing::Failure::display_interface);
+    const auto fallback = bridge.get_displays_json();
+    check(fallback.find("\"id\":\"index:0\"") != std::string::npos,
+            "interface-less monitor falls back to stable enumeration index");
+    check(fallback.find("source:") == std::string::npos, "no unstable source-name fallback IDs");
+    check(bridge.get_displays_json() == json, "injected fallback does not poison later enumerations");
     SetThreadDpiAwarenessContext(previous);
     std::wstring text = L"中文😀\"\\\n\t";
     text += L'\0'; text += L'\x01';

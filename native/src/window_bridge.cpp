@@ -42,6 +42,7 @@ int64_t WindowBridge::configure_hotkeys(uint32_t recover_mods, uint32_t recover_
     return state->configure_hotkeys(recover_mods, recover_vk, exit_mods, exit_vk,
             chat_mods, chat_vk);
 }
+std::string WindowBridge::get_status_json() const { auto state = state_; return state->get_status_json(); }
 void WindowBridge::shutdown() { auto state = state_; state->shutdown(); }
 int64_t WindowBridge::acquire_instance(const std::string &key) { auto state = state_; return state->acquire_instance(key); }
 bool WindowBridge::adopt_service_process(int64_t pid) { auto state = state_; return state->adopt_service_process(pid); }
@@ -53,12 +54,23 @@ namespace testing {
 std::atomic<int> state_count{0};
 MenuRunner menu_runner = nullptr;
 void *menu_context = nullptr;
+std::atomic<Failure> next_failure{Failure::none};
 int live_states() { return state_count.load(); }
 void set_menu_runner(MenuRunner runner, void *context) {
     menu_runner = runner;
     menu_context = context;
 }
+void fail_next(Failure failure) { next_failure.store(failure); }
+bool consume_failure(Failure failure) {
+    auto expected = failure;
+    if (!next_failure.compare_exchange_strong(expected, Failure::none)) return false;
+    SetLastError(ERROR_ACCESS_DENIED);
+    return true;
 }
+}
+#define MENU_FAIL_AT(point) testing::consume_failure(testing::Failure::point)
+#else
+#define MENU_FAIL_AT(point) false
 #endif
 
 WindowState::WindowState() {
@@ -156,7 +168,10 @@ void WindowState::set_interactive(bool interactive) {
 
 DesktopPoint WindowState::get_cursor_position() const {
     POINT point{};
-    if (!GetPhysicalCursorPos(&point)) return {};
+    // (0,0) stays the backward-compatible fallback; get_status_json() exposes
+    // cursor_valid so callers can tell a failed read from a real origin point.
+    cursor_valid_ = GetPhysicalCursorPos(&point) != FALSE;
+    if (!cursor_valid_) return {};
     return {point.x, point.y};
 }
 
@@ -164,7 +179,23 @@ double WindowState::get_dpi_scale() const {
     // Effective per-monitor Windows DPI, not the panel's physical density.
     // Query each time so WM_DPICHANGED/moving between monitors needs no cache.
     const UINT dpi = role_ && IsWindow(role_) ? GetDpiForWindow(role_) : 0;
+    // 1.0 stays the backward-compatible fallback; get_status_json() exposes
+    // dpi_valid so an unconfigured/destroyed window is distinguishable.
+    dpi_valid_ = dpi != 0;
     return dpi ? static_cast<double>(dpi) / 96.0 : 1.0;
+}
+
+std::string WindowState::get_status_json() const {
+    // Owner-thread snapshot; readable before configure and after shutdown.
+    const auto flag = [](bool value) { return value ? "true" : "false"; };
+    return std::string("{\"configured\":") + flag(role_ != nullptr) +
+            ",\"cursor_valid\":" + flag(cursor_valid_) +
+            ",\"dpi_valid\":" + flag(dpi_valid_) +
+            ",\"tray_added\":" + flag(tray_added_) +
+            ",\"tray_v4\":" + flag(tray_v4_) +
+            ",\"recover_hotkey\":" + flag(recover_registered_) +
+            ",\"exit_hotkey\":" + flag(exit_registered_) +
+            ",\"dropped_actions\":" + std::to_string(dropped_actions_) + '}';
 }
 
 bool WindowState::is_left_button_down() const {
@@ -217,6 +248,10 @@ void WindowState::queue_action(int64_t action) {
         return;
     }
     if (count_ == actions_.size()) {
+        // Overflow drops the oldest entry; report it instead of losing actions
+        // silently. The counter is exposed through get_status_json().
+        if (dropped_actions_ == 0) warn("action ring full; dropping oldest tray actions");
+        ++dropped_actions_;
         read_ = (read_ + 1) % actions_.size();
         --count_;
     }
@@ -302,7 +337,13 @@ NOTIFYICONDATAW WindowState::icon_data() const {
     data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     data.uCallbackMessage = tray_message;
     data.hIcon = icon_;
-    wcscpy_s(data.szTip, L"Pet3D 桌宠 | Ctrl+Alt+F10 恢复 / Ctrl+Alt+Q 退出 / Ctrl+Alt+C 聊天");
+    // Advertise only the hotkeys Windows actually granted; a failed registration
+    // must never be promised in the tip. Total length stays far below szTip[128].
+    wcscpy_s(data.szTip, L"Pet3D 桌宠");
+    if (recover_registered_) wcscat_s(data.szTip, L" | Ctrl+Alt+F10 恢复");
+    if (exit_registered_) wcscat_s(data.szTip, L" | Ctrl+Alt+Q 退出");
+    if (chat_registered_) wcscat_s(data.szTip, L" | Ctrl+Alt+C 聊天");
+    if (!recover_registered_ && !exit_registered_) wcscat_s(data.szTip, L" | 右键菜单操作");
     return data;
 }
 
@@ -408,12 +449,19 @@ void WindowState::show_menu() {
     AppendMenuW(menu, MF_STRING, 7, L"聊天  |  Chat (&C)");
     if (!menu_groups_.empty()) {
         // One submenu per action category; commands echo action_command_base + flat index.
-        HMENU actions = CreatePopupMenu();
-        size_t flat = 0;
+        HMENU actions = MENU_FAIL_AT(menu_actions_root) ? nullptr : CreatePopupMenu();
         if (actions) {
+            size_t flat = 0;
             for (const auto &group : menu_groups_) {
-                HMENU submenu = CreatePopupMenu();
-                if (!submenu) continue;
+                HMENU submenu = MENU_FAIL_AT(menu_submenu) ? nullptr : CreatePopupMenu();
+                if (!submenu) {
+                    // The owner maps command IDs by flat position across ALL
+                    // groups. Skip this group's IDs so later groups keep their
+                    // correct numbers; never renumber silently.
+                    warn("action submenu unavailable; its items are skipped");
+                    flat += group.items.size();
+                    continue;
+                }
                 for (const auto &item : group.items) {
                     InsertMenuW(submenu, static_cast<UINT>(-1), MF_BYPOSITION | MF_STRING,
                             static_cast<UINT_PTR>(action_command_base + flat), item.c_str());
@@ -422,6 +470,9 @@ void WindowState::show_menu() {
                 AppendMenuW(actions, MF_POPUP, reinterpret_cast<UINT_PTR>(submenu), group.label.c_str());
             }
             AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(actions), L"动作  |  Actions (&A)");
+        } else {
+            // Fixed commands 1..7 still work; report the lost action block loudly.
+            warn("unable to create actions menu; action commands unavailable this time");
         }
     }
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
@@ -436,7 +487,7 @@ void WindowState::show_menu() {
 #ifdef PET_WINDOW_TESTING
     if (testing::menu_runner) {
         // Deterministic nested dispatch without showing/activating any window.
-        command = testing::menu_runner(helper_, testing::menu_context);
+        command = testing::menu_runner(helper_, menu, testing::menu_context);
     } else
 #endif
     {
@@ -509,6 +560,8 @@ void WindowState::finish_shutdown() {
     read_ = count_ = 0;
     wheel_delta_ = 0;
     last_tray_click_ = 0;
+    dropped_actions_ = 0;
+    cursor_valid_ = dpi_valid_ = false;
     exit_pending_ = false;
     stopping_ = false;
     shutdown_requested_.store(false);

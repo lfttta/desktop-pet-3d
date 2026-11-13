@@ -2,6 +2,7 @@
 #include <shellapi.h>
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 
 namespace {
 int assertions = 0;
@@ -51,6 +52,11 @@ int main() {
     const HWND foreground = GetForegroundWindow();
     pet3d::WindowBridge bridge;
     check(bridge.get_dpi_scale() == 1.0, "unconfigured DPI fallback is one");
+    const auto unconfigured_status = bridge.get_status_json();
+    check(unconfigured_status.find("\"configured\":false") != std::string::npos &&
+            unconfigured_status.find("\"dpi_valid\":false") != std::string::npos &&
+            unconfigured_status.find("\"cursor_valid\":false") != std::string::npos,
+            "status distinguishes unconfigured fallback values from real readings");
     check(!bridge.configure(0), "zero handle rejected");
     check(!bridge.configure(-1), "invalid handle rejected");
     check(!bridge.configure(reinterpret_cast<int64_t>(GetDesktopWindow())), "foreign HWND rejected");
@@ -61,6 +67,12 @@ int main() {
     check(effective_dpi > 0 && bridge.get_dpi_scale() == static_cast<double>(effective_dpi) / 96.0,
             "DPI scale uses effective HWND DPI, not physical panel DPI");
     std::printf("Effective HWND DPI=%u, scale=%.4f\n", effective_dpi, bridge.get_dpi_scale());
+    bridge.get_cursor_position();
+    const auto configured_status = bridge.get_status_json();
+    check(configured_status.find("\"configured\":true") != std::string::npos &&
+            configured_status.find("\"dpi_valid\":true") != std::string::npos &&
+            configured_status.find("\"cursor_valid\":true") != std::string::npos,
+            "status reports configured bridge with valid cursor/DPI readings");
     check(bridge.configure(reinterpret_cast<int64_t>(hwnd)), "configure is idempotent");
     check(!bridge.configure(reinterpret_cast<int64_t>(second)), "configured bridge cannot silently migrate");
     // Wheel deltas accumulate on the role window and are taken once per poll.
@@ -143,6 +155,8 @@ int main() {
     SendMessageW(helper, WM_COMMAND, 5, 0);
     check(bridge.poll_tray_action() == 5, "exit cannot be dropped or delayed by queue overflow");
     check(bridge.poll_tray_action() == 0, "exit drains obsolete actions");
+    check(bridge.get_status_json().find("\"dropped_actions\":48") != std::string::npos,
+            "ring overflow drops are counted, not silent");
     SendMessageW(helper, WM_HOTKEY, pet3d::WindowBridge::recover_hotkey, 0);
     check(bridge.poll_tray_action() == 2, "recovery hotkey fallback dispatch");
     SendMessageW(helper, WM_HOTKEY, pet3d::WindowBridge::exit_hotkey, 0);
@@ -164,6 +178,11 @@ int main() {
     check(GetWindowLongPtrW(hwnd, GWL_EXSTYLE) == ex, "original extended styles restored");
     check(GetWindowLongPtrW(hwnd, GWL_STYLE) == style, "original normal styles retained");
     check(bridge.poll_tray_action() == 0, "shutdown clears actions");
+    const auto reset_status = bridge.get_status_json();
+    check(reset_status.find("\"configured\":false") != std::string::npos &&
+            reset_status.find("\"dropped_actions\":0") != std::string::npos &&
+            reset_status.find("\"tray_added\":false") != std::string::npos,
+            "shutdown resets status flags and counters");
     for (int iteration = 0; iteration < 10; ++iteration) {
         pet3d::WindowBridge scoped;
         check(scoped.configure(reinterpret_cast<int64_t>(hwnd)), "repeat configure after shutdown");

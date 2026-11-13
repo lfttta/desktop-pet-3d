@@ -2,6 +2,7 @@
 from pathlib import Path
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import hashlib
@@ -13,7 +14,8 @@ ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser()
 parser.add_argument("--stage1", action="store_true", help="explicit alias for the default stage1 test suite")
-parser.add_argument("--godot", default=r"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe")
+parser.add_argument("--godot", default=os.environ.get("PET3D_ENGINE") or
+                    r"D:\danjigame\GODDOT  WORD\Godot_v4.7.2-stable_win64.exe")
 args = parser.parse_args()
 logs = HERE / "results"
 logs.mkdir(exist_ok=True)
@@ -50,7 +52,7 @@ run("win32", [str(ROOT / "native/build/window_bridge_test.exe")], "hidden-HWND n
 run("lifetime", [str(ROOT / "native/build/lifetime_test.exe")], "lifetime/hotkey assertions, 0 failures")
 run("stage1", [str(ROOT / "native/build/stage1_test.exe")], "stage1 subprocess/resource assertions")
 run("godot_api", [args.godot, "--headless", "--path", str(HERE / "godot"), "--script", "res://smoke.gd"],
-    "PASS: seventeen-method API")
+    "PASS: eighteen-method API")
 config = target / "pet_window.gdextension"
 original_config = config.read_text(encoding="utf-8")
 try:
@@ -59,7 +61,7 @@ try:
     config.write_text(original_config.replace("pet_window.windows.debug.x86_64.dll",
         "pet_window.windows.release.x86_64.dll"), encoding="utf-8")
     run("godot_release_api", [args.godot, "--headless", "--path", str(HERE / "godot"),
-        "--script", "res://smoke.gd"], "PASS: seventeen-method API")
+        "--script", "res://smoke.gd"], "PASS: eighteen-method API")
 finally:
     config.write_text(original_config, encoding="utf-8")
 digests = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (addon / "bin").glob("*.dll")}

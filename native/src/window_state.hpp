@@ -57,6 +57,7 @@ public:
     int64_t configure_hotkeys(uint32_t recover_mods, uint32_t recover_vk,
             uint32_t exit_mods, uint32_t exit_vk,
             uint32_t chat_mods, uint32_t chat_vk);
+    std::string get_status_json() const;
     void shutdown();
     int64_t acquire_instance(const std::string &key);
     bool adopt_service_process(int64_t pid);
@@ -102,6 +103,12 @@ private:
     std::array<int64_t, 32> actions_{};
     size_t read_ = 0;
     size_t count_ = 0;
+    // Overflow is reported, never silent: counted drops plus one stderr warning
+    // per episode. Validity flags record whether the last cursor/DPI query hit
+    // a real Win32 reading instead of the documented fallback value.
+    uint64_t dropped_actions_ = 0;
+    mutable bool cursor_valid_ = false;
+    mutable bool dpi_valid_ = false;
 
     // Action submenu fed by GDScript: one group per line, "label|item|item".
     // Commands are action_command_base + flat item index, so the owner can map

@@ -24,14 +24,8 @@ public:
     explicit operator bool() const { return value && value != INVALID_HANDLE_VALUE; }
 };
 #ifdef PET_WINDOW_TESTING
-std::atomic<testing::Failure> next_failure{testing::Failure::none};
-bool fail(testing::Failure point) {
-    auto expected = point;
-    if (!next_failure.compare_exchange_strong(expected, testing::Failure::none)) return false;
-    SetLastError(ERROR_ACCESS_DENIED);
-    return true;
-}
-#define FAIL_AT(point) fail(testing::Failure::point)
+// Injection state lives in window_bridge.cpp so both TUs share one consumer.
+#define FAIL_AT(point) testing::consume_failure(testing::Failure::point)
 #else
 #define FAIL_AT(point) false
 #endif
@@ -78,24 +72,31 @@ std::string quote_json(const std::wstring &value) {
     }
     return result + '"';
 }
-struct Displays { std::string json = "["; bool failed = false; };
+struct Displays { std::string json = "["; bool failed = false; int order = 0; };
 BOOL CALLBACK append_display(HMONITOR monitor, HDC, LPRECT, LPARAM context) {
     auto &out = *reinterpret_cast<Displays *>(context);
+    const int index = out.order++;
     try {
         MONITORINFOEXW info{}; info.cbSize = sizeof(info);
         if (!GetMonitorInfoW(monitor, &info)) { out.failed = true; return FALSE; }
         std::wstring id, name = info.szDevice;
-        for (DWORD i = 0;; ++i) {
-            DISPLAY_DEVICEW device{}; device.cb = sizeof(device);
-            if (!EnumDisplayDevicesW(info.szDevice, i, &device, EDD_GET_DEVICE_INTERFACE_NAME)) break;
-            if (!(device.StateFlags & DISPLAY_DEVICE_ACTIVE)) continue;
-            if (device.DeviceID[0]) id = device.DeviceID;
-            if (device.DeviceString[0]) name = device.DeviceString;
-            if (!id.empty()) break;
+        if (!FAIL_AT(display_interface)) {
+            for (DWORD i = 0;; ++i) {
+                DISPLAY_DEVICEW device{}; device.cb = sizeof(device);
+                if (!EnumDisplayDevicesW(info.szDevice, i, &device, EDD_GET_DEVICE_INTERFACE_NAME)) break;
+                if (!(device.StateFlags & DISPLAY_DEVICE_ACTIVE)) continue;
+                if (device.DeviceID[0]) id = device.DeviceID;
+                if (device.DeviceString[0]) name = device.DeviceString;
+                if (!id.empty()) break;
+            }
         }
-        // Remote/virtual drivers may omit monitor interfaces. Keep that display
-        // usable with an explicit source fallback, never pretend it is stable.
-        if (id.empty()) id = std::wstring(L"source:") + info.szDevice;
+        // Remote/virtual drivers may omit monitor interfaces. Fall back to the
+        // EnumDisplayMonitors position: for an unchanged display topology the
+        // enumeration order repeats exactly, while \\.\DISPLAYn source names can
+        // be renumbered by Windows between enumerations. This is a layout-scoped
+        // fallback, never a persistent hardware ID; replugging monitors may
+        // renumber it, so the owner should re-resolve by name/geometry then.
+        if (id.empty()) id = L"index:" + std::to_wstring(index);
         const auto &r = info.rcMonitor;
         const auto &w = info.rcWork;
         if (out.json.size() > 1) out.json += ',';
@@ -112,7 +113,6 @@ BOOL CALLBACK append_display(HMONITOR monitor, HDC, LPRECT, LPARAM context) {
 
 #ifdef PET_WINDOW_TESTING
 namespace testing {
-void fail_next(Failure failure) { next_failure.store(failure); }
 std::string json_quote(const std::wstring &value) { return quote_json(value); }
 }
 #endif

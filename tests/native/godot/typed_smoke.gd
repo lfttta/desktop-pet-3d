@@ -25,6 +25,11 @@ func run() -> void:
 	for iteration in 100:
 		text = bridge.get_displays_json()
 		assert(JSON.parse_string(text) is Array)
+	var menu_ok: bool = bridge.set_menu_actions("测试|甲|乙")
+	assert(menu_ok)
+	var status: String = bridge.get_status_json()
+	var parsed: Dictionary = JSON.parse_string(status)
+	assert(parsed is Dictionary and parsed.get("dropped_actions") == 0)
 	bridge.shutdown()
 	assert(other.acquire_instance(key) == 1)
 	other.shutdown()

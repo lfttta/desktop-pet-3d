@@ -2,6 +2,7 @@
 #include "window_test_hooks.hpp"
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 
 namespace {
 int failures = 0;
@@ -36,7 +37,7 @@ struct MenuContext {
     bool explicit_shutdown;
     bool entered = false;
 };
-UINT nested_menu_dispatch(HWND menu_owner, void *pointer) {
+UINT nested_menu_dispatch(HWND menu_owner, HMENU, void *pointer) {
     auto &context = *static_cast<MenuContext *>(pointer);
     context.entered = true;
     check(pet3d::testing::live_states() == 1, "menu callback begins with one retained native state");
@@ -61,6 +62,74 @@ UINT nested_menu_dispatch(HWND menu_owner, void *pointer) {
             "nested shutdown defers subclass teardown until outer callback exits");
     SendMessageW(menu_owner, WM_COMMAND, 2, 0);
     return 5; // ignored after shutdown request; continuation must still be safe
+}
+struct MenuSnapshot {
+    std::vector<UINT> action_ids;
+    int fixed_items = 0;
+    bool entered = false;
+};
+void collect_menu(HMENU menu, MenuSnapshot &snapshot) {
+    const int count = GetMenuItemCount(menu);
+    for (int index = 0; index < count; ++index) {
+        MENUITEMINFOW item{}; item.cbSize = sizeof(item);
+        item.fMask = MIIM_ID | MIIM_SUBMENU | MIIM_STRING;
+        wchar_t text[256]{};
+        item.dwTypeData = text; item.cch = 256;
+        if (!GetMenuItemInfoW(menu, index, TRUE, &item)) continue;
+        if (item.hSubMenu) { collect_menu(item.hSubMenu, snapshot); continue; }
+        if (item.wID >= 1000) snapshot.action_ids.push_back(item.wID);
+        else if (item.wID >= 1 && item.wID <= 7) ++snapshot.fixed_items;
+    }
+}
+UINT inspect_menu(HWND, HMENU menu, void *pointer) {
+    auto &snapshot = *static_cast<MenuSnapshot *>(pointer);
+    snapshot.entered = true;
+    collect_menu(menu, snapshot);
+    return 0;
+}
+void open_menu(HWND menu_helper, MenuSnapshot &snapshot) {
+    pet3d::testing::set_menu_runner(inspect_menu, &snapshot);
+    // Handles both modern and legacy shell callback encoding.
+    SendMessageW(menu_helper, WM_APP + 0x3D, 0, WM_CONTEXTMENU);
+    if (!snapshot.entered) SendMessageW(menu_helper, WM_APP + 0x3D, 0, WM_RBUTTONUP);
+    pet3d::testing::set_menu_runner(nullptr, nullptr);
+}
+void menu_alignment_tests(HWND role) {
+    pet3d::WindowBridge bridge;
+    check(bridge.configure(reinterpret_cast<int64_t>(role)), "configure menu fixture");
+    check(bridge.set_menu_actions("甲|a1|a2\n乙|b1|b2"), "menu payload accepted");
+    helper = nullptr;
+    EnumThreadWindows(GetCurrentThreadId(), find_helper, 0);
+    const HWND menu_helper = helper;
+    check(menu_helper != nullptr, "menu fixture helper exists");
+    // Healthy build: flat command IDs follow the owner's group order exactly.
+    MenuSnapshot intact;
+    open_menu(menu_helper, intact);
+    check(intact.entered, "menu runner entered through helper WNDPROC");
+    check(intact.action_ids == std::vector<UINT>({1000, 1001, 1002, 1003}),
+            "flat command IDs follow group order");
+    check(intact.fixed_items == 6, "fixed menu commands present");
+    // A failed submenu must skip its own IDs, never renumber later groups.
+    MenuSnapshot skipped;
+    pet3d::testing::fail_next(pet3d::testing::Failure::menu_submenu);
+    open_menu(menu_helper, skipped);
+    check(skipped.entered, "submenu-failure menu runner entered");
+    check(skipped.action_ids == std::vector<UINT>({1002, 1003}),
+            "failed submenu keeps later command IDs aligned");
+    // A failed actions root loses only the action block; fixed commands survive.
+    MenuSnapshot rootless;
+    pet3d::testing::fail_next(pet3d::testing::Failure::menu_actions_root);
+    open_menu(menu_helper, rootless);
+    check(rootless.entered && rootless.action_ids.empty(),
+            "failed actions root drops only the action block");
+    check(rootless.fixed_items == 6, "fixed commands survive actions root failure");
+    // The echoed command range still covers every parsed item, including the
+    // groups whose submenu could not be created.
+    SendMessageW(menu_helper, WM_COMMAND, 1003, 0);
+    check(bridge.poll_tray_action() == 1003, "last flat command accepted");
+    SendMessageW(menu_helper, WM_COMMAND, 1004, 0);
+    check(bridge.poll_tray_action() == 0, "command past flat table rejected");
+    bridge.shutdown();
 }
 }
 
@@ -173,6 +242,7 @@ int main() {
     const bool chat_released = RegisterHotKey(nullptr, probe_id, modifiers, 'C') != FALSE;
     check(chat_released, "shutdown releases Ctrl+Alt+C registration");
     if (chat_released) UnregisterHotKey(nullptr, probe_id);
+    menu_alignment_tests(role);
     check(pet3d::testing::live_states() == 0, "no native state leaks after all fixtures");
     DestroyWindow(role);
     UnregisterClassW(cls.lpszClassName, cls.hInstance);

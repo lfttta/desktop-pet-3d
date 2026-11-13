@@ -22,7 +22,7 @@ def _write(tmp_path, document):
 
 
 def test_v10_defaults_keep_hotkeys_group():
-    assert SCHEMA_VERSION == 10
+    assert SCHEMA_VERSION == 11
     assert DEFAULTS['hotkeys'] == {
         'recover': 'Ctrl+Alt+F10', 'exit': 'Ctrl+Alt+Q', 'chat': 'Ctrl+Alt+C',
     }
@@ -36,6 +36,8 @@ def test_v7_document_gains_hotkeys_and_keeps_values(tmp_path):
     del v7['hotkeys']
     # The v9 tone did not exist in v7; the migration must backfill it.
     del v7['expression']['tone']
+    # The v11 vision group did not exist in v7 either.
+    del v7['vision']
     v7['scale'] = 0.9
     v7['user_name'] = '小陈'
     v7['bubble']['duration_seconds'] = 9
@@ -43,14 +45,14 @@ def test_v7_document_gains_hotkeys_and_keeps_values(tmp_path):
     path = _write(tmp_path, v7)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 10
+    assert store.settings['schema_version'] == SCHEMA_VERSION
     assert store.settings['hotkeys'] == HOTKEYS_DEFAULTS
     assert store.settings['expression']['tone'] == 'godette'
     assert store.settings['scale'] == 0.9
     assert store.settings['user_name'] == '小陈'
     assert store.settings['bubble']['duration_seconds'] == 9
     assert store.settings['greeting']['on_start'] is False
-    assert any('schema version 10' in warning for warning in store.warnings)
+    assert any(f'schema version {SCHEMA_VERSION}' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 
@@ -59,16 +61,18 @@ def test_v9_document_gains_chat_and_keeps_bindings(tmp_path):
     v9 = deepcopy(DEFAULTS)
     v9['schema_version'] = 9
     del v9['hotkeys']['chat']
+    # The v11 vision group did not exist in v9 either.
+    del v9['vision']
     v9['hotkeys']['recover'] = 'Alt+F9'
     v9['hotkeys']['exit'] = 'Alt+F8'
     path = _write(tmp_path, v9)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 10
+    assert store.settings['schema_version'] == SCHEMA_VERSION
     assert store.settings['hotkeys'] == {
         'recover': 'Alt+F9', 'exit': 'Alt+F8', 'chat': 'Ctrl+Alt+C',
     }
-    assert any('schema version 10' in warning for warning in store.warnings)
+    assert any(f'schema version {SCHEMA_VERSION}' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 
@@ -84,6 +88,8 @@ def test_old_document_whose_binding_owns_the_chat_default_is_kept(tmp_path, vers
     """
     document = deepcopy(DEFAULTS)
     document['schema_version'] = version
+    # The v11 vision group did not exist in v8/v9.
+    del document['vision']
     document['hotkeys'] = {
         'recover': 'Ctrl+Alt+F10', 'exit': 'Ctrl+Alt+Q',
     }
@@ -96,7 +102,7 @@ def test_old_document_whose_binding_owns_the_chat_default_is_kept(tmp_path, vers
     path = _write(tmp_path, document)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 10
+    assert store.settings['schema_version'] == SCHEMA_VERSION
     assert store.settings['scale'] == 1.37
     assert store.settings['user_name'] == '小林'
     assert store.settings['hotkeys'][field] == 'Ctrl+Alt+C'

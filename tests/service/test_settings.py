@@ -147,16 +147,16 @@ def test_backup_failure_does_not_destroy_broken_original(tmp_path, monkeypatch):
     assert config.read_bytes() == b'broken original'
 
 
-def test_schema10_defaults_include_phase2_groups_and_expression_tone():
+def test_defaults_include_every_group_up_to_the_current_schema():
     from service.settings import (AI_EMBEDDING_DEFAULTS, AUTONOMY_DEFAULTS,
                                   BEHAVIOR_DEFAULTS, DEFAULTS, DESKTOP_DEFAULTS,
                                   EXPRESSION_DEFAULTS, EXPRESSION_TONES,
                                   GROWTH_DEFAULTS, HOTKEYS_DEFAULTS,
                                   MEMORY_ARCHIVE_DEFAULTS,
                                   MEMORY_COMPACTION_DEFAULTS, PERFORMANCE_DEFAULTS,
-                                  SCHEMA_VERSION)
-    assert SCHEMA_VERSION == 10
-    assert DEFAULTS['schema_version'] == 10
+                                  SCHEMA_VERSION, VISION_DEFAULTS)
+    assert SCHEMA_VERSION == 11
+    assert DEFAULTS['schema_version'] == SCHEMA_VERSION
     assert DEFAULTS['memory']['compaction'] == {
         'enabled': False, 'model_compress': False, 'daily_limit': 20,
         'min_age_days': 7, 'max_per_run': 10, 'protect_importance': 0.8,
@@ -174,8 +174,10 @@ def test_schema10_defaults_include_phase2_groups_and_expression_tone():
         'work_focus_policy': 'minimal', 'idle_policy': 'gentle',
     }
     assert DEFAULTS['desktop'] == DESKTOP_DEFAULTS
-    assert DEFAULTS['behavior'] == {'enabled': True}
-    assert DEFAULTS['behavior'] == BEHAVIOR_DEFAULTS
+    assert DEFAULTS['behavior'] == BEHAVIOR_DEFAULTS == {'enabled': True,
+                                                         'walk_enabled': True}
+    assert DEFAULTS['vision'] == VISION_DEFAULTS
+    assert DEFAULTS['vision']['enabled'] is False
     assert DEFAULTS['performance'] == {
         'idle_fps': 30, 'drag_fps': 60, 'hidden_fps': 5,
     }
@@ -192,11 +194,12 @@ def test_schema10_defaults_include_phase2_groups_and_expression_tone():
     assert EXPRESSION_TONES == ('godette', 'sharp', 'clingy', 'tool', 'custom')
 
 
-def test_v3_document_migrates_to_v10_and_preserves_values(tmp_path):
+def test_v3_document_migrates_to_v11_and_preserves_values(tmp_path):
     from service.settings import (AI_EMBEDDING_DEFAULTS, BEHAVIOR_DEFAULTS,
                                   DESKTOP_DEFAULTS, GROWTH_DEFAULTS, HOTKEYS_DEFAULTS,
                                   MEMORY_ARCHIVE_DEFAULTS, MEMORY_COMPACTION_DEFAULTS,
-                                  PERFORMANCE_DEFAULTS, SettingsStore)
+                                  PERFORMANCE_DEFAULTS, SCHEMA_VERSION,
+                                  VISION_DEFAULTS, SettingsStore)
     v3 = {
         'schema_version': 3, 'character_id': 'godette', 'persona_id': 'godette',
         'scale': 0.75, 'screen_id': 'monitor-2', 'user_name': '小明',
@@ -226,7 +229,7 @@ def test_v3_document_migrates_to_v10_and_preserves_values(tmp_path):
     path = tmp_path / 'settings.json'
     path.write_bytes((json.dumps(v3, ensure_ascii=False) + '\n').encode('utf-8'))
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 10
+    assert store.settings['schema_version'] == SCHEMA_VERSION
     for key in ('character_id', 'persona_id', 'scale', 'screen_id', 'user_name',
                 'placement'):
         assert store.settings[key] == v3[key]
@@ -246,22 +249,28 @@ def test_v3_document_migrates_to_v10_and_preserves_values(tmp_path):
     assert store.settings['growth'] == GROWTH_DEFAULTS
     assert store.settings['desktop'] == DESKTOP_DEFAULTS
     assert store.settings['behavior'] == BEHAVIOR_DEFAULTS
+    assert store.settings['vision'] == VISION_DEFAULTS
     assert store.settings['performance'] == PERFORMANCE_DEFAULTS
     assert store.settings['hotkeys'] == HOTKEYS_DEFAULTS
     assert store.settings['autonomy']['cloud_enabled'] is True
     assert store.settings['autonomy']['default_quiet_minutes'] == 30
-    assert any('schema version 10' in warning for warning in store.warnings)
+    assert any('schema version %d' % SCHEMA_VERSION in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 
 
-def test_v8_document_migrates_to_v10_and_adds_tone_and_chat_defaults(tmp_path):
-    from service.settings import DEFAULTS, EXPRESSION_DEFAULTS, SettingsStore
+def test_v8_document_migrates_to_v11_and_adds_tone_and_chat_defaults(tmp_path):
+    from service.settings import (DEFAULTS, EXPRESSION_DEFAULTS, SCHEMA_VERSION,
+                                  SettingsStore)
     v8 = deepcopy(DEFAULTS)
     v8['schema_version'] = 8
     del v8['expression']['tone']
     # A real v8 file predates hotkeys.chat; the migration must backfill it.
     del v8['hotkeys']['chat']
+    # vision is a v11 group and behavior.walk_enabled a v11 key, so a genuine
+    # v8 document has neither; the migration must backfill both.
+    del v8['vision']
+    del v8['behavior']['walk_enabled']
     v8['scale'] = 0.65
     v8['user_name'] = '小许'
     v8['expression']['phrases_enabled'] = False
@@ -270,15 +279,17 @@ def test_v8_document_migrates_to_v10_and_adds_tone_and_chat_defaults(tmp_path):
     path.write_bytes((json.dumps(v8, ensure_ascii=False) + '\n').encode('utf-8'))
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 10
+    assert store.settings['schema_version'] == SCHEMA_VERSION
     assert store.settings['expression']['tone'] == EXPRESSION_DEFAULTS['tone']
     assert store.settings['hotkeys']['chat'] == 'Ctrl+Alt+C'
+    assert store.settings['behavior'] == {'enabled': True, 'walk_enabled': True}
+    assert store.settings['vision'] == DEFAULTS['vision']
     # Every value the v8 file already stored survives unchanged.
     assert store.settings['scale'] == 0.65
     assert store.settings['user_name'] == '小许'
     assert store.settings['expression']['phrases_enabled'] is False
     assert store.settings['expression']['style']['warmth'] == 0.9
-    assert any('schema version 10' in warning for warning in store.warnings)
+    assert any('schema version %d' % SCHEMA_VERSION in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 

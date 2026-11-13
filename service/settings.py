@@ -14,7 +14,7 @@ from service.jsonutil import MAX_FRAME_BYTES, dumps, loads
 from service.character_catalog import ALLOWED_CHARACTER_IDS
 from service.persona import ALLOWED_PERSONA_IDS, DEFAULT_PERSONA_ID
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 DEFAULTS_V1 = {
     'schema_version': 1, 'character_id': 'godette', 'scale': 1.0,
     'screen_id': '', 'user_name': '你',
@@ -95,8 +95,11 @@ AUTONOMY_DEFAULTS = {
     'cloud_enabled': True,
     'default_quiet_minutes': 30,
 }
+# `walk_enabled` off removes the walk branch from the behaviour roll;
+# user-triggered actions do not go through it.
 BEHAVIOR_DEFAULTS = {
     'enabled': True,
+    'walk_enabled': True,
 }
 PERFORMANCE_DEFAULTS = {
     'idle_fps': 30,
@@ -111,6 +114,14 @@ DESKTOP_DEFAULTS = {
     'dnd_policy': 'silent',
     'work_focus_policy': 'minimal',
     'idle_policy': 'gentle',
+}
+# Screenshot vision. Kept here (not in service/vision.py) so this module
+# stays free of the AI stack; vision.py imports these values.
+VISION_DEFAULTS = {
+    'enabled': False,
+    'model': '',
+    'max_dimension': 1280,
+    'proactive_interval_seconds': 1800,
 }
 PRIVACY_DEFAULTS = {
     'log_prompts': False,
@@ -161,6 +172,7 @@ GROUP_DEFAULTS = {
     'bubble': BUBBLE_DEFAULTS,
     'greeting': GREETING_DEFAULTS,
     'hotkeys': HOTKEYS_DEFAULTS,
+    'vision': VISION_DEFAULTS,
 }
 DEFAULTS = {
     'schema_version': SCHEMA_VERSION, 'character_id': 'godette',
@@ -391,6 +403,8 @@ def _group(name, value, partial):
             result[key] = _validate_greeting(key, item)
         elif name == 'hotkeys':
             result[key] = _hotkey(item)
+        elif name == 'vision':
+            result[key] = _validate_vision(key, item)
         else:
             result[key] = _boolean(item)
     return result
@@ -521,7 +535,7 @@ def _validate_voice(key, value):
 
 
 def _validate_behavior(key, value):
-    if key == 'enabled':
+    if key in ('enabled', 'walk_enabled'):
         return _boolean(value)
     raise ValidationError('unsupported behavior setting')
 
@@ -550,6 +564,27 @@ def _validate_greeting(key, value):
     if key == 'cooldown_minutes':
         return _integer(value, 5, 1440)
     raise ValidationError('unsupported greeting setting')
+
+
+VISION_MAX_DIMENSION_RANGE = (64, 7680)
+VISION_PROACTIVE_INTERVAL_RANGE = (60, 86400)
+VISION_MAX_MODEL_CHARS = 200
+
+
+def _validate_vision(key, value):
+    if key == 'enabled':
+        return _boolean(value)
+    if key == 'model':
+        if type(value) is not str or len(value) > VISION_MAX_MODEL_CHARS:
+            raise ValidationError(
+                'vision.model must be a string of at most %d characters'
+                % VISION_MAX_MODEL_CHARS)
+        return value
+    if key == 'max_dimension':
+        return _integer(value, *VISION_MAX_DIMENSION_RANGE)
+    if key == 'proactive_interval_seconds':
+        return _integer(value, *VISION_PROACTIVE_INTERVAL_RANGE)
+    raise ValidationError('unsupported vision setting')
 
 
 def _choice(value, choices, label):
@@ -635,16 +670,17 @@ def _add_default_groups(document):
 
 
 # v3 had every group except growth, desktop, voice, behavior, performance,
-# bubble, greeting and hotkeys.
+# bubble, greeting, hotkeys and vision.
 V3_TOP_LEVEL_KEYS = DEFAULTS.keys() - {
     'growth', 'desktop', 'voice', 'behavior', 'performance',
-    'bubble', 'greeting', 'hotkeys',
+    'bubble', 'greeting', 'hotkeys', 'vision',
 }
 # v4 added growth but neither the desktop/behavior/performance groups nor
 # autonomy.cloud_enabled. The voice group was added to v5 later, so a v4
 # document may or may not carry it.
 V4_TOP_LEVEL_KEYS = DEFAULTS.keys() - {
     'desktop', 'behavior', 'performance', 'bubble', 'greeting', 'hotkeys',
+    'vision',
 }
 V4_TOP_LEVEL_KEYS_WITHOUT_VOICE = V4_TOP_LEVEL_KEYS - {'voice'}
 V4_AUTONOMY_KEYS = frozenset({
@@ -654,16 +690,18 @@ V4_AUTONOMY_KEYS = frozenset({
 # v5 added the desktop group and autonomy.cloud_enabled. The voice group was
 # added to v5 after the fact, so a v5 document may or may not carry it.
 V5_TOP_LEVEL_KEYS = DEFAULTS.keys() - {
-    'behavior', 'performance', 'bubble', 'greeting', 'hotkeys',
+    'behavior', 'performance', 'bubble', 'greeting', 'hotkeys', 'vision',
 }
 V5_TOP_LEVEL_KEYS_WITHOUT_VOICE = V5_TOP_LEVEL_KEYS - {'voice'}
 # v6 added the behavior and performance groups; v7 adds bubble and greeting;
 # v8 adds the hotkeys group; v9 adds expression.tone without changing the
-# top-level shape; v10 adds hotkeys.chat inside the existing group.
-V6_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'bubble', 'greeting', 'hotkeys'}
-V7_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'hotkeys'}
-V8_TOP_LEVEL_KEYS = DEFAULTS.keys()
-V9_TOP_LEVEL_KEYS = DEFAULTS.keys()
+# top-level shape; v10 adds hotkeys.chat inside the existing group; v11 adds
+# the vision group and behavior.walk_enabled inside the existing group.
+V6_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'bubble', 'greeting', 'hotkeys', 'vision'}
+V7_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'hotkeys', 'vision'}
+V8_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'vision'}
+V9_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'vision'}
+V10_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'vision'}
 
 
 def _chat_default_for(hotkeys):
@@ -697,10 +735,11 @@ def _chat_default_for(hotkeys):
 
 
 def _add_missing_groups(document):
-    """Add the v4..v10 groups/keys while preserving every value already stored."""
+    """Add the v4..v11 groups/keys while preserving every value already stored."""
     migrated = deepcopy(document)
     migrated['schema_version'] = SCHEMA_VERSION
-    for name in ('voice', 'behavior', 'performance', 'bubble', 'greeting', 'hotkeys'):
+    for name in ('voice', 'behavior', 'performance', 'bubble', 'greeting',
+                 'hotkeys', 'vision'):
         migrated.setdefault(name, deepcopy(GROUP_DEFAULTS[name]))
     expression = migrated.get('expression')
     if type(expression) is dict:
@@ -708,6 +747,9 @@ def _add_missing_groups(document):
     hotkeys = migrated.get('hotkeys')
     if type(hotkeys) is dict:
         hotkeys.setdefault('chat', _chat_default_for(hotkeys))
+    behavior = migrated.get('behavior')
+    if type(behavior) is dict:
+        behavior.setdefault('walk_enabled', BEHAVIOR_DEFAULTS['walk_enabled'])
     return migrated
 
 
@@ -781,6 +823,11 @@ def _upgrade_v9(document):
     return _add_missing_groups(document)
 
 
+def _upgrade_v10(document):
+    """Add the v11 vision group and behavior.walk_enabled to a v10 document."""
+    return _add_missing_groups(document)
+
+
 def migrate_document(document):
     """Upgrade a recognized older schema; return (document, migrated)."""
     if type(document) is not dict:
@@ -817,6 +864,9 @@ def migrate_document(document):
     if (document.get('schema_version') == 9
             and document.keys() == V9_TOP_LEVEL_KEYS):
         return _upgrade_v9(document), True
+    if (document.get('schema_version') == 10
+            and document.keys() == V10_TOP_LEVEL_KEYS):
+        return _upgrade_v10(document), True
     return document, False
 
 

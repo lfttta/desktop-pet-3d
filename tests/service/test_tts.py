@@ -486,7 +486,7 @@ def test_v5_document_without_voice_gains_defaults(tmp_path):
     # nor autonomy.default_quiet_minutes was there yet either.
     document = {key: value for key, value in deepcopy(DEFAULTS).items()
                 if key not in ('voice', 'behavior', 'performance',
-                               'bubble', 'greeting', 'hotkeys')}
+                               'bubble', 'greeting', 'hotkeys', 'vision')}
     document['schema_version'] = 5
     del document['expression']['tone']
     del document['autonomy']['default_quiet_minutes']
@@ -510,6 +510,7 @@ def test_v4_document_without_voice_gains_desktop_and_voice_defaults(tmp_path):
     del document['bubble']
     del document['greeting']
     del document['hotkeys']
+    del document['vision']
     del document['autonomy']['cloud_enabled']
     del document['autonomy']['default_quiet_minutes']
     _write_settings(tmp_path, document)

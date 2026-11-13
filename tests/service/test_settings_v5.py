@@ -1,5 +1,8 @@
-"""Settings schema v5/v6/v7 contracts: desktop group, cloud switch, behavior,
-performance, bubble/greeting and migrations."""
+"""Settings schema contracts: group migrations through the current version.
+
+The file name predates several schema bumps; it now covers v3/v4/v5 documents
+migrating to the current schema plus the behavior and vision groups.
+"""
 
 from copy import deepcopy
 import json
@@ -18,6 +21,7 @@ from service.settings import (
     PERFORMANCE_DEFAULTS,
     SCHEMA_VERSION,
     SettingsStore,
+    VISION_DEFAULTS,
     ValidationError,
     validate_document,
 )
@@ -25,7 +29,11 @@ from service.settings import (
 
 def _v4_document():
     """A realistic v4 document: no desktop/behavior/performance groups, the
-    original six autonomy keys."""
+    original six autonomy keys.
+
+    vision is a newer group, so a genuine v4 document cannot contain it
+    either — leaving it in would make the key set unrecognizable.
+    """
     # The v9 tone did not exist in this schema, so the migration must backfill it.
     document = deepcopy(DEFAULTS)
     document['schema_version'] = 4
@@ -36,6 +44,7 @@ def _v4_document():
     del document['bubble']
     del document['greeting']
     del document['hotkeys']
+    del document['vision']
     del document['autonomy']['cloud_enabled']
     del document['autonomy']['default_quiet_minutes']
     document['scale'] = 0.75
@@ -61,14 +70,15 @@ def _write(tmp_path, document):
 
 
 def test_default_document_and_fresh_store_validate(tmp_path):
-    assert SCHEMA_VERSION == 10
+    assert SCHEMA_VERSION == 11
     assert validate_document(deepcopy(DEFAULTS)) == DEFAULTS
     store = SettingsStore(tmp_path)
     assert store.settings == DEFAULTS
     assert validate_document(store.settings) == DEFAULTS
     assert store.settings['desktop'] == DESKTOP_DEFAULTS
-    assert store.settings['behavior'] == {'enabled': True}
+    assert store.settings['behavior'] == {'enabled': True, 'walk_enabled': True}
     assert store.settings['behavior'] == BEHAVIOR_DEFAULTS
+    assert store.settings['vision'] == VISION_DEFAULTS
     assert store.settings['performance'] == {
         'idle_fps': 30, 'drag_fps': 60, 'hidden_fps': 5,
     }
@@ -83,9 +93,10 @@ def test_v4_document_migrates_and_fills_desktop_and_cloud_enabled(tmp_path):
     path = _write(tmp_path, v4)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 10
+    assert store.settings['schema_version'] == SCHEMA_VERSION
     assert store.settings['desktop'] == DESKTOP_DEFAULTS
     assert store.settings['behavior'] == BEHAVIOR_DEFAULTS
+    assert store.settings['vision'] == VISION_DEFAULTS
     assert store.settings['performance'] == PERFORMANCE_DEFAULTS
     assert store.settings['autonomy']['cloud_enabled'] is True
     assert store.settings['autonomy']['default_quiet_minutes'] == 30
@@ -104,12 +115,12 @@ def test_v4_document_migrates_and_fills_desktop_and_cloud_enabled(tmp_path):
     assert store.settings['autonomy']['max_per_hour'] == 5
     assert store.settings['growth']['min_sessions'] == 5
     assert store.settings['privacy']['log_prompts'] is True
-    assert any('schema version 10' in warning for warning in store.warnings)
+    assert any('schema version %d' % SCHEMA_VERSION in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 
 
-def test_v3_document_migrates_to_v10_and_preserves_values(tmp_path):
+def test_v3_document_migrates_to_v11_and_preserves_values(tmp_path):
     v3 = {
         'schema_version': 3, 'character_id': 'godette', 'persona_id': 'godette',
         'scale': 0.75, 'screen_id': 'monitor-2', 'user_name': '小明',
@@ -139,7 +150,7 @@ def test_v3_document_migrates_to_v10_and_preserves_values(tmp_path):
     path = _write(tmp_path, v3)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 10
+    assert store.settings['schema_version'] == SCHEMA_VERSION
     assert store.settings['scale'] == 0.75
     assert store.settings['ai']['temperature'] == 0.3
     assert store.settings['ai']['embedding'] == AI_EMBEDDING_DEFAULTS
@@ -155,9 +166,10 @@ def test_v3_document_migrates_to_v10_and_preserves_values(tmp_path):
     assert store.settings['growth'] == GROWTH_DEFAULTS
     assert store.settings['desktop'] == DESKTOP_DEFAULTS
     assert store.settings['behavior'] == BEHAVIOR_DEFAULTS
+    assert store.settings['vision'] == VISION_DEFAULTS
     assert store.settings['performance'] == PERFORMANCE_DEFAULTS
     assert store.settings['privacy']['log_prompts'] is True
-    assert any('schema version 10' in warning for warning in store.warnings)
+    assert any('schema version %d' % SCHEMA_VERSION in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
 
 
@@ -171,6 +183,7 @@ def _v5_document(with_voice=True):
     del document['bubble']
     del document['greeting']
     del document['hotkeys']
+    del document['vision']
     del document['autonomy']['default_quiet_minutes']
     if not with_voice:
         del document['voice']
@@ -184,7 +197,7 @@ def _v5_document(with_voice=True):
 
 
 @pytest.mark.parametrize('with_voice', [True, False])
-def test_v5_document_migrates_to_v10_and_fills_new_keys(tmp_path, with_voice):
+def test_v5_document_migrates_to_v11_and_fills_new_keys(tmp_path, with_voice):
     v5 = _v5_document(with_voice)
     if with_voice:
         v5['voice'] = {'enabled': False, 'voice': 'zh-CN-XiaoxiaoNeural',
@@ -192,8 +205,9 @@ def test_v5_document_migrates_to_v10_and_fills_new_keys(tmp_path, with_voice):
     path = _write(tmp_path, v5)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 10
-    assert store.settings['behavior'] == {'enabled': True}
+    assert store.settings['schema_version'] == SCHEMA_VERSION
+    assert store.settings['behavior'] == BEHAVIOR_DEFAULTS
+    assert store.settings['vision'] == VISION_DEFAULTS
     assert store.settings['performance'] == {
         'idle_fps': 30, 'drag_fps': 60, 'hidden_fps': 5,
     }
@@ -213,9 +227,10 @@ def test_v5_document_migrates_to_v10_and_fills_new_keys(tmp_path, with_voice):
         }
     else:
         assert store.settings['voice'] == DEFAULTS['voice']
-    assert any('schema version 10' in warning for warning in store.warnings)
+    assert any('schema version %d' % SCHEMA_VERSION in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
-    # The migrated file is already v9, so a second open has nothing to do.
+    # The migrated file is already at the current schema, so a second open has
+    # nothing to do.
     assert SettingsStore(tmp_path).warnings == []
 
 
@@ -228,7 +243,7 @@ def test_v5_with_voice_values_keeps_them_through_migration(tmp_path):
     _write(tmp_path, v5)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 10
+    assert store.settings['schema_version'] == SCHEMA_VERSION
     assert store.settings['voice']['enabled'] is False
     assert store.settings['voice']['volume'] == 0
     assert all('Invalid settings' not in warning for warning in store.warnings)
@@ -337,3 +352,43 @@ def test_desktop_boundaries_and_every_policy_choice_are_accepted(tmp_path):
     assert saved['desktop']['work_focus_policy'] == 'normal'
     assert saved['desktop']['idle_policy'] == 'normal'
     assert AUTONOMY_DEFAULTS['cloud_enabled'] is True
+
+
+def test_behavior_and_vision_round_trip(tmp_path):
+    store = SettingsStore(tmp_path)
+    saved = store.update({
+        'behavior': {'walk_enabled': False},
+        'vision': {'enabled': True, 'model': 'vision-small',
+                   'max_dimension': 640, 'proactive_interval_seconds': 600},
+    })
+    assert saved['behavior']['walk_enabled'] is False
+    assert saved['vision'] == {'enabled': True, 'model': 'vision-small',
+                              'max_dimension': 640,
+                              'proactive_interval_seconds': 600}
+    assert SettingsStore(tmp_path).settings == saved
+
+
+@pytest.mark.parametrize('patch', [
+    {'behavior': {'walk_enabled': 1}},
+    {'behavior': {'walk_enabled': 'yes'}},
+    {'behavior': {'walk_enabled': None}},
+    {'behavior': {'unknown': True}},
+    {'vision': {'enabled': 'on'}},
+    {'vision': {'model': 5}},
+    {'vision': {'model': 'x' * 201}},
+    {'vision': {'max_dimension': 63}},
+    {'vision': {'max_dimension': 7681}},
+    {'vision': {'max_dimension': 1280.0}},
+    {'vision': {'proactive_interval_seconds': 59}},
+    {'vision': {'proactive_interval_seconds': 86401}},
+    {'vision': {'proactive_interval_seconds': True}},
+    {'vision': {'unknown': 1}},
+])
+def test_invalid_behavior_and_vision_values_are_rejected(tmp_path, patch):
+    store = SettingsStore(tmp_path)
+    raw = (tmp_path / 'settings.json').read_bytes()
+    before = store.settings
+    with pytest.raises(ValidationError):
+        store.update(patch)
+    assert store.settings == before
+    assert (tmp_path / 'settings.json').read_bytes() == raw

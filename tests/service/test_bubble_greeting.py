@@ -28,10 +28,12 @@ def _v6_document():
     del document['hotkeys']
     # The v9 tone did not exist in v6; the migration must backfill it.
     del document['expression']['tone']
+    # The v11 vision group did not exist in v6 either.
+    del document['vision']
     document['scale'] = 0.85
     document['user_name'] = '小周'
     document['expression']['style']['warmth'] = 0.3
-    document['behavior']['enabled'] = False
+    document['behavior'] = {'enabled': False}
     document['performance']['idle_fps'] = 20
     return document
 
@@ -43,7 +45,7 @@ def _write(tmp_path, document):
 
 
 def test_v9_defaults_keep_bubble_and_greeting_groups():
-    assert SCHEMA_VERSION == 10
+    assert SCHEMA_VERSION == 11
     assert DEFAULTS['bubble'] == {
         'enabled': True, 'duration_seconds': 4, 'show_replies': True,
     }
@@ -69,7 +71,7 @@ def test_v6_document_gains_bubble_and_greeting_and_keeps_values(tmp_path):
     assert store.settings['scale'] == 0.85
     assert store.settings['user_name'] == '小周'
     assert store.settings['expression']['style']['warmth'] == 0.3
-    assert store.settings['behavior'] == {'enabled': False}
+    assert store.settings['behavior'] == {'enabled': False, 'walk_enabled': True}
     assert store.settings['performance']['idle_fps'] == 20
     assert any(f'schema version {SCHEMA_VERSION}' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings

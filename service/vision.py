@@ -40,6 +40,9 @@ from service.ai.circuit import CircuitBreaker
 from service.ai.provider import OpenAICompatibleProvider, ProviderError
 from service.protocol import ProtocolError
 from service.secrets import SecretsError, load_key_for
+from service.settings import (VISION_DEFAULTS, VISION_MAX_DIMENSION_RANGE,
+                              VISION_MAX_MODEL_CHARS,
+                              VISION_PROACTIVE_INTERVAL_RANGE)
 
 NAME = 'vision'
 CAPABILITY = {
@@ -57,13 +60,14 @@ SYSTEM_PROMPT = (
 MAX_PROMPT_CHARS = 2000
 MAX_MONITOR_INDEX = 15
 
-DEFAULT_MAX_DIMENSION = 1280
-MIN_MAX_DIMENSION = 64
-MAX_MAX_DIMENSION = 7680
-DEFAULT_PROACTIVE_INTERVAL = 1800
-MIN_PROACTIVE_INTERVAL = 60
-MAX_PROACTIVE_INTERVAL = 86400
-MAX_MODEL_CHARS = 200
+# The vision settings group and its bounds live in service/settings.py, which stays
+# free of the AI stack; the import above pulls them in so there is one
+# definition. These aliases keep this module's public constant names stable.
+DEFAULT_MAX_DIMENSION = VISION_DEFAULTS['max_dimension']
+MIN_MAX_DIMENSION, MAX_MAX_DIMENSION = VISION_MAX_DIMENSION_RANGE
+DEFAULT_PROACTIVE_INTERVAL = VISION_DEFAULTS['proactive_interval_seconds']
+MIN_PROACTIVE_INTERVAL, MAX_PROACTIVE_INTERVAL = VISION_PROACTIVE_INTERVAL_RANGE
+MAX_MODEL_CHARS = VISION_MAX_MODEL_CHARS
 
 # Conservative worst-case image token estimate for a <=1280px screenshot;
 # added to the text reservation before the ledger is consulted.
@@ -74,14 +78,6 @@ MAX_CAPTURE_PIXELS = 64_000_000
 PROACTIVE_REQUEST_ID = 'vision'
 PROACTIVE_EVENT = 'vision.proactive'
 JOIN_TIMEOUT_SECONDS = 1.0
-
-# Single source of truth for the v6 settings group; settings.py imports this.
-VISION_DEFAULTS = {
-    'enabled': False,
-    'model': '',
-    'max_dimension': DEFAULT_MAX_DIMENSION,
-    'proactive_interval_seconds': DEFAULT_PROACTIVE_INTERVAL,
-}
 
 # Chinese event messages for vision-specific codes; provider codes reuse the
 # orchestrator's SAFE_ERRORS vocabulary (imported lazily so that settings.py
@@ -115,7 +111,7 @@ def read_vision_settings(settings):
     """Normalize the vision group at the module boundary.
 
     Missing, mistyped or out-of-range values fall back to the defaults, so a
-    pre-v6 settings document (no vision group) simply reads as disabled.
+    settings document from before the vision group existed simply reads as disabled.
     """
     group = settings.get('vision') if isinstance(settings, dict) else None
     group = group if isinstance(group, dict) else {}

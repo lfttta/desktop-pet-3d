@@ -14,7 +14,7 @@ from service.jsonutil import MAX_FRAME_BYTES, dumps, loads
 from service.character_catalog import ALLOWED_CHARACTER_IDS
 from service.persona import ALLOWED_PERSONA_IDS, DEFAULT_PERSONA_ID
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 DEFAULTS_V1 = {
     'schema_version': 1, 'character_id': 'godette', 'scale': 1.0,
     'screen_id': '', 'user_name': '你',
@@ -138,6 +138,10 @@ GREETING_DEFAULTS = {
     'on_start': True,
     'cooldown_minutes': 60,
 }
+HOTKEYS_DEFAULTS = {
+    'recover': 'Ctrl+Alt+F10',
+    'exit': 'Ctrl+Alt+Q',
+}
 GROUP_DEFAULTS = {
     'ai': AI_DEFAULTS,
     'memory': MEMORY_DEFAULTS,
@@ -151,6 +155,7 @@ GROUP_DEFAULTS = {
     'performance': PERFORMANCE_DEFAULTS,
     'bubble': BUBBLE_DEFAULTS,
     'greeting': GREETING_DEFAULTS,
+    'hotkeys': HOTKEYS_DEFAULTS,
 }
 DEFAULTS = {
     'schema_version': SCHEMA_VERSION, 'character_id': 'godette',
@@ -163,6 +168,21 @@ PATCH_KEYS = DEFAULTS.keys() - {'schema_version'}
 REPLACE_ATTEMPTS = 4
 LEGACY_CHARACTERS = {'swordsman', 'alicia', 'soldier', 'cartoon_skeleton', 'man'}
 TIME_OF_DAY = re.compile(r'^([01][0-9]|2[0-3]):[0-5][0-9]$')
+# Hotkey text mirrors app/scripts/platform/hotkeys.gd: modifier aliases are
+# case-insensitive and the key is a letter, digit, F1..F24 or a named key.
+HOTKEY_MODIFIER_ALIASES = {
+    'ctrl': 'ctrl', 'control': 'ctrl',
+    'alt': 'alt', 'option': 'alt',
+    'shift': 'shift',
+    'win': 'win', 'meta': 'win', 'super': 'win', 'cmd': 'win',
+}
+HOTKEY_NAMED = frozenset({
+    'space', 'spacebar', 'tab', 'enter', 'return', 'esc', 'escape',
+    'backspace', 'delete', 'del', 'insert', 'ins', 'home', 'end',
+    'pageup', 'pgup', 'pagedown', 'pgdn', 'up', 'down', 'left', 'right',
+    'pause', 'printscreen', 'prtsc', 'capslock',
+})
+HOTKEY_KEY = re.compile(r'^([a-z0-9]|f([1-9]|1[0-9]|2[0-4]))$')
 
 
 class ValidationError(ValueError):
@@ -224,6 +244,35 @@ def _optional_timestamp(value):
     except ValueError as exc:
         raise ValidationError('manual_quiet_until must be empty or ISO 8601') from exc
     return value
+
+
+def _hotkey(value):
+    """Validate one binding; the stored text stays exactly as the user wrote it."""
+    text = _string(value, 40, allow_empty=False).strip()
+    parts = [part.strip() for part in text.split('+')]
+    modifiers = set()
+    modifier_tokens = 0
+    key = None
+    for part in parts:
+        token = part.lower()
+        if not token:
+            raise ValidationError('hotkey has an empty part')
+        if token in HOTKEY_MODIFIER_ALIASES:
+            modifiers.add(HOTKEY_MODIFIER_ALIASES[token])
+            modifier_tokens += 1
+            continue
+        if key is not None:
+            raise ValidationError('hotkey must have exactly one key')
+        if not (HOTKEY_KEY.match(token) or token in HOTKEY_NAMED):
+            raise ValidationError('hotkey key is not supported')
+        key = token
+    if key is None:
+        raise ValidationError('hotkey is missing a key')
+    if not modifiers:
+        raise ValidationError('hotkey needs at least one modifier')
+    if len(modifiers) != modifier_tokens:
+        raise ValidationError('hotkey repeats a modifier')
+    return text
 
 
 def _nested_mapping(value, defaults, label, partial):
@@ -316,6 +365,8 @@ def _group(name, value, partial):
             result[key] = _validate_bubble(key, item)
         elif name == 'greeting':
             result[key] = _validate_greeting(key, item)
+        elif name == 'hotkeys':
+            result[key] = _hotkey(item)
         else:
             result[key] = _boolean(item)
     return result
@@ -534,6 +585,9 @@ def validate_document(document):
             normalized[key] = _group(key, value, partial=False)
         else:
             normalized[key] = _scalar(key, value)
+    hotkeys = normalized['hotkeys']
+    if hotkeys['recover'].lower() == hotkeys['exit'].lower():
+        raise ValidationError('the recover and exit hotkeys must differ')
     # Leave room for the ready/result envelope, request ID and recovery warnings.
     if len(dumps(normalized)) > MAX_FRAME_BYTES - 8192:
         raise ValidationError('settings exceed the protocol response budget')
@@ -549,16 +603,16 @@ def _add_default_groups(document):
 
 
 # v3 had every group except growth, desktop, voice, behavior, performance,
-# bubble and greeting.
+# bubble, greeting and hotkeys.
 V3_TOP_LEVEL_KEYS = DEFAULTS.keys() - {
     'growth', 'desktop', 'voice', 'behavior', 'performance',
-    'bubble', 'greeting',
+    'bubble', 'greeting', 'hotkeys',
 }
 # v4 added growth but neither the desktop/behavior/performance groups nor
 # autonomy.cloud_enabled. The voice group was added to v5 later, so a v4
 # document may or may not carry it.
 V4_TOP_LEVEL_KEYS = DEFAULTS.keys() - {
-    'desktop', 'behavior', 'performance', 'bubble', 'greeting',
+    'desktop', 'behavior', 'performance', 'bubble', 'greeting', 'hotkeys',
 }
 V4_TOP_LEVEL_KEYS_WITHOUT_VOICE = V4_TOP_LEVEL_KEYS - {'voice'}
 V4_AUTONOMY_KEYS = frozenset({
@@ -567,17 +621,21 @@ V4_AUTONOMY_KEYS = frozenset({
 })
 # v5 added the desktop group and autonomy.cloud_enabled. The voice group was
 # added to v5 after the fact, so a v5 document may or may not carry it.
-V5_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'behavior', 'performance', 'bubble', 'greeting'}
+V5_TOP_LEVEL_KEYS = DEFAULTS.keys() - {
+    'behavior', 'performance', 'bubble', 'greeting', 'hotkeys',
+}
 V5_TOP_LEVEL_KEYS_WITHOUT_VOICE = V5_TOP_LEVEL_KEYS - {'voice'}
-# v6 added the behavior and performance groups; v7 adds bubble and greeting.
-V6_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'bubble', 'greeting'}
+# v6 added the behavior and performance groups; v7 adds bubble and greeting;
+# v8 adds the hotkeys group.
+V6_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'bubble', 'greeting', 'hotkeys'}
+V7_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'hotkeys'}
 
 
 def _add_missing_groups(document):
-    """Add the v4..v7 groups while preserving every value already stored."""
+    """Add the v4..v8 groups while preserving every value already stored."""
     migrated = deepcopy(document)
     migrated['schema_version'] = SCHEMA_VERSION
-    for name in ('voice', 'behavior', 'performance', 'bubble', 'greeting'):
+    for name in ('voice', 'behavior', 'performance', 'bubble', 'greeting', 'hotkeys'):
         migrated.setdefault(name, deepcopy(GROUP_DEFAULTS[name]))
     return migrated
 
@@ -629,11 +687,16 @@ def _upgrade_v5(document):
 
 
 def _upgrade_v6(document):
-    """Add the v7 bubble and greeting groups to a v6 document.
+    """Add the v7/v8 bubble, greeting and hotkeys groups to a v6 document.
 
-    Every value already stored stays as it is; only the two missing groups are
+    Every value already stored stays as it is; only the missing groups are
     filled from their defaults.
     """
+    return _add_missing_groups(document)
+
+
+def _upgrade_v7(document):
+    """Add the v8 hotkeys group to a v7 document."""
     return _add_missing_groups(document)
 
 
@@ -664,6 +727,9 @@ def migrate_document(document):
     if (document.get('schema_version') == 6
             and document.keys() == V6_TOP_LEVEL_KEYS):
         return _upgrade_v6(document), True
+    if (document.get('schema_version') == 7
+            and document.keys() == V7_TOP_LEVEL_KEYS):
+        return _upgrade_v7(document), True
     return document, False
 
 

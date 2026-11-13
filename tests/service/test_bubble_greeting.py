@@ -20,11 +20,12 @@ from service.settings import (
 
 
 def _v6_document():
-    """A schema 6 document: every v6 group, neither bubble nor greeting."""
+    """A schema 6 document: every v6 group, neither bubble, greeting nor hotkeys."""
     document = deepcopy(DEFAULTS)
     document['schema_version'] = 6
     del document['bubble']
     del document['greeting']
+    del document['hotkeys']
     document['scale'] = 0.85
     document['user_name'] = '小周'
     document['expression']['style']['warmth'] = 0.3
@@ -39,8 +40,8 @@ def _write(tmp_path, document):
     return path
 
 
-def test_v7_defaults_add_bubble_and_greeting_groups():
-    assert SCHEMA_VERSION == 7
+def test_v8_defaults_keep_bubble_and_greeting_groups():
+    assert SCHEMA_VERSION == 8
     assert DEFAULTS['bubble'] == {
         'enabled': True, 'duration_seconds': 4, 'show_replies': True,
     }
@@ -57,16 +58,17 @@ def test_v6_document_gains_bubble_and_greeting_and_keeps_values(tmp_path):
     path = _write(tmp_path, v6)
 
     store = SettingsStore(tmp_path)
-    assert store.settings['schema_version'] == 7
+    assert store.settings['schema_version'] == 8
     assert store.settings['bubble'] == BUBBLE_DEFAULTS
     assert store.settings['greeting'] == GREETING_DEFAULTS
+    assert store.settings['hotkeys'] == DEFAULTS['hotkeys']
     # Every value the v6 file already stored survives unchanged.
     assert store.settings['scale'] == 0.85
     assert store.settings['user_name'] == '小周'
     assert store.settings['expression']['style']['warmth'] == 0.3
     assert store.settings['behavior'] == {'enabled': False}
     assert store.settings['performance']['idle_fps'] == 20
-    assert any('schema version 7' in warning for warning in store.warnings)
+    assert any('schema version 8' in warning for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     # The migrated file is already v7, so a second open has nothing to do.
     assert SettingsStore(tmp_path).warnings == []

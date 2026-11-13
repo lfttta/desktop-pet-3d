@@ -46,6 +46,9 @@ public:
     bool has_capture();
     int64_t poll_tray_action();
     bool set_menu_actions(const std::string &groups);
+    // Re-registers the two global hotkeys. Returns bit0=recover, bit1=exit.
+    int64_t configure_hotkeys(uint32_t recover_mods, uint32_t recover_vk,
+            uint32_t exit_mods, uint32_t exit_vk);
     void shutdown();
     int64_t acquire_instance(const std::string &key);
     bool adopt_service_process(int64_t pid);
@@ -74,6 +77,12 @@ private:
     bool tray_v4_ = false;
     bool recover_registered_ = false;
     bool exit_registered_ = false;
+    struct Hotkey {
+        UINT mods = MOD_CONTROL | MOD_ALT;
+        UINT vk = 0;
+    };
+    Hotkey recover_binding_{MOD_CONTROL | MOD_ALT, VK_F10};
+    Hotkey exit_binding_{MOD_CONTROL | MOD_ALT, 'Q'};
     bool stopping_ = false;
     bool menu_open_ = false;
     bool exit_pending_ = false;
@@ -111,6 +120,7 @@ private:
     };
     bool apply_interaction();
     bool create_helper();
+    bool register_hotkeys();
     bool add_tray_icon();
     NOTIFYICONDATAW icon_data() const;
     void queue_action(int64_t action);

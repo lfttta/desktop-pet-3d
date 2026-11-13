@@ -34,6 +34,11 @@ void WindowBridge::end_capture() { auto state = state_; state->end_capture(); }
 bool WindowBridge::has_capture() { auto state = state_; return state->has_capture(); }
 int64_t WindowBridge::poll_tray_action() { auto state = state_; return state->poll_tray_action(); }
 bool WindowBridge::set_menu_actions(const std::string &groups) { auto state = state_; return state->set_menu_actions(groups); }
+int64_t WindowBridge::configure_hotkeys(uint32_t recover_mods, uint32_t recover_vk,
+        uint32_t exit_mods, uint32_t exit_vk) {
+    auto state = state_;
+    return state->configure_hotkeys(recover_mods, recover_vk, exit_mods, exit_vk);
+}
 void WindowBridge::shutdown() { auto state = state_; state->shutdown(); }
 int64_t WindowBridge::acquire_instance(const std::string &key) { auto state = state_; return state->acquire_instance(key); }
 bool WindowBridge::adopt_service_process(int64_t pid) { auto state = state_; return state->adopt_service_process(pid); }
@@ -304,6 +309,36 @@ bool WindowState::add_tray_icon() {
     return tray_added_;
 }
 
+bool WindowState::register_hotkeys() {
+    if (!helper_) return false;
+    if (recover_registered_) {
+        UnregisterHotKey(helper_, recover_hotkey);
+        recover_registered_ = false;
+    }
+    if (exit_registered_) {
+        UnregisterHotKey(helper_, exit_hotkey);
+        exit_registered_ = false;
+    }
+    if (recover_binding_.vk) {
+        recover_registered_ = RegisterHotKey(helper_, recover_hotkey,
+                recover_binding_.mods | MOD_NOREPEAT, recover_binding_.vk) != FALSE;
+    }
+    if (exit_binding_.vk) {
+        exit_registered_ = RegisterHotKey(helper_, exit_hotkey,
+                exit_binding_.mods | MOD_NOREPEAT, exit_binding_.vk) != FALSE;
+    }
+    return recover_registered_ || exit_registered_;
+}
+
+int64_t WindowState::configure_hotkeys(uint32_t recover_mods, uint32_t recover_vk,
+        uint32_t exit_mods, uint32_t exit_vk) {
+    if (!on_thread() || shutdown_requested_.load()) return 0;
+    if (recover_vk) recover_binding_ = {recover_mods, recover_vk};
+    if (exit_vk) exit_binding_ = {exit_mods, exit_vk};
+    register_hotkeys();
+    return (recover_registered_ ? 1 : 0) | (exit_registered_ ? 2 : 0);
+}
+
 bool WindowState::create_helper() {
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
             GET_MODULE_HANDLE_EX_FLAG_PIN,
@@ -329,15 +364,12 @@ bool WindowState::create_helper() {
     wake_window_.store(helper_);
     icon_ = CopyIcon(LoadIconW(nullptr, IDI_APPLICATION));
     taskbar_created_ = RegisterWindowMessageW(L"TaskbarCreated");
-    recover_registered_ = RegisterHotKey(helper_, recover_hotkey,
-            MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_F10) != FALSE;
-    exit_registered_ = RegisterHotKey(helper_, exit_hotkey,
-            MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'Q') != FALSE;
+    register_hotkeys();
     const bool added = add_tray_icon();
     if (!SetTimer(helper_, retry_timer, 2000, nullptr)) return false;
-    if (!added) warn("tray unavailable; Ctrl+Alt+Q exits, retrying every 2 seconds");
-    if (!exit_registered_) warn("Ctrl+Alt+Q unavailable; use tray Exit");
-    if (!recover_registered_) warn("Ctrl+Alt+F10 unavailable; use tray Recover position");
+    if (!added) warn("tray unavailable; the exit hotkey is the fallback, retrying every 2 seconds");
+    if (!exit_registered_) warn("exit hotkey unavailable; use tray Exit");
+    if (!recover_registered_) warn("recover hotkey unavailable; use tray Recover position");
     // Never report successful configuration with neither tray nor exit fallback.
     return added || exit_registered_;
 }

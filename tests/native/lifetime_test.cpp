@@ -136,6 +136,19 @@ int main() {
         check(!stolen && GetLastError() == ERROR_HOTKEY_ALREADY_REGISTERED,
                 "bridge reserves Ctrl+Alt+Q with RegisterHotKey");
         if (stolen) UnregisterHotKey(nullptr, probe_id);
+
+        // Custom bindings replace both defaults, and the previous exit key must
+        // be released instead of staying registered as a dead combination.
+        check(next.configure_hotkeys(MOD_CONTROL | MOD_ALT, VK_F11,
+                                     MOD_CONTROL | MOD_ALT, VK_F12) == 3,
+                "configure_hotkeys registers both custom bindings");
+        const bool custom = RegisterHotKey(nullptr, probe_id, modifiers, VK_F11) != FALSE;
+        check(!custom && GetLastError() == ERROR_HOTKEY_ALREADY_REGISTERED,
+                "the custom recover hotkey is owned by the bridge");
+        if (custom) UnregisterHotKey(nullptr, probe_id);
+        const bool old_free = RegisterHotKey(nullptr, probe_id, modifiers, 'Q') != FALSE;
+        check(old_free, "configure_hotkeys releases the previous exit key");
+        if (old_free) UnregisterHotKey(nullptr, probe_id);
         next.shutdown();
     }
     const bool released = RegisterHotKey(nullptr, probe_id, modifiers, 'Q') != FALSE;

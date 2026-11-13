@@ -86,9 +86,9 @@ def test_v1_settings_are_migrated_without_losing_values(tmp_path):
     store = SettingsStore(tmp_path)
     assert {key: store.settings[key] for key in v1 if key != 'schema_version'} == \
         {key: value for key, value in v1.items() if key != 'schema_version'}
-    assert store.settings['schema_version'] == 7
+    assert store.settings['schema_version'] == 8
     assert store.settings['persona_id'] == 'godette'
-    assert any('schema version 7' in warning for warning in store.warnings)
+    assert any('schema version 8' in warning for warning in store.warnings)
     assert json.loads((tmp_path / 'settings.json').read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 
@@ -104,7 +104,7 @@ def test_v1_legacy_character_and_schema_migrate_together(tmp_path):
     store = SettingsStore(tmp_path)
     assert store.settings['character_id'] == 'godette'
     assert store.settings['persona_id'] == 'godette'
-    assert store.settings['schema_version'] == 7
+    assert store.settings['schema_version'] == 8
     assert len(store.warnings) == 2
 
 

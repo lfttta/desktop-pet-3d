@@ -38,6 +38,8 @@ public:
     bool has_capture();
     int64_t poll_tray_action();
     bool set_menu_actions(const std::string &groups);
+    int64_t configure_hotkeys(uint32_t recover_mods, uint32_t recover_vk,
+            uint32_t exit_mods, uint32_t exit_vk);
     void shutdown();
     int64_t acquire_instance(const std::string &key);
     bool adopt_service_process(int64_t pid);

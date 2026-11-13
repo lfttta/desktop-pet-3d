@@ -9,6 +9,7 @@ const ExpressionPanel = preload("res://scripts/ui/expression_panel.gd")
 const GrowthPanel = preload("res://scripts/ui/growth_panel.gd")
 const UsagePanel = preload("res://scripts/ui/usage_panel.gd")
 const Autostart = preload("res://scripts/platform/autostart.gd")
+const Hotkeys = preload("res://scripts/platform/hotkeys.gd")
 const AI_DEFAULTS := {
 	"provider": "deepseek",
 	"base_url": "https://api.deepseek.com",
@@ -112,6 +113,12 @@ const BUBBLE_DURATION_MIN := 2
 const BUBBLE_DURATION_MAX := 15
 const GREETING_COOLDOWN_MIN := 5
 const GREETING_COOLDOWN_MAX := 1440
+# Defaults mirror service/settings.py HOTKEYS_DEFAULTS; text is canonicalised
+# through app/scripts/platform/hotkeys.gd before it reaches the patch.
+const HOTKEYS_DEFAULTS := {
+	"recover": "Ctrl+Alt+F10",
+	"exit": "Ctrl+Alt+Q",
+}
 ## Offsets offered for the manual quiet action; the service accepts 5..240,
 ## and a stored value outside this list is kept as an extra option.
 const QUIET_MINUTE_CHOICES := [15, 30, 60, 120]
@@ -215,6 +222,8 @@ var quiet_button: Button
 var autonomy_status: Label
 var behavior_enabled: CheckButton
 var autostart_enabled: CheckButton
+var hotkey_recover: LineEdit
+var hotkey_exit: LineEdit
 var idle_fps: SpinBox
 var drag_fps: SpinBox
 var hidden_fps: SpinBox
@@ -363,6 +372,15 @@ func _build_basic_page() -> void:
 	autostart_enabled = CheckButton.new()
 	autostart_enabled.text = "登录 Windows 后自动启动"
 	_row(page, "开机自启", autostart_enabled)
+	_section(page, "全局热键")
+	hotkey_recover = LineEdit.new()
+	hotkey_recover.max_length = 40
+	hotkey_recover.placeholder_text = HOTKEYS_DEFAULTS.recover
+	_row(page, "找回桌宠", hotkey_recover)
+	hotkey_exit = LineEdit.new()
+	hotkey_exit.max_length = 40
+	hotkey_exit.placeholder_text = HOTKEYS_DEFAULTS.exit
+	_row(page, "退出", hotkey_exit)
 	_section(page, "性能")
 	idle_fps = _spin(IDLE_FPS_MIN, IDLE_FPS_MAX, 1)
 	_row(page, "待机帧率", idle_fps)
@@ -785,6 +803,9 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	autostart_enabled.disabled = not autostart_ready
 	autostart_enabled.button_pressed = Autostart.is_enabled() if autostart_ready else false
 	autostart_enabled.tooltip_text = "" if autostart_ready else "只有打包版能写入开机自启"
+	var hotkeys := _group(settings, "hotkeys")
+	hotkey_recover.text = str(hotkeys.get("recover", HOTKEYS_DEFAULTS.recover))
+	hotkey_exit.text = str(hotkeys.get("exit", HOTKEYS_DEFAULTS.exit))
 	# The spin boxes clamp an out-of-range saved value to their own bounds.
 	var performance := _group(settings, "performance")
 	idle_fps.value = clampf(float(performance.get("idle_fps", PERFORMANCE_DEFAULTS.idle_fps)), float(IDLE_FPS_MIN), float(IDLE_FPS_MAX))
@@ -913,6 +934,25 @@ func _save() -> void:
 			"on_start": greeting_on_start.button_pressed,
 			"cooldown_minutes": int(greeting_cooldown.value),
 		}
+	# hotkeys is a schema v8 group. Validate here so bad text never reaches the
+	# service, then store the canonical spelling of what was typed.
+	var recover_binding := Hotkeys.parse(hotkey_recover.text)
+	if not recover_binding.ok:
+		show_message("找回热键：" + str(recover_binding.error), true)
+		hotkey_recover.grab_focus()
+		return
+	var exit_binding := Hotkeys.parse(hotkey_exit.text)
+	if not exit_binding.ok:
+		show_message("退出热键：" + str(exit_binding.error), true)
+		hotkey_exit.grab_focus()
+		return
+	if str(recover_binding.canonical) == str(exit_binding.canonical):
+		show_message("找回和退出不能是同一个热键。", true)
+		return
+	hotkey_recover.text = str(recover_binding.canonical)
+	hotkey_exit.text = str(exit_binding.canonical)
+	if _supports_schema(8):
+		patch["hotkeys"] = {"recover": hotkey_recover.text, "exit": hotkey_exit.text}
 	if expression_panel:
 		patch["expression"] = {
 			"enabled": expression_enabled.button_pressed,
@@ -921,6 +961,14 @@ func _save() -> void:
 		}
 	_apply_autostart()
 	save_requested.emit(patch)
+
+## Puts the pair that is really registered back into the fields, so a rejected
+## binding never lingers in the UI after the service stored something else.
+func show_hotkeys(active: Array) -> void:
+	if active.size() != 2:
+		return
+	hotkey_recover.text = str(active[0])
+	hotkey_exit.text = str(active[1])
 
 ## Applies the autostart checkbox to the registry. This is not part of the
 ## settings patch: the entry describes this installation, not the persona.
@@ -1170,6 +1218,10 @@ func _refresh_controls() -> void:
 	greeting_enabled.disabled = not bubble_ready
 	greeting_on_start.disabled = not bubble_ready
 	greeting_cooldown.editable = bubble_ready
+	# hotkeys exist from schema v8; an older service rejects the whole patch.
+	var hotkeys_ready := ready and _supports_schema(8)
+	hotkey_recover.editable = hotkeys_ready
+	hotkey_exit.editable = hotkeys_ready
 	# cloud_enabled only exists from schema v5; a legacy service would reject it.
 	cloud_proactive.disabled = not (ready and _supports_desktop())
 	# Desktop controls stay unavailable once the service reported the command

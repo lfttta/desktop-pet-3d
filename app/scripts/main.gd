@@ -6,6 +6,7 @@ const SettingsWindow = preload("res://scripts/ui/settings_window.gd")
 const ChatWindow = preload("res://scripts/ui/chat_window.gd")
 const EmotionPresenter = preload("res://scripts/state/emotion_presenter.gd")
 const TtsPlayer = preload("res://scripts/audio/tts_player.gd")
+const Hotkeys = preload("res://scripts/platform/hotkeys.gd")
 var client: Node
 var saved_settings := AppSettings.defaults()
 ## The service's bubble group. Defaults match service/settings.py so a pre-v7
@@ -31,6 +32,9 @@ var _saving := {}
 var _last_display_state := ""
 var _warnings: Array = []
 var _last_save_error := ""
+## The pair the native layer has actually registered. Empty until the first
+## apply, which is also the cue that no fallback exists yet.
+var _active_hotkeys: Array = []
 
 func _ready() -> void:
 	_parse_options()
@@ -86,6 +90,7 @@ func _ready() -> void:
 	apply_runtime_settings(saved_settings)
 	_restore_placement()
 	_create_windows()
+	_apply_hotkeys(saved_settings)
 	# Settings may already have arrived during the startup wait, so the ready
 	# handshake itself cannot be relied on to trigger the start greeting.
 	_greet_on_start_once()
@@ -326,6 +331,27 @@ func _apply_greeting_settings() -> void:
 		bool(greeting_group.get("on_start", true)),
 		int(greeting_group.get("cooldown_minutes", 60)))
 
+## Registers the configured global hotkeys and, when another program already
+## owns one, restores the pair that worked and writes that pair back so the
+## file never claims a binding the process does not have.
+func _apply_hotkeys(settings: Dictionary) -> void:
+	if bridge == null or DisplayServer.get_name() != "Windows":
+		return
+	var wanted := Hotkeys.bindings(settings)
+	if _active_hotkeys == wanted:
+		return
+	var outcome := Hotkeys.resolve(bridge, str(wanted[0]), str(wanted[1]), _active_hotkeys)
+	_active_hotkeys = outcome.active
+	if outcome.ok:
+		return
+	var message := str(outcome.message)
+	if settings_window:
+		settings_window.show_hotkeys(_active_hotkeys)
+		settings_window.show_message(message, true)
+	_show_notice("热键没有生效", message)
+	if _active_hotkeys.size() == 2 and _active_hotkeys != wanted and _app_ready and not _closing:
+		_save_patch({"hotkeys": {"recover": _active_hotkeys[0], "exit": _active_hotkeys[1]}}, false)
+
 ## Shows the start greeting once, after the client reported ready and the
 ## settings document has been applied. Deferred so the first frame of the pet is
 ## drawn before the bubble appears above it.
@@ -426,6 +452,7 @@ func _on_settings_received(settings: Dictionary) -> void:
 	apply_runtime_settings(saved_settings)
 	_apply_bubble_settings()
 	_apply_greeting_settings()
+	_apply_hotkeys(saved_settings)
 	if chat_window:
 		chat_window.update_settings(saved_settings)
 	if emotion_presenter:

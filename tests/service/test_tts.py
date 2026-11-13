@@ -159,7 +159,7 @@ def test_v5_document_without_voice_gains_defaults(tmp_path):
     # nor autonomy.default_quiet_minutes was there yet either.
     document = {key: value for key, value in deepcopy(DEFAULTS).items()
                 if key not in ('voice', 'behavior', 'performance',
-                               'bubble', 'greeting')}
+                               'bubble', 'greeting', 'hotkeys')}
     document['schema_version'] = 5
     del document['autonomy']['default_quiet_minutes']
     _write_settings(tmp_path, document)
@@ -168,7 +168,7 @@ def test_v5_document_without_voice_gains_defaults(tmp_path):
 
     assert store.settings['voice'] == VOICE_DEFAULTS
     assert json.loads((tmp_path / 'settings.json').read_text('utf-8')) == store.settings
-    assert any('schema version 7' in warning for warning in store.warnings)
+    assert any('schema version 8' in warning for warning in store.warnings)
 
 
 def test_v4_document_without_voice_gains_desktop_and_voice_defaults(tmp_path):
@@ -180,12 +180,13 @@ def test_v4_document_without_voice_gains_desktop_and_voice_defaults(tmp_path):
     del document['voice']
     del document['bubble']
     del document['greeting']
+    del document['hotkeys']
     del document['autonomy']['cloud_enabled']
     del document['autonomy']['default_quiet_minutes']
     _write_settings(tmp_path, document)
 
     store = SettingsStore(tmp_path)
 
-    assert store.settings['schema_version'] == 7
+    assert store.settings['schema_version'] == 8
     assert store.settings['desktop'] == DESKTOP_DEFAULTS
     assert store.settings['voice'] == VOICE_DEFAULTS

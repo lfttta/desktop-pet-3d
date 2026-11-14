@@ -215,10 +215,11 @@ intra_progress = animation_position / cycle_length
 | 阶段 | 内容 | 参考项目对应 | 判断 |
 |---|---|---|---|
 | 3-B | 聊天气泡 + 头顶快捷输入 | `speech_bubble.py` 1810 行 + `speech_bubble_text.py` 纯函数 | 已完成（v3.3.x）：回复上气泡、点击气泡弹回复条、分时段问候。回复条做成独立可聚焦小窗，因为主窗口 `no_focus` 在 Windows 上运行时摘不掉，气泡内嵌 LineEdit 收不到键盘 |
-| 3-C | Agent 状态联动 | `agent_link` 6303 行，本地 JSONL 总线 | 真缺口，纯本地不联网 |
+| 3-C | Agent 状态联动 | `agent_link` 6303 行，本地 JSONL 总线 | 真缺口，纯本地不联网。2026-11-13 调研决定：维持现状，3-C 不做。红线依据：`service/desktop/monitor.py` 模块声明只采四项信号、窗口标题/进程名/屏幕内容/键鼠内容永不读取，`tests/service/test_desktop_monitor.py` 以源码级断言禁用 `GetWindowText` 等窗口文本 API，两者均保持原样不改；联网识屏方案（如全程录屏的 screenpipe）与本项目隐私姿态相悖，不做。见 [开源方案调研](reports/2026-11-13-open-source-research.md) §1.3、§2 |
 | 3-D | TTS | `tts/{edge,sapi,mimo,doubao}` 声明式注册表 | 已做 SAPI 合成（`tts.synthesize`，默认关闭）；合成同步阻塞主线程直至语音功能正式启用 |
 | 3-E | 截屏视觉 + 主动识屏 | `vision.py`、`proactive/` | 真缺口 |
 | 3-F | 分档降载 | `tick_governor.py` 四档 + 800ms 滞回 + AC 感知 | 打磨项 |
+| 3-G | VRMA 动作库迁移（VRM Animation） | [VRM Animation 规范](https://vrm.dev/en/vrma/)（glTF animation + `VRMC_vrm_animation` 扩展，同一份 `.vrma` 可套用到任意 VRM 模型） | 建议单独立项评估（2026-11-13 调研中「最值得立项」的一条）：改为 `.vrma` 后换角色不必重做动画，并能接入社区动作；现动作按角色烘焙进 AnimationLibrary、`humanoid_core.json` 只有 mode 没有长度，属大改，不应顺手实施。见 [开源方案调研](reports/2026-11-13-open-source-research.md) §2.1 |
 
 **已优于参考项目、不再引入**：LLM 对话编排（`service/ai/orchestrator.py` 657 行，含熔断、预算账本、schema 修复重试）、记忆系统（`service/memory/*` 2863 行）、人格与提示词、拖拽抛掷物理、逐像素穿透。
 

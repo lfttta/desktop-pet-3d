@@ -129,6 +129,9 @@ int main() {
     const bool available = RegisterHotKey(nullptr, probe_id, modifiers, 'Q') != FALSE;
     check(available, "Ctrl+Alt+Q available before fixture configures");
     if (available) UnregisterHotKey(nullptr, probe_id);
+    const bool chat_available = RegisterHotKey(nullptr, probe_id, modifiers, 'C') != FALSE;
+    check(chat_available, "Ctrl+Alt+C available before fixture configures");
+    if (chat_available) UnregisterHotKey(nullptr, probe_id);
     {
         pet3d::WindowBridge next;
         check(next.configure(reinterpret_cast<int64_t>(role)), "configure hotkey fixture");
@@ -136,24 +139,40 @@ int main() {
         check(!stolen && GetLastError() == ERROR_HOTKEY_ALREADY_REGISTERED,
                 "bridge reserves Ctrl+Alt+Q with RegisterHotKey");
         if (stolen) UnregisterHotKey(nullptr, probe_id);
+        const bool chat_stolen = RegisterHotKey(nullptr, probe_id, modifiers, 'C') != FALSE;
+        check(!chat_stolen && GetLastError() == ERROR_HOTKEY_ALREADY_REGISTERED,
+                "bridge reserves the default chat hotkey");
+        if (chat_stolen) UnregisterHotKey(nullptr, probe_id);
 
-        // Custom bindings replace both defaults, and the previous exit key must
-        // be released instead of staying registered as a dead combination.
+        // Custom bindings replace all three defaults, and the previous exit and
+        // chat keys must be released instead of staying registered as dead
+        // combinations.
         check(next.configure_hotkeys(MOD_CONTROL | MOD_ALT, VK_F11,
-                                     MOD_CONTROL | MOD_ALT, VK_F12) == 3,
-                "configure_hotkeys registers both custom bindings");
+                                     MOD_CONTROL | MOD_ALT, VK_F12,
+                                     MOD_CONTROL | MOD_ALT, VK_F9) == 7,
+                "configure_hotkeys registers all three custom bindings");
         const bool custom = RegisterHotKey(nullptr, probe_id, modifiers, VK_F11) != FALSE;
         check(!custom && GetLastError() == ERROR_HOTKEY_ALREADY_REGISTERED,
                 "the custom recover hotkey is owned by the bridge");
         if (custom) UnregisterHotKey(nullptr, probe_id);
+        const bool custom_chat = RegisterHotKey(nullptr, probe_id, modifiers, VK_F9) != FALSE;
+        check(!custom_chat && GetLastError() == ERROR_HOTKEY_ALREADY_REGISTERED,
+                "the custom chat hotkey is owned by the bridge");
+        if (custom_chat) UnregisterHotKey(nullptr, probe_id);
         const bool old_free = RegisterHotKey(nullptr, probe_id, modifiers, 'Q') != FALSE;
         check(old_free, "configure_hotkeys releases the previous exit key");
         if (old_free) UnregisterHotKey(nullptr, probe_id);
+        const bool old_chat_free = RegisterHotKey(nullptr, probe_id, modifiers, 'C') != FALSE;
+        check(old_chat_free, "configure_hotkeys releases the previous chat key");
+        if (old_chat_free) UnregisterHotKey(nullptr, probe_id);
         next.shutdown();
     }
     const bool released = RegisterHotKey(nullptr, probe_id, modifiers, 'Q') != FALSE;
     check(released, "shutdown releases Ctrl+Alt+Q registration");
     if (released) UnregisterHotKey(nullptr, probe_id);
+    const bool chat_released = RegisterHotKey(nullptr, probe_id, modifiers, 'C') != FALSE;
+    check(chat_released, "shutdown releases Ctrl+Alt+C registration");
+    if (chat_released) UnregisterHotKey(nullptr, probe_id);
     check(pet3d::testing::live_states() == 0, "no native state leaks after all fixtures");
     DestroyWindow(role);
     UnregisterClassW(cls.lpszClassName, cls.hInstance);

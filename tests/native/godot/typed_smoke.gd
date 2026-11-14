@@ -12,6 +12,7 @@ func run() -> void:
 	bridge.end_capture()
 	assert(not bridge.has_capture())
 	assert(bridge.poll_tray_action() == 0)
+	assert(bridge.poll_wheel_delta() == 0)
 	var key: String = "typed-中文-😀-" + str(OS.get_process_id())
 	var acquired: int = bridge.acquire_instance(key)
 	assert(acquired == 1)

@@ -23,6 +23,7 @@ public:
     static constexpr wchar_t helper_class[] = L"Pet3D.TrayBridge.v1";
     static constexpr int recover_hotkey = 0x3D10;
     static constexpr int exit_hotkey = 0x3D12;
+    static constexpr int chat_hotkey = 0x3D14;
     WindowBridge();
     ~WindowBridge();
     WindowBridge(const WindowBridge &) = delete;
@@ -37,9 +38,11 @@ public:
     void end_capture();
     bool has_capture();
     int64_t poll_tray_action();
+    int64_t poll_wheel_delta();
     bool set_menu_actions(const std::string &groups);
     int64_t configure_hotkeys(uint32_t recover_mods, uint32_t recover_vk,
-            uint32_t exit_mods, uint32_t exit_vk);
+            uint32_t exit_mods, uint32_t exit_vk,
+            uint32_t chat_mods, uint32_t chat_vk);
     void shutdown();
     int64_t acquire_instance(const std::string &key);
     bool adopt_service_process(int64_t pid);

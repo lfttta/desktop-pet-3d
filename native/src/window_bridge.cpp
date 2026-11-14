@@ -33,11 +33,14 @@ bool WindowBridge::begin_capture() { auto state = state_; return state->begin_ca
 void WindowBridge::end_capture() { auto state = state_; state->end_capture(); }
 bool WindowBridge::has_capture() { auto state = state_; return state->has_capture(); }
 int64_t WindowBridge::poll_tray_action() { auto state = state_; return state->poll_tray_action(); }
+int64_t WindowBridge::poll_wheel_delta() { auto state = state_; return state->poll_wheel_delta(); }
 bool WindowBridge::set_menu_actions(const std::string &groups) { auto state = state_; return state->set_menu_actions(groups); }
 int64_t WindowBridge::configure_hotkeys(uint32_t recover_mods, uint32_t recover_vk,
-        uint32_t exit_mods, uint32_t exit_vk) {
+        uint32_t exit_mods, uint32_t exit_vk,
+        uint32_t chat_mods, uint32_t chat_vk) {
     auto state = state_;
-    return state->configure_hotkeys(recover_mods, recover_vk, exit_mods, exit_vk);
+    return state->configure_hotkeys(recover_mods, recover_vk, exit_mods, exit_vk,
+            chat_mods, chat_vk);
 }
 void WindowBridge::shutdown() { auto state = state_; state->shutdown(); }
 int64_t WindowBridge::acquire_instance(const std::string &key) { auto state = state_; return state->acquire_instance(key); }
@@ -237,6 +240,13 @@ int64_t WindowState::poll_tray_action() {
     return action;
 }
 
+int64_t WindowState::poll_wheel_delta() {
+    if (!on_thread() || shutdown_requested_.load()) return 0;
+    const int64_t delta = wheel_delta_;
+    wheel_delta_ = 0; // Take-and-clear: the owner drains exactly once per frame.
+    return delta;
+}
+
 bool WindowState::set_menu_actions(const std::string &groups) {
     if (!on_thread()) return false;
     // Input: one group per line, "label|item|item". Items are action display
@@ -292,7 +302,7 @@ NOTIFYICONDATAW WindowState::icon_data() const {
     data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     data.uCallbackMessage = tray_message;
     data.hIcon = icon_;
-    wcscpy_s(data.szTip, L"Pet3D 桌宠 | Ctrl+Alt+F10 恢复 / Ctrl+Alt+Q 退出");
+    wcscpy_s(data.szTip, L"Pet3D 桌宠 | Ctrl+Alt+F10 恢复 / Ctrl+Alt+Q 退出 / Ctrl+Alt+C 聊天");
     return data;
 }
 
@@ -319,6 +329,10 @@ bool WindowState::register_hotkeys() {
         UnregisterHotKey(helper_, exit_hotkey);
         exit_registered_ = false;
     }
+    if (chat_registered_) {
+        UnregisterHotKey(helper_, chat_hotkey);
+        chat_registered_ = false;
+    }
     if (recover_binding_.vk) {
         recover_registered_ = RegisterHotKey(helper_, recover_hotkey,
                 recover_binding_.mods | MOD_NOREPEAT, recover_binding_.vk) != FALSE;
@@ -327,16 +341,23 @@ bool WindowState::register_hotkeys() {
         exit_registered_ = RegisterHotKey(helper_, exit_hotkey,
                 exit_binding_.mods | MOD_NOREPEAT, exit_binding_.vk) != FALSE;
     }
-    return recover_registered_ || exit_registered_;
+    if (chat_binding_.vk) {
+        chat_registered_ = RegisterHotKey(helper_, chat_hotkey,
+                chat_binding_.mods | MOD_NOREPEAT, chat_binding_.vk) != FALSE;
+    }
+    return recover_registered_ || exit_registered_ || chat_registered_;
 }
 
 int64_t WindowState::configure_hotkeys(uint32_t recover_mods, uint32_t recover_vk,
-        uint32_t exit_mods, uint32_t exit_vk) {
+        uint32_t exit_mods, uint32_t exit_vk,
+        uint32_t chat_mods, uint32_t chat_vk) {
     if (!on_thread() || shutdown_requested_.load()) return 0;
     if (recover_vk) recover_binding_ = {recover_mods, recover_vk};
     if (exit_vk) exit_binding_ = {exit_mods, exit_vk};
+    if (chat_vk) chat_binding_ = {chat_mods, chat_vk};
     register_hotkeys();
-    return (recover_registered_ ? 1 : 0) | (exit_registered_ ? 2 : 0);
+    return (recover_registered_ ? 1 : 0) | (exit_registered_ ? 2 : 0) |
+            (chat_registered_ ? 4 : 0);
 }
 
 bool WindowState::create_helper() {
@@ -370,6 +391,7 @@ bool WindowState::create_helper() {
     if (!added) warn("tray unavailable; the exit hotkey is the fallback, retrying every 2 seconds");
     if (!exit_registered_) warn("exit hotkey unavailable; use tray Exit");
     if (!recover_registered_) warn("recover hotkey unavailable; use tray Recover position");
+    if (!chat_registered_) warn("chat hotkey unavailable; use tray Chat");
     // Never report successful configuration with neither tray nor exit fallback.
     return added || exit_registered_;
 }
@@ -461,6 +483,7 @@ void WindowState::finish_shutdown() {
         KillTimer(helper_, retry_timer);
         if (recover_registered_) UnregisterHotKey(helper_, recover_hotkey);
         if (exit_registered_) UnregisterHotKey(helper_, exit_hotkey);
+        if (chat_registered_) UnregisterHotKey(helper_, chat_hotkey);
         // Delete unconditionally; Explorer can change state between callbacks.
         auto data = icon_data();
         Shell_NotifyIconW(NIM_DELETE, &data);
@@ -481,9 +504,11 @@ void WindowState::finish_shutdown() {
     if (module_) UnregisterClassW(helper_class, module_); // last helper owns removal
     module_ = nullptr;
     thread_ = 0;
-    tray_added_ = tray_v4_ = recover_registered_ = exit_registered_ = false;
+    tray_added_ = tray_v4_ = recover_registered_ = exit_registered_ = chat_registered_ = false;
     taskbar_created_ = 0;
     read_ = count_ = 0;
+    wheel_delta_ = 0;
+    last_tray_click_ = 0;
     exit_pending_ = false;
     stopping_ = false;
     shutdown_requested_.store(false);
@@ -494,6 +519,11 @@ LRESULT CALLBACK WindowState::role_proc(HWND hwnd, UINT message, WPARAM wp, LPAR
         UINT_PTR id, DWORD_PTR data) {
     auto *self = reinterpret_cast<WindowState *>(data);
     CallbackScope callback(self);
+    if (message == WM_MOUSEWHEEL && !self->stopping_ && !self->shutdown_requested_.load()) {
+        // Accumulate signed notches (multiples of WHEEL_DELTA). The message still
+        // reaches Godot through DefSubclassProc; polling consumes the sum once.
+        self->wheel_delta_ += GET_WHEEL_DELTA_WPARAM(wp);
+    }
     if (message == WM_MOUSEACTIVATE) return MA_NOACTIVATE;
     if (message == WM_POINTERACTIVATE) return PA_NOACTIVATE;
     if (message == WM_NCHITTEST && !self->interactive_ && !self->capture_) return HTTRANSPARENT;
@@ -535,8 +565,19 @@ LRESULT CALLBACK WindowState::helper_proc(HWND hwnd, UINT message, WPARAM wp, LP
     switch (message) {
         case tray_message: {
             const UINT event = self->tray_v4_ ? LOWORD(lp) : static_cast<UINT>(lp);
-            if ((self->tray_v4_ && (event == NIN_SELECT || event == NIN_KEYSELECT)) ||
-                    (!self->tray_v4_ && event == WM_LBUTTONUP)) self->queue_action(1);
+            const bool selected = (self->tray_v4_ && (event == NIN_SELECT || event == NIN_KEYSELECT)) ||
+                    (!self->tray_v4_ && event == WM_LBUTTONUP);
+            if (selected) {
+                // A double click arrives as two select callbacks. Treat the
+                // second one within 300 ms as part of the same gesture so a
+                // quick double click still toggles exactly once.
+                const ULONGLONG now = GetTickCount64();
+                if (!self->last_tray_click_ ||
+                        now - self->last_tray_click_ >= tray_click_debounce_ms) {
+                    self->queue_action(1);
+                }
+                self->last_tray_click_ = now;
+            }
             if ((self->tray_v4_ && event == WM_CONTEXTMENU) ||
                     (!self->tray_v4_ && event == WM_RBUTTONUP)) self->show_menu();
             return 0;
@@ -550,6 +591,7 @@ LRESULT CALLBACK WindowState::helper_proc(HWND hwnd, UINT message, WPARAM wp, LP
         case WM_HOTKEY:
             if (wp == recover_hotkey) self->queue_action(2);
             if (wp == exit_hotkey) self->queue_action(5);
+            if (wp == chat_hotkey) self->queue_action(7);
             return 0;
         case WM_CLOSE:
             self->queue_action(5);

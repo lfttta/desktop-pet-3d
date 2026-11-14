@@ -29,6 +29,10 @@ public:
     static constexpr auto helper_class = WindowBridge::helper_class;
     static constexpr int recover_hotkey = WindowBridge::recover_hotkey;
     static constexpr int exit_hotkey = WindowBridge::exit_hotkey;
+    static constexpr int chat_hotkey = WindowBridge::chat_hotkey;
+    // A tray double click delivers two select callbacks; collapsing events this
+    // close keeps it equivalent to one click instead of toggling twice.
+    static constexpr ULONGLONG tray_click_debounce_ms = 300;
     // Menu commands for the action submenu start here; fixed commands stay 1..7.
     static constexpr int64_t action_command_base = 1000;
     WindowState();
@@ -45,10 +49,14 @@ public:
     void end_capture();
     bool has_capture();
     int64_t poll_tray_action();
+    // Returns the accumulated WM_MOUSEWHEEL delta and clears it for the next call.
+    int64_t poll_wheel_delta();
     bool set_menu_actions(const std::string &groups);
-    // Re-registers the two global hotkeys. Returns bit0=recover, bit1=exit.
+    // Re-registers the three global hotkeys. Returns bit0=recover, bit1=exit,
+    // bit2=chat.
     int64_t configure_hotkeys(uint32_t recover_mods, uint32_t recover_vk,
-            uint32_t exit_mods, uint32_t exit_vk);
+            uint32_t exit_mods, uint32_t exit_vk,
+            uint32_t chat_mods, uint32_t chat_vk);
     void shutdown();
     int64_t acquire_instance(const std::string &key);
     bool adopt_service_process(int64_t pid);
@@ -77,16 +85,20 @@ private:
     bool tray_v4_ = false;
     bool recover_registered_ = false;
     bool exit_registered_ = false;
+    bool chat_registered_ = false;
     struct Hotkey {
         UINT mods = MOD_CONTROL | MOD_ALT;
         UINT vk = 0;
     };
     Hotkey recover_binding_{MOD_CONTROL | MOD_ALT, VK_F10};
     Hotkey exit_binding_{MOD_CONTROL | MOD_ALT, 'Q'};
+    Hotkey chat_binding_{MOD_CONTROL | MOD_ALT, 'C'};
     bool stopping_ = false;
     bool menu_open_ = false;
     bool exit_pending_ = false;
     UINT taskbar_created_ = 0;
+    int32_t wheel_delta_ = 0;
+    ULONGLONG last_tray_click_ = 0;
     std::array<int64_t, 32> actions_{};
     size_t read_ = 0;
     size_t count_ = 0;

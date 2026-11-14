@@ -50,7 +50,7 @@ run("win32", [str(ROOT / "native/build/window_bridge_test.exe")], "hidden-HWND n
 run("lifetime", [str(ROOT / "native/build/lifetime_test.exe")], "lifetime/hotkey assertions, 0 failures")
 run("stage1", [str(ROOT / "native/build/stage1_test.exe")], "stage1 subprocess/resource assertions")
 run("godot_api", [args.godot, "--headless", "--path", str(HERE / "godot"), "--script", "res://smoke.gd"],
-    "PASS: fourteen-method API")
+    "PASS: seventeen-method API")
 config = target / "pet_window.gdextension"
 original_config = config.read_text(encoding="utf-8")
 try:
@@ -59,7 +59,7 @@ try:
     config.write_text(original_config.replace("pet_window.windows.debug.x86_64.dll",
         "pet_window.windows.release.x86_64.dll"), encoding="utf-8")
     run("godot_release_api", [args.godot, "--headless", "--path", str(HERE / "godot"),
-        "--script", "res://smoke.gd"], "PASS: fourteen-method API")
+        "--script", "res://smoke.gd"], "PASS: seventeen-method API")
 finally:
     config.write_text(original_config, encoding="utf-8")
 digests = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in (addon / "bin").glob("*.dll")}

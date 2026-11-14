@@ -1,9 +1,11 @@
 #include "window_bridge.hpp"
+#include <shellapi.h>
 #include <cstdio>
 #include <cstdlib>
 
 namespace {
 int assertions = 0;
+int wheel_seen = 0;
 void check(bool condition, const char *message) {
     ++assertions;
     if (!condition) {
@@ -13,6 +15,7 @@ void check(bool condition, const char *message) {
 }
 LRESULT CALLBACK original_proc(HWND hwnd, UINT message, WPARAM wp, LPARAM lp) {
     if (message == WM_APP + 99) return 12345;
+    if (message == WM_MOUSEWHEEL) ++wheel_seen;
     return DefWindowProcW(hwnd, message, wp, lp);
 }
 HWND make_window(DWORD ex = WS_EX_TOOLWINDOW) {
@@ -52,6 +55,7 @@ int main() {
     check(!bridge.configure(-1), "invalid handle rejected");
     check(!bridge.configure(reinterpret_cast<int64_t>(GetDesktopWindow())), "foreign HWND rejected");
     check(!bridge.begin_capture(), "unconfigured capture fails");
+    check(bridge.poll_wheel_delta() == 0, "unconfigured wheel accumulator is empty");
     check(bridge.configure(reinterpret_cast<int64_t>(hwnd)), "configure valid HWND");
     const UINT effective_dpi = GetDpiForWindow(hwnd);
     check(effective_dpi > 0 && bridge.get_dpi_scale() == static_cast<double>(effective_dpi) / 96.0,
@@ -59,6 +63,16 @@ int main() {
     std::printf("Effective HWND DPI=%u, scale=%.4f\n", effective_dpi, bridge.get_dpi_scale());
     check(bridge.configure(reinterpret_cast<int64_t>(hwnd)), "configure is idempotent");
     check(!bridge.configure(reinterpret_cast<int64_t>(second)), "configured bridge cannot silently migrate");
+    // Wheel deltas accumulate on the role window and are taken once per poll.
+    wheel_seen = 0;
+    SendMessageW(hwnd, WM_MOUSEWHEEL, MAKEWPARAM(0, 120), 0);
+    SendMessageW(hwnd, WM_MOUSEWHEEL,
+            MAKEWPARAM(0, static_cast<WORD>(static_cast<short>(-60))), 0);
+    check(wheel_seen == 2, "wheel messages still reach the original procedure");
+    check(bridge.poll_wheel_delta() == 60, "wheel notches accumulate signed deltas");
+    check(bridge.poll_wheel_delta() == 0, "polling the wheel takes and clears the sum");
+    SendMessageW(hwnd, WM_MOUSEWHEEL, MAKEWPARAM(0, 0), 0);
+    check(bridge.poll_wheel_delta() == 0, "zero delta leaves the accumulator empty");
     pet3d::WindowBridge duplicate;
     check(!duplicate.configure(reinterpret_cast<int64_t>(hwnd)), "exclusive subclass ownership");
     check(SendMessageW(hwnd, WM_APP + 99, 0, 0) == 12345, "original procedure still called");
@@ -112,6 +126,19 @@ int main() {
     check(bridge.poll_tray_action() == 0, "exit drains activation and new actions");
     SendMessageW(helper, WM_COMMAND, 999, 0);
     check(bridge.poll_tray_action() == 0, "unknown commands ignored");
+    // A double click delivers two selects; only the first one toggles. Sending
+    // both legacy and version-4 encodings keeps this independent of the shell
+    // protocol that was actually negotiated for the hidden icon.
+    constexpr UINT tray_message = WM_APP + 0x3D;
+    SendMessageW(helper, tray_message, 0, WM_LBUTTONUP);
+    SendMessageW(helper, tray_message, 0, NIN_SELECT);
+    check(bridge.poll_tray_action() == 1, "first tray select toggles once");
+    check(bridge.poll_tray_action() == 0, "second select within 300 ms is ignored");
+    Sleep(350);
+    SendMessageW(helper, tray_message, 0, WM_LBUTTONUP);
+    SendMessageW(helper, tray_message, 0, NIN_SELECT);
+    check(bridge.poll_tray_action() == 1, "a select after the debounce window toggles again");
+    check(bridge.poll_tray_action() == 0, "debounce leaves no duplicate action");
     for (int n = 0; n < 80; ++n) SendMessageW(helper, WM_COMMAND, 1, 0);
     SendMessageW(helper, WM_COMMAND, 5, 0);
     check(bridge.poll_tray_action() == 5, "exit cannot be dropped or delayed by queue overflow");
@@ -120,6 +147,8 @@ int main() {
     check(bridge.poll_tray_action() == 2, "recovery hotkey fallback dispatch");
     SendMessageW(helper, WM_HOTKEY, pet3d::WindowBridge::exit_hotkey, 0);
     check(bridge.poll_tray_action() == 5, "exit hotkey fallback dispatch");
+    SendMessageW(helper, WM_HOTKEY, pet3d::WindowBridge::chat_hotkey, 0);
+    check(bridge.poll_tray_action() == 7, "chat hotkey dispatches the chat command");
     SendMessageW(helper, RegisterWindowMessageW(L"TaskbarCreated"), 0, 0);
     check(IsWindow(helper), "simulated Explorer broadcast retains helper");
     RECT after{};

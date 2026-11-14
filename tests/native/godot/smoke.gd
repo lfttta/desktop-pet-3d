@@ -22,14 +22,17 @@ func _initialize() -> void:
 		"end_capture": [TYPE_NIL, []],
 		"has_capture": [TYPE_BOOL, []],
 		"poll_tray_action": [TYPE_INT, []],
+		"poll_wheel_delta": [TYPE_INT, []],
 		"shutdown": [TYPE_NIL, []],
 		"acquire_instance": [TYPE_INT, [TYPE_STRING]],
 		"adopt_service_process": [TYPE_BOOL, [TYPE_INT]],
 		"terminate_service_processes": [TYPE_NIL, []],
 		"get_displays_json": [TYPE_STRING, []],
+		"set_menu_actions": [TYPE_BOOL, [TYPE_STRING]],
+		"configure_hotkeys": [TYPE_INT, [TYPE_STRING]],
 	}
 	var methods := ClassDB.class_get_method_list("PetWindowBridge", true)
-	check(methods.size() == expected.size(), "original ten plus four stage1 public native methods")
+	check(methods.size() == expected.size(), "original ten plus seven stage1 public native methods")
 	for method in methods:
 		var key: String = method.name
 		check(expected.has(key), "unexpected method " + key)
@@ -51,6 +54,7 @@ func _initialize() -> void:
 		check(not bridge.begin_capture(), "capture requires configured HWND")
 		check(not bridge.has_capture(), "no accidental capture")
 		check(bridge.poll_tray_action() == 0, "unconfigured queue empty")
+		check(bridge.poll_wheel_delta() == 0, "unconfigured wheel accumulator empty")
 		check(typeof(bridge.get_cursor_position()) == TYPE_VECTOR2I, "cursor Variant conversion")
 		check(typeof(bridge.get_dpi_scale()) == TYPE_FLOAT and bridge.get_dpi_scale() == 1.0,
 			"unconfigured DPI float Variant conversion")
@@ -113,5 +117,5 @@ func _initialize() -> void:
 	var typed = load("res://typed_smoke.gd").new()
 	typed.run()
 	if failures.is_empty():
-		print("PASS: fourteen-method API, original ten preserved, Variant and ptrcall, 50 RefCounted lifecycles")
+		print("PASS: seventeen-method API, original ten preserved, Variant and ptrcall, 50 RefCounted lifecycles")
 	quit(0 if failures.is_empty() else 1)

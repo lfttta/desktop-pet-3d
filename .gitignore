@@ -47,3 +47,7 @@ prototypes/
 # ========== 临时日志（docs/reports 下的验收证据仍入库） ==========
 candidate-*-review.log
 *-reexport.log
+
+# ========== 本地覆盖率数据（用 coverage 生成，不入库） ==========
+.coverage
+.coverage.*

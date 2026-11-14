@@ -2,3 +2,7 @@
 pytest==9.1.1
 pyinstaller==6.21.0
 pillow==13.0.0
+# Coverage report for the service suite: `python -B -m coverage run
+# --source=service --omit="*/tests/*" -m pytest tests/service`, then
+# `python -B -m coverage report -m`. Not used by the build gate.
+coverage==7.17.3

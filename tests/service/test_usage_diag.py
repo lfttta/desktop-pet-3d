@@ -11,7 +11,7 @@ import pytest
 
 from service.ai.budget import BudgetLedger
 from service.commands import dispatch
-from service.database import Database
+from service.database import SCHEMA_VERSION, Database
 from service.features import diag
 from service.protocol import ProtocolError
 from service.runtime import EventLog
@@ -60,8 +60,8 @@ def env(tmp_path):
     environment.close()
 
 
-def _now_stamp(days_ago=0):
-    moment = datetime.now(timezone.utc) - timedelta(days=days_ago)
+def _now_stamp(days_ago=0, now=None):
+    moment = (now or datetime.now(timezone.utc)) - timedelta(days=days_ago)
     return moment.strftime('%Y-%m-%d %H:%M:%S')
 
 
@@ -162,19 +162,39 @@ def test_usage_report_without_database_reports_zeroes(tmp_path):
 
 
 def test_budget_ledger_aggregates_by_model_and_day(env):
-    _insert_usage(env, 'model-a', 10, 5, 0.01, _now_stamp())
-    _insert_usage(env, 'model-a', 20, 5, 0.02, _now_stamp(days_ago=1))
-    _insert_usage(env, 'model-d', 3, 2, 0.001, _now_stamp())
-    _insert_usage(env, 'model-b', 100, 100, 0.5, _now_stamp(days_ago=13))
-    _insert_usage(env, 'model-c', 1000, 1000, 9.0, _now_stamp(days_ago=40))
+    now = datetime.now(timezone.utc)
+    today_stamp = _now_stamp(now=now)
+    yesterday_stamp = _now_stamp(days_ago=1, now=now)
+    oldest_stamp = _now_stamp(days_ago=13, now=now)
+    _insert_usage(env, 'model-a', 10, 5, 0.01, today_stamp)
+    _insert_usage(env, 'model-a', 20, 5, 0.02, yesterday_stamp)
+    _insert_usage(env, 'model-d', 3, 2, 0.001, today_stamp)
+    # These rows exercise the 14-day window edge and the month filter. Whether
+    # they land in the current month depends on the calendar date, so the
+    # by_model expectation is derived below instead of hard-coded.
+    _insert_usage(env, 'model-b', 100, 100, 0.5, oldest_stamp)
+    _insert_usage(env, 'model-c', 1000, 1000, 9.0,
+                  _now_stamp(days_ago=40, now=now))
 
     ledger = BudgetLedger(env.database)
+    current_month = now.strftime('%Y-%m')
+
+    def in_month(value):
+        return value[:7] == current_month
+
+    expected_models = ['model-a', 'model-d']
+    if in_month(oldest_stamp):
+        expected_models.insert(0, 'model-b')
     by_model = ledger.by_model()
-    assert [entry['model'] for entry in by_model] == ['model-a', 'model-d']
-    assert by_model[0]['tokens'] == 40
-    assert by_model[0]['calls'] == 2
-    assert by_model[1]['tokens'] == 5
-    assert by_model[1]['calls'] == 1
+    assert [entry['model'] for entry in by_model] == expected_models
+
+    entries = {entry['model']: entry for entry in by_model}
+    # Yesterday falls into the previous month only on the first day of a month.
+    assert entries['model-a']['tokens'] == (40 if in_month(yesterday_stamp) else 15)
+    assert entries['model-a']['calls'] == (2 if in_month(yesterday_stamp) else 1)
+    assert entries['model-d']['tokens'] == 5
+    assert entries['model-d']['calls'] == 1
+    assert 'model-c' not in entries
 
     days = ledger.by_day(14)
     assert len(days) == 14
@@ -228,7 +248,7 @@ def test_diag_export_contains_redacted_files_and_no_private_bodies(env, tmp_path
     assert diagnostics['counts']['messages'] == 1
     assert diagnostics['counts']['memories'] == 1
     assert diagnostics['counts']['conversations'] == 1
-    assert diagnostics['database_user_version'] == 3
+    assert diagnostics['database_user_version'] == SCHEMA_VERSION
     assert diagnostics['event_log_entries'] == 2
 
     logs = contents['logs.txt'].decode('utf-8')

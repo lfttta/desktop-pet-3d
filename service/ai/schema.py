@@ -16,6 +16,8 @@ MAX_TEXT_CHARS = 4000
 MAX_SPEAK_CHARS = 2000
 MAX_CANDIDATES = 8
 MAX_CANDIDATE_CHARS = 500
+MAX_CANDIDATE_CATEGORY_CHARS = 64
+MAX_CANDIDATE_SOURCE_CHARS = 32
 MAX_STATE_FIELDS = 8
 STATE_KEY = re.compile(r'^[a-z][a-z0-9_]{0,31}$')
 REQUIRED_FIELDS = ('text', 'speak', 'action', 'memory_candidates',
@@ -79,21 +81,66 @@ def _action(value):
     return normalized
 
 
+def _candidate(item):
+    """Validate one string or structured candidate and normalize its fields.
+
+    A plain string keeps the old text-only shape. A structured object carries
+    the category/importance/source_type the memory writer and growth evidence
+    use; invalid optional values are rejected so a repair retry can fix them.
+    """
+    if type(item) is str:
+        text = item.strip()
+        if not text:
+            _fail('missing_field', 'memory_candidates entries must not be empty.')
+        if len(text) > MAX_CANDIDATE_CHARS:
+            _fail('out_of_range', 'A memory candidate is too long.')
+        return text
+    if not isinstance(item, dict):
+        _fail('invalid_type',
+              'memory_candidates entries must be strings or objects.')
+    raw = item.get('text', item.get('content'))
+    if type(raw) is not str:
+        _fail('invalid_type',
+              'A structured memory candidate needs a text field.')
+    text = raw.strip()
+    if not text:
+        _fail('missing_field', 'memory_candidates entries must not be empty.')
+    if len(text) > MAX_CANDIDATE_CHARS:
+        _fail('out_of_range', 'A memory candidate is too long.')
+    candidate = {'text': text}
+    for key, max_chars in (
+            ('category', MAX_CANDIDATE_CATEGORY_CHARS),
+            ('source_type', MAX_CANDIDATE_SOURCE_CHARS)):
+        value = item.get(key)
+        if value is None:
+            continue
+        if type(value) is not str:
+            _fail('invalid_type',
+                  'memory_candidates ' + key + ' must be a string.')
+        value = value.strip()
+        if len(value) > max_chars:
+            _fail('out_of_range',
+                  'memory_candidates ' + key + ' is too long.')
+        candidate[key] = value
+    importance = item.get('importance')
+    if importance is not None:
+        if type(importance) not in (int, float) or isinstance(importance, bool):
+            _fail('invalid_type',
+                  'memory_candidates importance must be a number.')
+        importance = float(importance)
+        if not math.isfinite(importance) or not 0.0 <= importance <= 1.0:
+            _fail('out_of_range',
+                  'memory_candidates importance must be between 0 and 1.')
+        candidate['importance'] = importance
+    return candidate
+
+
 def _candidates(value):
     if type(value) is not list:
         _fail('invalid_type', 'memory_candidates must be a list.')
     if len(value) > MAX_CANDIDATES:
         _fail('out_of_range', 'memory_candidates has too many entries.')
-    result = []
-    for item in value:
-        if type(item) is not str:
-            _fail('invalid_type', 'memory_candidates entries must be strings.')
-        if not item.strip():
-            _fail('missing_field', 'memory_candidates entries must not be empty.')
-        if len(item) > MAX_CANDIDATE_CHARS:
-            _fail('out_of_range', 'A memory candidate is too long.')
-        result.append(item.strip())
-    return result
+    return [_candidate(item) for item in value]
 
 
 def _state_suggestion(value):
@@ -143,7 +190,9 @@ def repair_instruction(error):
     """A compact repair request appended after an invalid structured reply."""
     return ('Your previous reply was invalid (%s). Reply again with exactly one '
             'JSON object using the fields text, speak, action, memory_candidates, '
-            'state_suggestion and confidence. No markdown and no extra text. '
-            'Do not mention JSON, formatting, the retry, or this instruction in '
-            'the answer text; answer the user request directly.'
+            'state_suggestion and confidence. memory_candidates is a list whose '
+            'entries are either strings or objects with the fields text, '
+            'category, importance (0 to 1) and source_type. No markdown and no '
+            'extra text. Do not mention JSON, formatting, the retry, or this '
+            'instruction in the answer text; answer the user request directly.'
             % error.message)

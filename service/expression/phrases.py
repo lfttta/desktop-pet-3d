@@ -7,6 +7,11 @@ by id. Selection never picks a disabled phrase, a phrase still in cooldown, or
 one that reached its daily limit. When the caller supplies a ``now`` datetime,
 phrases also have to match the current time window (see ``TIME_WINDOWS``).
 
+Categories are a closed vocabulary (``PHRASE_CATEGORIES``): an entry whose
+classification is not on that list is dropped at load time rather than becoming
+a phrase no caller asks for, and a selection with an unknown category matches
+nothing. A missing category keeps the legacy ``general`` bucket.
+
 ``phrase_usage.uses`` is the number of uses on the day recorded in
 ``last_used_at``; it resets when the day changes. This keeps the existing
 schema unchanged while still enforcing a per-day limit.
@@ -35,6 +40,27 @@ TIME_WINDOWS = {
 TIME_WINDOW_ANY = 'any'
 TIME_WINDOW_CHOICES = tuple(TIME_WINDOWS) + (TIME_WINDOW_ANY,)
 TIME_WINDOW_NAMES = frozenset(TIME_WINDOW_CHOICES)
+
+# Speaking intents the library understands. ``general`` is the legacy bucket
+# for entries that carry no category; every other name is an intent the app and
+# the proactive scheduler may ask for. An entry with any other category is
+# rejected at load time instead of silently becoming a phrase no caller asks
+# for.
+PHRASE_CATEGORIES = (
+    'general',
+    'greeting',
+    'care',
+    'idle',
+    'night',
+    'happy',
+    'sad',
+    'apology',
+    'waiting',
+    'celebration',
+    'tired',
+)
+CATEGORY_NAMES = frozenset(PHRASE_CATEGORIES)
+DEFAULT_CATEGORY = 'general'
 
 
 def user_library_path(data_dir):
@@ -81,6 +107,25 @@ def _time_window(value):
     return TIME_WINDOW_ANY
 
 
+def category_choices():
+    """Return the allowed phrase categories in their documented order."""
+    return list(PHRASE_CATEGORIES)
+
+
+def normalize_category(value):
+    """Return a valid category name, or ``None`` for anything unknown.
+
+    A missing or empty category is the legacy ``general`` bucket; an explicitly
+    unknown one is rejected rather than silently relabelled, so a typo in the
+    library is visible in tests instead of producing a phrase nobody can select.
+    """
+    if value is None or value == '':
+        return DEFAULT_CATEGORY
+    if type(value) is str and value in CATEGORY_NAMES:
+        return value
+    return None
+
+
 def time_window_for(moment):
     """Return the window name of one datetime's own wall-clock hour."""
     hour = moment.hour
@@ -100,9 +145,9 @@ def _normalize(entry):
         return None
     if type(text) is not str or not text.strip():
         return None
-    category = entry.get('category')
-    if type(category) is not str or not category:
-        category = 'general'
+    category = normalize_category(entry.get('category'))
+    if category is None:
+        return None
     return {
         'id': phrase_id.strip(),
         'text': text,
@@ -116,10 +161,18 @@ def _normalize(entry):
 
 def _merge(base, override):
     merged = dict(base)
-    for key in ('text', 'category'):
+    for key in ('text',):
         value = override.get(key)
         if type(value) is str and value.strip():
             merged[key] = value
+    # Only a non-empty whitelisted category relabels a phrase. An unknown or
+    # blank override stays ignored instead of collapsing the phrase into the
+    # legacy bucket (or into a category no caller asks for).
+    override_category = override.get('category')
+    if type(override_category) is str and override_category:
+        category = normalize_category(override_category)
+        if category is not None:
+            merged['category'] = category
     for key in ('cooldown_seconds', 'daily_limit'):
         if type(override.get(key)) is int and override[key] >= 0:
             merged[key] = override[key]
@@ -345,15 +398,30 @@ def _record_usage(connection, phrase, now):
 
 
 def select_phrase(connection, category=None, now=None, rng=None,
-                  default_path=None, user_path=None, data_dir=None):
+                  default_path=None, user_path=None, data_dir=None,
+                  window=None, allowed_windows=None):
     """Pick one usable phrase, record the use and return it, or return None.
 
+    ``category`` may be one name or a sequence of names; an empty selection
+    matches every category, and an unknown name matches nothing (the caller
+    asked for an intent the library does not have). ``allowed_windows`` is an
+    optional extra filter, e.g. ``('morning', 'any')``.
+
     ``now`` (a datetime) additionally hides phrases whose ``time_window`` does
-    not match that wall-clock hour. ``now=None`` keeps the old behaviour and
-    does not filter by time of day.
+    not match that wall-clock hour. ``now`` stays authoritative when both are
+    supplied: ``window`` only names the hour for callers that do not have a
+    datetime, and is validated like ``time_window_for`` does. ``now=None`` with
+    no ``window`` keeps the old behaviour and does not filter by time of day.
     """
     moment = normalize_now(now)
-    window = time_window_for(now) if now is not None else None
+    if now is not None:
+        window = time_window_for(now)
+    elif window is not None and window not in TIME_WINDOW_NAMES:
+        window = None
+    if allowed_windows is not None:
+        allowed_windows = {name for name in allowed_windows
+                           if name in TIME_WINDOW_NAMES}
+    wanted = _wanted_categories(category)
     if user_path is None and data_dir is None:
         data_dir = _data_dir_from_connection(connection)
     candidates = []
@@ -361,10 +429,13 @@ def select_phrase(connection, category=None, now=None, rng=None,
                                data_dir=data_dir):
         if not phrase['enabled']:
             continue
-        if category is not None and phrase['category'] != category:
+        if wanted is not None and phrase['category'] not in wanted:
             continue
         if (window is not None and phrase['time_window'] != TIME_WINDOW_ANY
                 and phrase['time_window'] != window):
+            continue
+        if (allowed_windows is not None
+                and phrase['time_window'] not in allowed_windows):
             continue
         if not usable_now(connection, phrase, now=moment):
             continue
@@ -375,3 +446,22 @@ def select_phrase(connection, category=None, now=None, rng=None,
     chosen = picker(candidates)
     _record_usage(connection, chosen, moment)
     return dict(chosen)
+
+
+def _wanted_categories(category):
+    """Normalize the selection filter; ``None`` means every category.
+
+    A single string is one intent. A sequence is a set of intents. An unknown
+    name stays in the set and therefore selects nothing, which is stricter than
+    silently widening the request to the whole library.
+    """
+    if category is None:
+        return None
+    if type(category) is str:
+        return {category}
+    try:
+        values = list(category)
+    except TypeError:
+        return {category}
+    wanted = {value for value in values if type(value) is str}
+    return wanted or None

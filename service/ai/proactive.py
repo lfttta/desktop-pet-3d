@@ -12,6 +12,7 @@ memories, when supplied, are appended to the system block and never change the
 user block.
 """
 
+import importlib
 import re
 import sqlite3
 
@@ -89,6 +90,29 @@ def _memory_lines(memories):
     return '\n'.join(entries)[:MAX_MEMORY_CHARS]
 
 
+def _tone_directive(settings):
+    """Return the configured tone directive, or '' when none applies.
+
+    The tone table lives in ``service.persona_tone``; a build without that
+    module keeps the neutral prompt instead of failing. An unknown or missing
+    tone falls back to the default one, matching ``service.ai.prompt``: the
+    chat and proactive paths must speak with the same voice.
+    """
+    try:
+        persona_tone = importlib.import_module('service.persona_tone')
+    except Exception:
+        return ''
+    if persona_tone is None:
+        return ''
+    expression = settings.get('expression')
+    tone = expression.get('tone') if isinstance(expression, dict) else None
+    if type(tone) is not str or not tone.strip():
+        tone = getattr(persona_tone, 'DEFAULT_TONE', 'godette')
+    directives = getattr(persona_tone, 'TONE_DIRECTIVES', {})
+    directive = directives.get(tone.strip(), '') if isinstance(directives, dict) else ''
+    return directive.strip() if type(directive) is str else ''
+
+
 def build_messages(settings, persona_id, state_label, history, memories=None):
     """Return the two-message prompt used for one proactive generation."""
     settings = settings if isinstance(settings, dict) else {}
@@ -98,6 +122,9 @@ def build_messages(settings, persona_id, state_label, history, memories=None):
         build_boundaries(persona_id).strip(),
         PROACTIVE_RULES,
     ]
+    tone = _tone_directive(settings)
+    if tone:
+        system_parts.append(tone)
     memory_text = _memory_lines(memories)
     if memory_text:
         system_parts.append('可能记得的事：\n' + memory_text)

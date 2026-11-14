@@ -7,15 +7,16 @@ import shutil
 import sqlite3
 import uuid
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 5
 SETTINGS_SCHEMA_VERSION = 4
 SUBJECT_USER_ID = 'owner'
 
 TABLES = (
-    'conversations', 'messages', 'memories', 'memory_operations', 'memory_outbox',
+    'conversations', 'messages', 'conversation_summaries', 'memories',
+    'memory_operations', 'memory_outbox',
     'memory_jobs', 'memory_conflicts', 'memory_embeddings',
     'character_state', 'growth_candidates', 'personality_history',
-    'usage_ledger', 'phrase_usage', 'autonomy_state',
+    'usage_ledger', 'phrase_usage', 'autonomy_state', 'timers',
 )
 
 _MEMORY_ADDITIONS = (
@@ -54,7 +55,7 @@ class Database:
             self.connection.execute('PRAGMA foreign_keys=ON')
             self.connection.execute('PRAGMA synchronous=FULL')
             version = self.connection.execute('PRAGMA user_version').fetchone()[0]
-            if version not in (0, 1, 2, 3):
+            if version not in (0, 1, 2, 3, 4, 5):
                 raise sqlite3.DatabaseError('unsupported database schema')
             if self._needs_backup(version):
                 self.backup_path = self._backup(version)
@@ -75,7 +76,7 @@ class Database:
             raise
 
     def _needs_backup(self, version):
-        if version in (1, 2):
+        if version in (1, 2, 3, 4):
             return True
         if version != 0:
             return False
@@ -119,6 +120,11 @@ class Database:
                            'ON messages(conversation_id, created_at)')
         connection.execute('CREATE INDEX IF NOT EXISTS idx_messages_subject '
                            'ON messages(subject_user_id, conversation_id, created_at)')
+        connection.execute('CREATE TABLE IF NOT EXISTS conversation_summaries ('
+                           'conversation_id TEXT PRIMARY KEY,'
+                           "summary TEXT NOT NULL DEFAULT '',"
+                           'through_message_id INTEGER NOT NULL DEFAULT 0,'
+                           "updated_at TEXT NOT NULL DEFAULT '')")
         connection.execute('CREATE TABLE IF NOT EXISTS memories ('
                            'id TEXT PRIMARY KEY, content TEXT NOT NULL,'
                            'created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,'
@@ -240,6 +246,14 @@ class Database:
                            'hourly_window_start TEXT,'
                            'manual_quiet_until TEXT,'
                            'updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)')
+        connection.execute('CREATE TABLE IF NOT EXISTS timers ('
+                           'id INTEGER PRIMARY KEY,'
+                           'due_at TEXT NOT NULL,'
+                           "text TEXT NOT NULL DEFAULT '',"
+                           'created_at TEXT NOT NULL,'
+                           'fired_at TEXT)')
+        connection.execute('CREATE INDEX IF NOT EXISTS idx_timers_pending '
+                           'ON timers(fired_at, due_at)')
 
     def _ensure_memory_columns(self, connection):
         existing = {row[1] for row in connection.execute('PRAGMA table_info(memories)')}

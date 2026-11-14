@@ -10,6 +10,7 @@ import uuid
 
 from service.ai.orchestrator import get_orchestrator
 from service.ai.prompt import build_messages
+from service.ai.summary import maybe_summarize
 from service.behavior import budget
 from service.database import SUBJECT_USER_ID
 from service.protocol import ProtocolError
@@ -86,7 +87,7 @@ def send(request, store, ctx):
         raise ProtocolError('storage_unavailable',
                             'Chat storage is not available.', request['id'])
     settings = store.settings
-    messages = build_messages(database, conversation_id, text, settings)
+    messages = build_messages(database, conversation_id, text, settings, store)
     try:
         conversation_id = _begin_exchange(database, conversation_id, text)
     except sqlite3.Error:
@@ -96,13 +97,30 @@ def send(request, store, ctx):
     def on_final(kind, data):
         if kind != 'done':
             return
+        # A local-only (budget exhausted) or degraded reply did not use the
+        # provider normally; spending another paid call on a summary right
+        # after it would defeat the budget.
+        if isinstance(data, dict) and (data.get('local_only')
+                                       or data.get('degraded')):
+            return
         content = data.get('text') if isinstance(data, dict) else None
         if type(content) is not str or not content:
             return
+        stored = False
         try:
             _append_assistant(database, conversation_id, content)
+            stored = True
         except sqlite3.Error:
             pass
+        if stored:
+            # Trigger check runs here after the assistant row is persisted; the
+            # provider call and summary write run on a daemon thread so the
+            # terminal chat event is never delayed.
+            try:
+                maybe_summarize(store, conversation_id, settings,
+                                getattr(orchestrator, 'provider_factory', None))
+            except Exception:
+                pass
 
     orchestrator = get_orchestrator(store, database)
     orchestrator.attach(ctx)

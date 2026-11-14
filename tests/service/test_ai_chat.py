@@ -10,7 +10,8 @@ import pytest
 from service.ai.budget import BudgetLedger, estimate_cost, parse_usage
 from service.ai.circuit import CircuitBreaker
 from service.ai.orchestrator import ChatOrchestrator, SAFE_FALLBACK
-from service.ai.prompt import MAX_PROMPT_CHARS, build_messages, search_memories
+from service.ai.prompt import (MAX_HISTORY_MESSAGES, MAX_PROMPT_CHARS,
+                               build_messages, search_memories)
 from service.ai.provider import OpenAICompatibleProvider, ProviderError, TransportError
 from service.ai.router import Router
 from service.ai.schema import SchemaError, parse_structured
@@ -352,7 +353,10 @@ def test_prompt_stays_within_budget_and_skips_full_history(tmp_path):
         assert measured <= MAX_PROMPT_CHARS
         assert messages[0]['role'] == 'system'
         assert messages[-1] == {'role': 'user', 'content': '下雨天'}
-        assert len(messages) <= 18
+        # The prompt keeps at most MAX_HISTORY_MESSAGES turns, and the total
+        # budget may trim that further; it never keeps the full transcript.
+        assert len(messages) - 2 <= MAX_HISTORY_MESSAGES
+        assert MAX_HISTORY_MESSAGES == 24
         assert '消息19' in messages[-2]['content']
         assert '消息00' not in ''.join(item['content'] for item in messages)
         assert '用户喜欢下雨天' in messages[0]['content']

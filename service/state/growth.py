@@ -37,6 +37,23 @@ ELIGIBLE_SOURCE_TYPES = frozenset({'correction'})
 
 _NOISE = re.compile(r'[\s\W_]+', re.UNICODE)
 
+
+def candidate_category(value, default='general'):
+    """Map a chat memory candidate's category onto a stored memory category.
+
+    A candidate the model explicitly marked preference, relationship or feedback
+    keeps that category, so the memory it produces is visible to
+    ``_collect_evidence``. Anything else stays ``general`` and never moves a
+    personality value.
+    """
+    if type(value) is not str:
+        return default
+    category = value.strip().casefold()
+    if category in ELIGIBLE_CATEGORIES:
+        return category
+    return default
+
+
 # Keywords are compared against the case-folded, punctuation-free memory text.
 TRAIT_KEYWORDS = {
     'warmth': ('warm', 'care', 'caring', 'comfort', 'hug', 'kind', 'together',

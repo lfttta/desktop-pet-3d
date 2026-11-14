@@ -574,7 +574,7 @@ def test_autonomy_disabled_short_circuits(tmp_path, monkeypatch):
         database.close()
 
 
-def test_expression_phrases_disabled_short_circuits(tmp_path, monkeypatch):
+def test_expression_phrases_disabled_still_sends_cloud_message(tmp_path, monkeypatch):
     database = Database(tmp_path / 'pet.db')
     try:
         _install_phrases(tmp_path)
@@ -585,10 +585,14 @@ def test_expression_phrases_disabled_short_circuits(tmp_path, monkeypatch):
         scheduler = _scheduler(database, FakeStore(settings), provider)
         try:
             scheduler.tick(NOW)
+            assert _wait_for(lambda: scheduler._results.qsize() == 1)
+            scheduler.tick(NOW + timedelta(seconds=1))
         finally:
             scheduler.close()
-        assert provider.calls == 0
-        assert scheduler.runtime.posted == []
+        # The phrase library only governs the local fallback; turning it off
+        # must not silently mute cloud proactive messages.
+        assert provider.calls == 1
+        assert scheduler.runtime.posted[0][2]['source'] == 'cloud'
     finally:
         database.close()
 

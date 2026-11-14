@@ -66,7 +66,7 @@
     },
     {
       "id": "care_rest",
-      "text": "累的话就休息一会儿，我等你。",
+      "text": "累了就靠着我歇会儿，我等你。",
       "category": "care",
       "cooldown_seconds": 12600,
       "daily_limit": 1,
@@ -195,6 +195,1320 @@
       "text": "还没睡吗？别熬太晚，我会担心。",
       "category": "greeting",
       "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "greet_sunlight",
+      "text": "早安，窗外的光刚刚好。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "morning"
+    },
+    {
+      "id": "greet_slow_start",
+      "text": "新的一天，先给自己倒杯水。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "morning"
+    },
+    {
+      "id": "greet_breakfast",
+      "text": "早呀，今天想从哪件小事开始？",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "morning"
+    },
+    {
+      "id": "greet_morning_light",
+      "text": "今天的光比昨天暖，早呀。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "morning"
+    },
+    {
+      "id": "greet_afternoon_rest",
+      "text": "下午过半了，记得给自己留个空档。",
+      "category": "greeting",
+      "cooldown_seconds": 18000,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "afternoon"
+    },
+    {
+      "id": "greet_afternoon_weather",
+      "text": "午后有点困，起来走两步吧。",
+      "category": "greeting",
+      "cooldown_seconds": 18000,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "afternoon"
+    },
+    {
+      "id": "greet_afternoon_chat",
+      "text": "下午好呀，今天过得还顺利吗？",
+      "category": "greeting",
+      "cooldown_seconds": 18000,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "afternoon"
+    },
+    {
+      "id": "greet_evening_light",
+      "text": "傍晚好，天色慢慢暗下来了。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "greet_evening_soft",
+      "text": "今晚就轻松一点，别再忙了。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "greet_night_company",
+      "text": "夜里安静，我陪你待一会儿。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "greet_night_worry",
+      "text": "这么晚还醒着，是有什么心事吗？",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "greet_night_gently",
+      "text": "你还没休息，我心里惦记着。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "greet_here",
+      "text": "你来啦，我正好在这儿。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "greet_smile",
+      "text": "见到你就想打个招呼。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "greet_together",
+      "text": "嗨，今天也一起待着吧。",
+      "category": "greeting",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "care_morning_rinse",
+      "text": "起床后别急着忙，先润润嗓子。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "morning"
+    },
+    {
+      "id": "care_morning_breakfast",
+      "text": "早饭别省，哪怕吃个鸡蛋也好。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "morning"
+    },
+    {
+      "id": "care_morning_stretch",
+      "text": "早晨拉伸两分钟，一整天都轻快。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "morning"
+    },
+    {
+      "id": "care_afternoon_stand",
+      "text": "下午犯困的话，站起来接杯水。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "afternoon"
+    },
+    {
+      "id": "care_afternoon_far",
+      "text": "下午别一直坐着，去窗边看看远处。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "afternoon"
+    },
+    {
+      "id": "care_afternoon_water",
+      "text": "下午也喝点温水，别只靠咖啡。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "afternoon"
+    },
+    {
+      "id": "care_evening_light_food",
+      "text": "晚饭别吃太撑，胃会舒服些。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "care_night_water",
+      "text": "夜里少喝点水，明早眼睛不肿。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "care_night_lamp",
+      "text": "睡前一小时，把灯调暗一些。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "care_water",
+      "text": "记得喝水，别等渴了才想起来。",
+      "category": "care",
+      "cooldown_seconds": 12600,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "care_stand",
+      "text": "腰背酸的话，站起来靠墙站会儿。",
+      "category": "care",
+      "cooldown_seconds": 12600,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "care_blink",
+      "text": "眼睛发涩的时候，闭眼歇十秒。",
+      "category": "care",
+      "cooldown_seconds": 12600,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "care_shoulder",
+      "text": "肩膀是不是又绷紧了？松一松。",
+      "category": "care",
+      "cooldown_seconds": 12600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "care_meal",
+      "text": "再忙也要好好吃饭，别凑合。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "care_window",
+      "text": "屋里有点干，记得开窗透气。",
+      "category": "care",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_nearby",
+      "text": "我就在旁边，想到什么都可以说。",
+      "category": "idle",
+      "cooldown_seconds": 9000,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_wind",
+      "text": "窗外好像有风，你听见了吗？",
+      "category": "idle",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_one_less",
+      "text": "手边的事做完一件，就少一件。",
+      "category": "idle",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_daze",
+      "text": "发呆也算休息，不用觉得浪费。",
+      "category": "idle",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_how_was_day",
+      "text": "今天过得怎么样，想聊聊吗？",
+      "category": "idle",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_thinking_of_you",
+      "text": "我刚刚在想，你会不会也累了。",
+      "category": "idle",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_desk",
+      "text": "桌面有点乱的话，一起收拾吧。",
+      "category": "idle",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_breathe",
+      "text": "偶尔停下来喘口气，不丢人。",
+      "category": "idle",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_praise",
+      "text": "你今天有没有好好夸过自己？",
+      "category": "idle",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_quiet_ok",
+      "text": "安静待着也很好，不用找话说。",
+      "category": "idle",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_half_day",
+      "text": "我数了数，今天也过了大半了。",
+      "category": "idle",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_smallest",
+      "text": "不知道先做什么，就做最小的那件。",
+      "category": "idle",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_no_bother",
+      "text": "你忙你的，我不吵你。",
+      "category": "idle",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_cloud",
+      "text": "我给窗外的云起了个名字。",
+      "category": "idle",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_keep_time",
+      "text": "想眯一会儿就眯，我帮你看着时间。",
+      "category": "idle",
+      "cooldown_seconds": 12600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "idle_afternoon_sun",
+      "text": "午后的阳光斜进来，正好晒晒手。",
+      "category": "idle",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "afternoon"
+    },
+    {
+      "id": "idle_worthy",
+      "text": "今天的你，也值得被好好对待。",
+      "category": "idle",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "night_tomorrow",
+      "text": "今晚先放下，明天再接着想。",
+      "category": "night",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_sleep_now",
+      "text": "该睡了，把心事搁在床边。",
+      "category": "night",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_no_phone",
+      "text": "半夜醒了别刷手机，闭眼躺一会儿。",
+      "category": "night",
+      "cooldown_seconds": 18000,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_debt",
+      "text": "熬夜的账，身体都记着呢。",
+      "category": "night",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_curtain",
+      "text": "窗帘拉好了吗？夜里风凉。",
+      "category": "night",
+      "cooldown_seconds": 18000,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_slow_mind",
+      "text": "睡前别再想工作，让脑子歇着。",
+      "category": "night",
+      "cooldown_seconds": 18000,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_company",
+      "text": "已经很晚了，我陪你到睡着。",
+      "category": "night",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_moon",
+      "text": "今晚的月亮很亮，晚安。",
+      "category": "night",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_dream",
+      "text": "别把明天的事带到今晚的梦里。",
+      "category": "night",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_close_screen",
+      "text": "夜太深了，先合上屏幕吧。",
+      "category": "night",
+      "cooldown_seconds": 18000,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_chatter",
+      "text": "你要是睡不着，就听我说两句废话。",
+      "category": "night",
+      "cooldown_seconds": 18000,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_tomorrow_tired",
+      "text": "这个时间还醒着，明天会累的。",
+      "category": "night",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "night_dream_light",
+      "text": "晚安，做个轻松的梦。",
+      "category": "night",
+      "cooldown_seconds": 21600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "happy_smile",
+      "text": "看到你笑，我也跟着开心。",
+      "category": "happy",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_good_news",
+      "text": "今天有什么好事，说来听听？",
+      "category": "happy",
+      "cooldown_seconds": 9000,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_face",
+      "text": "你的开心都写在脸上了。",
+      "category": "happy",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_moment",
+      "text": "这一刻很好，慢慢享受。",
+      "category": "happy",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_contagious",
+      "text": "好心情会传染，我中招了。",
+      "category": "happy",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_mood",
+      "text": "看得出来，你现在心情不错。",
+      "category": "happy",
+      "cooldown_seconds": 9000,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_record",
+      "text": "好事发生的时候，记得记下来。",
+      "category": "happy",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_glad",
+      "text": "这份喜悦，我想替你收着。",
+      "category": "happy",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_eyes",
+      "text": "你笑起来的眼睛会发光。",
+      "category": "happy",
+      "cooldown_seconds": 9000,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_luck",
+      "text": "今天的运气，好像站在你这边。",
+      "category": "happy",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_no_overthink",
+      "text": "开心的时候就别想太多了。",
+      "category": "happy",
+      "cooldown_seconds": 9000,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_aftertaste",
+      "text": "这份高兴，够你回味一整天。",
+      "category": "happy",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_smooth",
+      "text": "你最近好像顺了不少。",
+      "category": "happy",
+      "cooldown_seconds": 9000,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "happy_celebrate_small",
+      "text": "要不要为这件小事庆祝一下？",
+      "category": "happy",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_slow",
+      "text": "难过的话，不用急着好起来。",
+      "category": "sad",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_listen",
+      "text": "我在，你可以慢慢说。",
+      "category": "sad",
+      "cooldown_seconds": 9000,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_cry",
+      "text": "想哭就哭一会儿，我陪着你。",
+      "category": "sad",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_no_smile",
+      "text": "今天不想笑，也没关系。",
+      "category": "sad",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_alone",
+      "text": "你不需要一个人扛着。",
+      "category": "sad",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_understand",
+      "text": "这件事确实不好受，我知道。",
+      "category": "sad",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_quiet",
+      "text": "不想说话的话，我们就安静待着。",
+      "category": "sad",
+      "cooldown_seconds": 12600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_self_care",
+      "text": "情绪低的时候，先照顾好自己。",
+      "category": "sad",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_kind_to_self",
+      "text": "你已经很努力了，别对自己太凶。",
+      "category": "sad",
+      "cooldown_seconds": 12600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_pause",
+      "text": "不开心的时候，允许自己停下来。",
+      "category": "sad",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_say_it",
+      "text": "有些难受，说出来会轻一点。",
+      "category": "sad",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_company",
+      "text": "不知道怎么安慰，就安静陪着。",
+      "category": "sad",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_hard_day",
+      "text": "这一天不容易，你辛苦了。",
+      "category": "sad",
+      "cooldown_seconds": 12600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "sad_rhythm",
+      "text": "别急，情绪也有它自己的节奏。",
+      "category": "sad",
+      "cooldown_seconds": 12600,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_quick",
+      "text": "抱歉，我刚才好像没答到点上。",
+      "category": "apology",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_misheard",
+      "text": "是我没听清楚，你再说一遍好吗？",
+      "category": "apology",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_gap",
+      "text": "我这边卡了一下，抱歉。",
+      "category": "apology",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_oversight",
+      "text": "这件事是我疏忽了，抱歉。",
+      "category": "apology",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_misunderstood",
+      "text": "我好像理解错了，让你费心了。",
+      "category": "apology",
+      "cooldown_seconds": 9000,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_tone",
+      "text": "对不起，语气重了些。",
+      "category": "apology",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_wait",
+      "text": "让你等久了，是我的问题。",
+      "category": "apology",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_no_help",
+      "text": "没能帮上忙，我心里有点过意不去。",
+      "category": "apology",
+      "cooldown_seconds": 9000,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_words",
+      "text": "那句话说得不合适，对不起。",
+      "category": "apology",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_rushed",
+      "text": "是我太着急了，慢一点听你说。",
+      "category": "apology",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_worry",
+      "text": "抱歉让你担心了，我没事。",
+      "category": "apology",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_next_time",
+      "text": "这次是我没做好，下次会注意。",
+      "category": "apology",
+      "cooldown_seconds": 9000,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_restart",
+      "text": "话没说完就断了，我们重新来。",
+      "category": "apology",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "apology_disturb",
+      "text": "对不起，打扰到你了。",
+      "category": "apology",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_patient",
+      "text": "我在等，不着急。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_still_here",
+      "text": "还在处理吗？我在这儿等着。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_not_gone",
+      "text": "别急，我还没走。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_time",
+      "text": "需要一点时间吧，我陪你等。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_no_rush",
+      "text": "你按自己的速度来就好。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_ready",
+      "text": "等你想好了再说也可以。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_busy",
+      "text": "这边还在等，你忙你的。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_enough_time",
+      "text": "不用赶着这一分钟，稳住手。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_count",
+      "text": "我数到十，你按自己的节奏。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_ok",
+      "text": "还没好吗？没事，我等着。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_focus",
+      "text": "你专心处理，我不催你。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_okay",
+      "text": "卡住就卡住，我继续等。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_hold",
+      "text": "我先把话收着，等你有空。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "waiting_help",
+      "text": "需要我帮忙的话，喊我一声。",
+      "category": "waiting",
+      "cooldown_seconds": 7200,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "celebration_worth",
+      "text": "这件事值得好好庆祝一下。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "celebration_proud",
+      "text": "做到了，我比你还高兴。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "celebration_remember",
+      "text": "今天这个你，我想记住。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "celebration_effort",
+      "text": "这么久的努力没有白费。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "celebration_reward",
+      "text": "该给自己一点奖励了。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "celebration_small_step",
+      "text": "小小的进步，也该鼓个掌。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "celebration_persist",
+      "text": "你看，坚持下来就有结果。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "celebration_done",
+      "text": "又完成一件事，真不错。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "celebration_eyes",
+      "text": "你的努力，我都看在眼里。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "celebration_finish",
+      "text": "办得漂亮，我服气。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "celebration_tonight",
+      "text": "今晚可以早点收工了吧。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "celebration_dinner",
+      "text": "晚饭加个菜，算是庆祝。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "celebration_sunset",
+      "text": "傍晚的好消息，让天色都亮了。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "celebration_walk",
+      "text": "收工以后去楼下转转，吹吹风。",
+      "category": "celebration",
+      "cooldown_seconds": 14400,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "tired_rest",
+      "text": "累了吧，先靠一会儿。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "tired_eyes",
+      "text": "眼睛都快睁不开了吧。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "tired_stop",
+      "text": "今天已经够久了，收工吧。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "tired_no_push",
+      "text": "撑不住就停，别勉强自己。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "tired_shoulder",
+      "text": "浑身发沉吧，别硬扛着。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "tired_sleep",
+      "text": "这么疲惫，先睡一觉再说。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "tired_still",
+      "text": "不想动的话，就安静坐着。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "tired_thanks",
+      "text": "辛苦了，今晚早点关灯。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "tired_yawn",
+      "text": "我看你打了好几个哈欠了。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "tired_battery",
+      "text": "电量快见底了吧，去充一充。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 2,
+      "enabled": true,
+      "time_window": "any"
+    },
+    {
+      "id": "tired_sleep_early",
+      "text": "困了就睡，明天再继续。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "tired_tomorrow",
+      "text": "收工吧，明天的事明天再说。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "tired_after_dinner",
+      "text": "晚饭后先坐会儿，别急着开工。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "evening"
+    },
+    {
+      "id": "tired_night_rest",
+      "text": "别硬撑，我听得出来你累了。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "tired_eyelids",
+      "text": "眼皮打架的时候，就别勉强了。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
+      "daily_limit": 1,
+      "enabled": true,
+      "time_window": "night"
+    },
+    {
+      "id": "tired_night_quiet",
+      "text": "夜里就让自己慢下来吧。",
+      "category": "tired",
+      "cooldown_seconds": 10800,
       "daily_limit": 1,
       "enabled": true,
       "time_window": "night"

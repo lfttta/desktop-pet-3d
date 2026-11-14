@@ -1,11 +1,14 @@
 """Voice output command.
 
-``tts.synthesize`` renders one short line through the Windows speech backend.
-The request only carries the text and an optional voice override; rate, volume
-and the default voice come from the ``voice`` settings group so the app does not
-have to duplicate them on every call.
+``tts.synthesize`` validates the line against the ``voice`` settings group and
+hands it to the runtime's speech worker; it answers at once with a synthesis
+request id. The rendered WAV arrives later as a ``tts.ready`` event (or
+``tts.failed`` when the backend cannot speak) posted under that id, so a slow
+render never blocks the service loop, other requests or chat streaming.
 """
 
+import queue
+import uuid
 from pathlib import Path
 
 from service import tts
@@ -19,6 +22,7 @@ CAPABILITY = {
 }
 DEFAULT_RATE = 0
 DEFAULT_VOLUME = 70
+ID_PREFIX = 'tts-'
 
 
 def _data_dir(store):
@@ -61,12 +65,27 @@ def synthesize(request, store, ctx):
                             'The data directory is not available.',
                             request['id'])
     try:
-        result = tts.synthesize(text, data_dir, voice=voice,
-                                rate=config.get('rate', DEFAULT_RATE),
-                                volume=config.get('volume', DEFAULT_VOLUME))
+        prepared = tts.prepare(text, voice=voice,
+                               rate=config.get('rate', DEFAULT_RATE),
+                               volume=config.get('volume', DEFAULT_VOLUME))
     except ProtocolError as exc:
         raise ProtocolError(exc.code, str(exc), request['id']) from None
-    return 'result', result
+    # Only the real runtime context carries the worker; a context-less dispatch
+    # (unit tests, tooling) has nowhere to render and says so explicitly.
+    speech = getattr(ctx, 'speech', None)
+    if speech is None:
+        raise ProtocolError('tts_unavailable',
+                            'Speech synthesis is unavailable.', request['id'])
+    request_id = ID_PREFIX + uuid.uuid4().hex
+    try:
+        speech.submit({'id': request_id, **prepared})
+    except queue.Full:
+        raise ProtocolError('tts_busy', 'Too many lines are waiting to be spoken.',
+                            request['id']) from None
+    except RuntimeError:
+        raise ProtocolError('tts_unavailable',
+                            'Speech synthesis is unavailable.', request['id']) from None
+    return 'result', {'request_id': request_id, 'accepted': True}
 
 
 COMMANDS = {'tts.synthesize': synthesize}

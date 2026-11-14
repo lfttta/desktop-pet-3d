@@ -6,6 +6,11 @@ WAV files are cached under ``<data-dir>/tts`` and keyed by a SHA-1 digest of the
 spoken text and the effective playback parameters, so replaying a line neither
 starts PowerShell nor re-renders it.
 
+``synthesize`` blocks for the whole render and belongs on the runtime's speech
+worker thread, never on the service thread. ``prepare`` performs the cheap
+validation and clamping on the caller's thread so a bad line is rejected before
+it reaches the queue.
+
 ``_run_powershell`` is the only process boundary in this module. Tests replace
 it; nothing else here spawns a process or touches audio devices.
 """
@@ -64,6 +69,21 @@ def _normalize_text(value):
     if not text:
         raise ProtocolError('invalid_request', 'tts.synthesize requires non-empty text.')
     return text[:MAX_TEXT_CHARS]
+
+
+def prepare(text, voice='', rate=0, volume=70):
+    """Validate and clamp a synthesis request without touching the backend.
+
+    This is the cheap half of :func:`synthesize` and belongs on the service
+    thread, so a bad line is rejected before it ever reaches the render queue;
+    the returned dict is exactly what ``synthesize`` consumes.
+    """
+    return {
+        'text': _normalize_text(text),
+        'voice': voice.strip() if type(voice) is str else '',
+        'rate': _bounded_integer(rate, RATE_MIN, RATE_MAX, 0),
+        'volume': _bounded_integer(volume, VOLUME_MIN, VOLUME_MAX, 70),
+    }
 
 
 def _cache_destination(data_dir, text, voice, rate, volume):

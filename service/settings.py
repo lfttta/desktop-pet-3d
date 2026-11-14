@@ -14,7 +14,7 @@ from service.jsonutil import MAX_FRAME_BYTES, dumps, loads
 from service.character_catalog import ALLOWED_CHARACTER_IDS
 from service.persona import ALLOWED_PERSONA_IDS, DEFAULT_PERSONA_ID
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 10
 DEFAULTS_V1 = {
     'schema_version': 1, 'character_id': 'godette', 'scale': 1.0,
     'screen_id': '', 'user_name': '你',
@@ -76,9 +76,13 @@ STYLE_DEFAULTS = {
     'sentence_length': 0.5,
     'emoji_frequency': 0.5,
 }
+# The speaking tone is a persona-level choice; app/scripts/ui/settings_window.gd
+# mirrors this list and only sends the key to a schema v9 or newer service.
+EXPRESSION_TONES = ('godette', 'sharp', 'clingy', 'tool', 'custom')
 EXPRESSION_DEFAULTS = {
     'enabled': True,
     'phrases_enabled': True,
+    'tone': 'godette',
     'style': deepcopy(STYLE_DEFAULTS),
 }
 AUTONOMY_DEFAULTS = {
@@ -120,10 +124,10 @@ GROWTH_DEFAULTS = {
     'locked_traits': [],
 }
 VOICE_DEFAULTS = {
-    # Speaking is paused: the command works, but synthesis is synchronous on the
-    # service thread, so a long line blocks every other request for up to 20 s.
-    # Off by default keeps that off the normal path until speech is finished.
-    'enabled': False,
+    # Synthesis runs on the runtime's speech worker, so a long line no longer
+    # blocks the service loop; speaking is on by default. A stored `false` in
+    # an existing settings file is honoured as it is — never migrated back on.
+    'enabled': True,
     'voice': '',
     'rate': 0,
     'volume': 70,
@@ -141,6 +145,7 @@ GREETING_DEFAULTS = {
 HOTKEYS_DEFAULTS = {
     'recover': 'Ctrl+Alt+F10',
     'exit': 'Ctrl+Alt+Q',
+    'chat': 'Ctrl+Alt+C',
 }
 GROUP_DEFAULTS = {
     'ai': AI_DEFAULTS,
@@ -183,6 +188,13 @@ HOTKEY_NAMED = frozenset({
     'pause', 'printscreen', 'prtsc', 'capslock',
 })
 HOTKEY_KEY = re.compile(r'^([a-z0-9]|f([1-9]|1[0-9]|2[0-4]))$')
+# Aliases that register the same virtual key must compare equal, mirroring
+# NAMED_KEYS in app/scripts/platform/hotkeys.gd.
+HOTKEY_KEY_CANONICAL = {
+    'spacebar': 'space', 'return': 'enter', 'escape': 'esc',
+    'del': 'delete', 'ins': 'insert', 'pgup': 'pageup', 'pgdn': 'pagedown',
+    'prtsc': 'printscreen',
+}
 
 
 class ValidationError(ValueError):
@@ -246,8 +258,13 @@ def _optional_timestamp(value):
     return value
 
 
-def _hotkey(value):
-    """Validate one binding; the stored text stays exactly as the user wrote it."""
+def _parse_hotkey(value):
+    """Validate one binding and return its (modifier set, key) identity.
+
+    Two spellings such as ``Ctrl+Alt+C`` and ``ctrl + alt + c`` describe the
+    same registered combination, so duplicate detection has to compare this
+    identity instead of the raw text. The caller keeps the user's spelling.
+    """
     text = _string(value, 40, allow_empty=False).strip()
     parts = [part.strip() for part in text.split('+')]
     modifiers = set()
@@ -272,6 +289,13 @@ def _hotkey(value):
         raise ValidationError('hotkey needs at least one modifier')
     if len(modifiers) != modifier_tokens:
         raise ValidationError('hotkey repeats a modifier')
+    return frozenset(modifiers), HOTKEY_KEY_CANONICAL.get(key, key)
+
+
+def _hotkey(value):
+    """Validate one binding; the stored text stays exactly as the user wrote it."""
+    text = _string(value, 40, allow_empty=False).strip()
+    _parse_hotkey(text)
     return text
 
 
@@ -441,6 +465,8 @@ def _validate_growth(key, value):
 def _validate_expression(key, value, partial):
     if key in ('enabled', 'phrases_enabled'):
         return _boolean(value)
+    if key == 'tone':
+        return _choice(value, EXPRESSION_TONES, 'expression.tone')
     if key == 'style':
         return _style(value, partial)
     raise ValidationError('unsupported expression setting')
@@ -586,8 +612,14 @@ def validate_document(document):
         else:
             normalized[key] = _scalar(key, value)
     hotkeys = normalized['hotkeys']
-    if hotkeys['recover'].lower() == hotkeys['exit'].lower():
-        raise ValidationError('the recover and exit hotkeys must differ')
+    seen = set()
+    for name in ('recover', 'exit', 'chat'):
+        # Spacing and modifier order are cosmetic, so two spellings that register
+        # the same mods+vk must be rejected here exactly as the app rejects them.
+        binding = _parse_hotkey(hotkeys[name])
+        if binding in seen:
+            raise ValidationError('the recover, exit and chat hotkeys must differ')
+        seen.add(binding)
     # Leave room for the ready/result envelope, request ID and recovery warnings.
     if len(dumps(normalized)) > MAX_FRAME_BYTES - 8192:
         raise ValidationError('settings exceed the protocol response budget')
@@ -626,17 +658,56 @@ V5_TOP_LEVEL_KEYS = DEFAULTS.keys() - {
 }
 V5_TOP_LEVEL_KEYS_WITHOUT_VOICE = V5_TOP_LEVEL_KEYS - {'voice'}
 # v6 added the behavior and performance groups; v7 adds bubble and greeting;
-# v8 adds the hotkeys group.
+# v8 adds the hotkeys group; v9 adds expression.tone without changing the
+# top-level shape; v10 adds hotkeys.chat inside the existing group.
 V6_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'bubble', 'greeting', 'hotkeys'}
 V7_TOP_LEVEL_KEYS = DEFAULTS.keys() - {'hotkeys'}
+V8_TOP_LEVEL_KEYS = DEFAULTS.keys()
+V9_TOP_LEVEL_KEYS = DEFAULTS.keys()
+
+
+def _chat_default_for(hotkeys):
+    """Pick a chat default that does not collide with the stored bindings.
+
+    Schema v10 added ``hotkeys.chat``. A v8/v9 file may legally hold
+    ``recover`` or ``exit`` at Ctrl+Alt+C, and blindly defaulting chat to the
+    same combination made ``validate_document`` reject the whole document,
+    which the store answered by backing up and resetting every setting. The
+    migration must never lose a valid document over one new default, so the
+    first free candidate wins.
+    """
+    taken = set()
+    for name in ('recover', 'exit'):
+        value = hotkeys.get(name)
+        if type(value) is str:
+            try:
+                taken.add(_parse_hotkey(value))
+            except ValidationError:
+                # A malformed stored binding already fails validation; do not
+                # let it decide the chat default as well.
+                continue
+    for candidate in ('Ctrl+Alt+C', 'Ctrl+Shift+C', 'Alt+Shift+C',
+                      'Ctrl+Alt+K', 'Ctrl+Alt+F9'):
+        try:
+            if _parse_hotkey(candidate) not in taken:
+                return candidate
+        except ValidationError:
+            continue
+    return HOTKEYS_DEFAULTS['chat']
 
 
 def _add_missing_groups(document):
-    """Add the v4..v8 groups while preserving every value already stored."""
+    """Add the v4..v10 groups/keys while preserving every value already stored."""
     migrated = deepcopy(document)
     migrated['schema_version'] = SCHEMA_VERSION
     for name in ('voice', 'behavior', 'performance', 'bubble', 'greeting', 'hotkeys'):
         migrated.setdefault(name, deepcopy(GROUP_DEFAULTS[name]))
+    expression = migrated.get('expression')
+    if type(expression) is dict:
+        expression.setdefault('tone', EXPRESSION_DEFAULTS['tone'])
+    hotkeys = migrated.get('hotkeys')
+    if type(hotkeys) is dict:
+        hotkeys.setdefault('chat', _chat_default_for(hotkeys))
     return migrated
 
 
@@ -696,7 +767,17 @@ def _upgrade_v6(document):
 
 
 def _upgrade_v7(document):
-    """Add the v8 hotkeys group to a v7 document."""
+    """Add the v8 hotkeys group and the v9 tone default to a v7 document."""
+    return _add_missing_groups(document)
+
+
+def _upgrade_v8(document):
+    """Add the v9 tone and v10 hotkeys.chat defaults to a v8 document."""
+    return _add_missing_groups(document)
+
+
+def _upgrade_v9(document):
+    """Add the v10 hotkeys.chat default to a v9 document."""
     return _add_missing_groups(document)
 
 
@@ -730,6 +811,12 @@ def migrate_document(document):
     if (document.get('schema_version') == 7
             and document.keys() == V7_TOP_LEVEL_KEYS):
         return _upgrade_v7(document), True
+    if (document.get('schema_version') == 8
+            and document.keys() == V8_TOP_LEVEL_KEYS):
+        return _upgrade_v8(document), True
+    if (document.get('schema_version') == 9
+            and document.keys() == V9_TOP_LEVEL_KEYS):
+        return _upgrade_v9(document), True
     return document, False
 
 

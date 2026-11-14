@@ -9,10 +9,10 @@ import pytest
 
 from service import commands
 from service.commands import dispatch
-from service.database import Database
+from service.database import SCHEMA_VERSION, Database
 from service.protocol import ProtocolError
 from service.runtime import serve
-from service.settings import DEFAULTS, SettingsStore
+from service.settings import DEFAULTS, SCHEMA_VERSION as SETTINGS_SCHEMA_VERSION, SettingsStore
 
 
 def _frame(command, payload=None, request_id='req-1'):
@@ -32,11 +32,12 @@ def test_v2_settings_migrate_to_v5_and_keep_old_fields(tmp_path):
     store = SettingsStore(tmp_path)
     old_fields = {key: value for key, value in v2.items() if key != 'schema_version'}
     assert {key: store.settings[key] for key in old_fields} == old_fields
-    assert store.settings['schema_version'] == 8
+    assert store.settings['schema_version'] == SETTINGS_SCHEMA_VERSION
     for group in ('ai', 'memory', 'expression', 'autonomy', 'privacy', 'growth',
                   'desktop'):
         assert store.settings[group] == DEFAULTS[group]
-    assert any('schema version 8' in warning for warning in store.warnings)
+    assert any(f'schema version {SETTINGS_SCHEMA_VERSION}' in warning
+               for warning in store.warnings)
     assert json.loads(path.read_text('utf-8')) == store.settings
     assert SettingsStore(tmp_path).warnings == []
 
@@ -53,7 +54,7 @@ def test_v3_settings_reject_api_key_and_range_errors(tmp_path):
     assert store.settings == before
 
 
-def test_database_migrates_v1_to_v3_with_backup_and_data(tmp_path):
+def test_database_migrates_v1_to_v4_with_backup_and_data(tmp_path):
     path = tmp_path / 'pet.db'
     connection = sqlite3.connect(path)
     connection.execute('CREATE TABLE settings_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
@@ -79,7 +80,7 @@ def test_database_migrates_v1_to_v3_with_backup_and_data(tmp_path):
 
     db = Database(path)
     try:
-        assert db.connection.execute('PRAGMA user_version').fetchone() == (3,)
+        assert db.connection.execute('PRAGMA user_version').fetchone() == (SCHEMA_VERSION,)
         assert db.connection.execute('SELECT title FROM conversations').fetchone() == ('旧会话',)
         assert db.connection.execute('SELECT content FROM messages').fetchone() == ('旧消息',)
         columns = {row[1] for row in db.connection.execute('PRAGMA table_info(memories)')}
@@ -104,7 +105,7 @@ def test_database_migrates_v1_to_v3_with_backup_and_data(tmp_path):
     db = Database(path)
     try:
         assert db.backup_path is None
-        assert db.connection.execute('PRAGMA user_version').fetchone() == (3,)
+        assert db.connection.execute('PRAGMA user_version').fetchone() == (SCHEMA_VERSION,)
     finally:
         db.close()
     assert len(list(tmp_path.glob('pet.db.v1-backup-*'))) == 1
@@ -129,10 +130,10 @@ def test_hello_advertises_v3_features_and_personas(tmp_path):
     event, payload = dispatch({'type': 'hello', 'id': 'hello',
                                'payload': {'protocol_version': 1}}, store)
     assert event == 'ready'
-    assert payload['settings']['schema_version'] == 8
+    assert payload['settings']['schema_version'] == SETTINGS_SCHEMA_VERSION
     assert sorted(payload['features']) == sorted([
-        'chat', 'memory', 'state', 'autonomy', 'expression', 'growth', 'usage',
-        'diag', 'desktop', 'voice'])
+        'chat', 'memory', 'state', 'autonomy', 'expression', 'growth', 'timers',
+        'usage', 'diag', 'desktop', 'voice'])
     expected = {
         'chat': ['chat.send', 'chat.cancel', 'chat.history'],
         'memory': ['memory.search', 'memory.propose', 'memory.correct',
@@ -146,6 +147,7 @@ def test_hello_advertises_v3_features_and_personas(tmp_path):
         'expression': ['expression.phrases.list', 'expression.phrases.set_enabled'],
         'growth': ['growth.list', 'growth.approve', 'growth.reject', 'growth.history',
                    'growth.rollback', 'personality.lock'],
+        'timers': ['timer.set', 'timer.list', 'timer.cancel'],
         'usage': ['usage.get'],
         'diag': ['diag.export'],
         'desktop': ['desktop.status'],

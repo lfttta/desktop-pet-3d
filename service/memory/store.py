@@ -25,6 +25,9 @@ DEFAULT_IMPORTANCE = 0.5
 DEFAULT_CONFIDENCE = 0.5
 SUMMARY_SNIPPET_CHARS = 160
 MAX_CHAIN_LENGTH = 100
+# Recall is capped so a frequently injected memory cannot build an unbounded
+# ranking advantage over newer memories.
+MAX_RECALL_COUNT = 50
 
 # Columns owned by this module. database.py creates the base table; the extra
 # columns are added here so the memory feature stays self-contained.
@@ -91,6 +94,7 @@ def memory_summary(row):
         'importance': float(row.get('importance') or 0.0),
         'strength': float(row.get('strength') or 0.0),
         'mention_count': int(row.get('mention_count') or 0),
+        'recall_count': int(row.get('recall_count') or 0),
         'status': row.get('status', 'active'),
         'created_at': row.get('created_at'),
         'updated_at': row.get('updated_at'),
@@ -254,6 +258,43 @@ class MemoryStore:
             (body_hash, updated_at, memory_id))
         return cursor.rowcount
 
+    def record_recall(self, memory_ids, subject_user_id=SUBJECT_USER_ID):
+        """Increment recall counters and recompute strength in one transaction.
+
+        Retrieval calls this after choosing which memories to inject. A storage
+        failure must never fail the search, so every error returns 0 and leaves
+        the previous counters untouched.
+        """
+        ids = []
+        seen = set()
+        for memory_id in memory_ids or ():
+            if type(memory_id) is not str or not memory_id or memory_id in seen:
+                continue
+            seen.add(memory_id)
+            ids.append(memory_id)
+        if not ids:
+            return 0
+        from service.memory import policy
+        try:
+            with self.database.transaction() as connection:
+                placeholders = ','.join('?' for _ in ids)
+                rows = connection.execute(
+                    'SELECT id, importance, mention_count, session_count, '
+                    'recall_count, confidence FROM memories '
+                    f'WHERE subject_user_id=? AND id IN ({placeholders})',
+                    [subject_user_id, *ids]).fetchall()
+                for row in rows:
+                    recall_count = min(MAX_RECALL_COUNT, int(row[4] or 0) + 1)
+                    strength = policy.strength(
+                        row[1], row[2] or 1, row[3] or 1, recall_count, row[5])
+                    connection.execute(
+                        'UPDATE memories SET recall_count=?, strength=? '
+                        'WHERE id=? AND subject_user_id=?',
+                        (recall_count, strength, row[0], subject_user_id))
+            return len(rows)
+        except (sqlite3.Error, TypeError, ValueError):
+            return 0
+
     def record_operation(self, connection, memory_id, operation, payload=None, status='applied'):
         connection.execute(
             'INSERT INTO memory_operations(id,memory_id,operation,payload,status) '
@@ -401,7 +442,8 @@ class MemoryStore:
         cursor = self.connection.execute(
             "SELECT * FROM memories WHERE subject_user_id=? AND status='active' "
             "AND deleted_at IS NULL AND id IN "
-            "(SELECT memory_id FROM memory_fts WHERE memory_fts MATCH ?) LIMIT ?",
+            "(SELECT memory_id FROM memory_fts WHERE memory_fts MATCH ?) "
+            "ORDER BY updated_at DESC, created_at DESC LIMIT ?",
             (subject_user_id, expression, limit))
         return _rows(cursor)
 

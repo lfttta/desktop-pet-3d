@@ -8,7 +8,7 @@ import pytest
 
 from service import commands
 from service.commands import dispatch
-from service.database import Database
+from service.database import SCHEMA_VERSION, Database
 from service.runtime import (BoundedLog, EVENT_LOG_MAXLEN, EventLog, RequestContext,
                              Runtime)
 from service.settings import SettingsStore
@@ -48,8 +48,8 @@ def test_hello_advertises_phase2_feature_groups(tmp_path):
                            'payload': {'protocol_version': 1}}, store)
     features = payload['features']
     assert sorted(features) == sorted([
-        'chat', 'memory', 'state', 'autonomy', 'expression', 'growth', 'usage',
-        'diag', 'desktop', 'voice'])
+        'chat', 'memory', 'state', 'autonomy', 'expression', 'growth', 'timers',
+        'usage', 'diag', 'desktop', 'voice'])
     expected = {
         'expression': ['expression.phrases.list', 'expression.phrases.set_enabled'],
         'growth': ['growth.list', 'growth.approve', 'growth.reject', 'growth.history',
@@ -148,7 +148,7 @@ def test_database_migration_creates_a_backup(tmp_path):
     try:
         assert db.backup_path is not None and db.backup_path.is_file()
         assert db.backup_path.read_bytes() == original
-        assert db.connection.execute('PRAGMA user_version').fetchone() == (3,)
+        assert db.connection.execute('PRAGMA user_version').fetchone() == (SCHEMA_VERSION,)
         assert db.connection.execute('SELECT title FROM conversations').fetchone() == ('kept',)
     finally:
         db.close()
@@ -156,14 +156,14 @@ def test_database_migration_creates_a_backup(tmp_path):
     assert len(backups) == 1 and backups[0].read_bytes() == original
 
 
-def test_version_three_database_opens_without_new_backup(tmp_path):
+def test_current_version_database_opens_without_new_backup(tmp_path):
     path = tmp_path / 'pet.db'
     db = Database(path)
     db.close()
     reopened = Database(path)
     try:
         assert reopened.backup_path is None
-        assert reopened.connection.execute('PRAGMA user_version').fetchone() == (3,)
+        assert reopened.connection.execute('PRAGMA user_version').fetchone() == (SCHEMA_VERSION,)
     finally:
         reopened.close()
     assert not list(tmp_path.glob('pet.db.v3-backup-*'))

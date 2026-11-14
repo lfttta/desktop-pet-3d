@@ -27,12 +27,18 @@ from service.ai import proactive as cloud_prompts
 from service.ai.budget import BudgetLedger, reservation
 from service.ai.provider import OpenAICompatibleProvider
 from service.behavior import budget
+from service.database import SUBJECT_USER_ID
 from service.expression import phrases
 from service.memory.policy import similarity
 from service.secrets import load_key_for
 
 SILENT_STATES = frozenset({'do_not_disturb', 'fullscreen', 'sleep_hours'})
 DESKTOP_UNKNOWN_REASON = 'desktop_unknown'
+# Categories the desktop policies may put on the wire. They are checked against
+# the phrase library's whitelist so a typo here can never ask the selector for
+# an intent no phrase carries; unknown names are dropped, never widened.
+POLICY_CATEGORIES = ('care', 'idle', 'night')
+POLICY_CATEGORY_NAMES = frozenset(POLICY_CATEGORIES)
 SENT_HISTORY = 5
 SIMILARITY_THRESHOLD = 0.8
 CLOUD_EVENT = 'autonomy.bubble'
@@ -48,12 +54,48 @@ DESKTOP_CLASSIFY_KEYS = ('idle_after_seconds', 'interaction_seconds')
 FAILURE_BACKOFF_BASE_SECONDS = 60.0
 FAILURE_BACKOFF_MAX_SECONDS = 3600.0
 FAILURE_BACKOFF_MAX_DOUBLINGS = 10
+# A fresh process stays quiet on the cloud path for this long; a cold start
+# would otherwise let the first tick spend money before the user has settled in.
+STARTUP_WARMUP_SECONDS = 90.0
+# Proactive recall uses the same shape the chat prompt uses for memories.
+MEMORY_LIMIT = 3
+MEMORY_ENTRY_CHARS = 400
+MEMORY_QUERY_CHARS = 200
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def _text(value):
     return value if type(value) is str else ''
+
+
+def _memory_texts(result):
+    """Normalize a recall result to plain, bounded strings.
+
+    ``search_for_context`` may return summaries (dicts) or already-rendered
+    strings, so both shapes are accepted. Anything malformed is skipped rather
+    than failing the message.
+    """
+    if type(result) is str:
+        result = [result]
+    if not isinstance(result, (list, tuple)):
+        return []
+    texts = []
+    seen = set()
+    for item in result:
+        if type(item) is str:
+            text = item
+        elif isinstance(item, dict):
+            text = item.get('text') or item.get('snippet') or item.get('content') or ''
+        else:
+            continue
+        if type(text) is not str:
+            continue
+        text = text.strip()[:MEMORY_ENTRY_CHARS]
+        if text and text not in seen:
+            seen.add(text)
+            texts.append(text)
+    return texts
 
 
 def _sensing_on(desktop_settings):
@@ -75,10 +117,17 @@ def _policy_value(desktop_settings, key):
 
 
 def _allowed(state, categories=(), min_factor=1.0, max_per_hour=None):
+    # Only intents the phrase library whitelists may travel with a policy.
+    # Unknown names are dropped rather than widened into "any category", so a
+    # typo here silences that policy instead of speaking the wrong kind of line.
+    allowed = []
+    for category in categories:
+        if category in POLICY_CATEGORY_NAMES and category not in allowed:
+            allowed.append(category)
     return {
         'allowed': True,
         'reason': 'allowed',
-        'categories': list(categories),
+        'categories': allowed,
         'min_factor': float(min_factor),
         'max_per_hour': max_per_hour,
         'state': state,
@@ -211,7 +260,8 @@ class ProactiveScheduler:
 
     def __init__(self, runtime, store, database, monitor=None,
                  provider_factory=None, clock=None, interval_seconds=30.0,
-                 rng=None):
+                 rng=None, startup_grace_seconds=STARTUP_WARMUP_SECONDS,
+                 started_at=None):
         self.runtime = runtime
         self.store = store
         self.database = database
@@ -220,6 +270,11 @@ class ProactiveScheduler:
         self.clock = clock if callable(clock) else time.monotonic
         self.interval_seconds = max(0.0, float(interval_seconds))
         self.rng = rng
+        try:
+            self.startup_grace_seconds = max(0.0, float(startup_grace_seconds))
+        except (TypeError, ValueError):
+            self.startup_grace_seconds = STARTUP_WARMUP_SECONDS
+        self._started_at = self._start_reference(started_at)
         self.ledger = BudgetLedger(database)
         self._results = queue.Queue()
         self._sent = deque(maxlen=SENT_HISTORY)
@@ -258,6 +313,11 @@ class ProactiveScheduler:
 
         autonomy = self._group(settings, 'autonomy')
         if autonomy.get('cloud_enabled') is True:
+            if self._startup_warmup_active(now):
+                # A cold start must not spend money before the user has settled
+                # in, so the cloud path stays quiet for the grace period.
+                self._log_event('skipped_warmup')
+                return
             if self._cloud_backoff_active(instant):
                 # A failed endpoint is not retried (and re-billed) every tick.
                 self._log_event('skipped_backoff')
@@ -295,10 +355,18 @@ class ProactiveScheduler:
         autonomy = ProactiveScheduler._group(settings, 'autonomy')
         if not autonomy.get('enabled'):
             return False
+        # ``phrases_enabled`` only gates the local phrase fallback; the cloud
+        # message is generated independently and must keep working without a
+        # phrase library. ``expression.enabled`` stays the master switch.
         expression = ProactiveScheduler._group(settings, 'expression')
-        if not expression.get('enabled') or not expression.get('phrases_enabled'):
+        if not expression.get('enabled'):
             return False
         return True
+
+    @staticmethod
+    def _phrases_enabled(settings):
+        return ProactiveScheduler._group(settings, 'expression').get(
+            'phrases_enabled') is True
 
     def _desktop_settings(self, settings):
         return self._group(settings, 'desktop')
@@ -396,27 +464,146 @@ class ProactiveScheduler:
         except Exception:
             return time.monotonic()
 
+    def _start_reference(self, started_at):
+        """Return the instant the process-start grace period begins at."""
+        if started_at is not None:
+            try:
+                return float(started_at)
+            except (TypeError, ValueError):
+                pass
+        try:
+            return float(self.clock())
+        except Exception:
+            return time.monotonic()
+
+    def _startup_warmup_active(self, now):
+        """True while a fresh process must not attempt a cloud message.
+
+        The service runtime ticks with a monotonic float, matching the default
+        clock. Explicit ``datetime`` ticks are wall-clock (used by tests and
+        replays) and have no monotonic origin to compare against, so the grace
+        period does not apply to them.
+        """
+        if self.startup_grace_seconds <= 0.0:
+            return False
+        if isinstance(now, datetime):
+            return False
+        try:
+            elapsed = self._instant(now) - self._started_at
+        except (TypeError, ValueError):
+            return False
+        return 0.0 <= elapsed < self.startup_grace_seconds
+
     # -- cloud generation ----------------------------------------------
+
+    def _memory_query(self, history):
+        """Return the latest user line, or the conversation theme.
+
+        The transcript tail is only a couple of lines, so the newest user turn
+        is read directly from storage; a conversation with no user turn falls
+        back to its title (the configured "topic" of the conversation).
+        """
+        connection = getattr(self.database, 'connection', None)
+        if connection is not None:
+            try:
+                row = connection.execute(
+                    "SELECT content FROM messages WHERE subject_user_id=? "
+                    "AND role='user' AND content<>'' ORDER BY rowid DESC LIMIT 1",
+                    (SUBJECT_USER_ID,)).fetchone()
+            except (AttributeError, TypeError, sqlite3.Error):
+                row = None
+            if row is not None and type(row[0]) is str and row[0].strip():
+                return row[0].strip()[:MEMORY_QUERY_CHARS]
+        for item in reversed(history if isinstance(history, list) else []):
+            if not isinstance(item, dict) or item.get('role') != 'user':
+                continue
+            content = item.get('content')
+            if type(content) is str and content.strip():
+                return content.strip()[:MEMORY_QUERY_CHARS]
+        if connection is not None:
+            try:
+                row = connection.execute(
+                    "SELECT title FROM conversations WHERE subject_user_id=? "
+                    "AND title<>'' ORDER BY rowid DESC LIMIT 1",
+                    (SUBJECT_USER_ID,)).fetchone()
+            except (AttributeError, TypeError, sqlite3.Error):
+                row = None
+            if row is not None and type(row[0]) is str and row[0].strip():
+                return row[0].strip()[:MEMORY_QUERY_CHARS]
+        return ''
+
+    def _recall_memories(self, history, settings):
+        """Return up to three memory snippets for the next proactive prompt.
+
+        Every failure yields an empty list: recall is context, never a reason
+        to withhold the message. ``search_for_context`` is preferred; older
+        builds without it use the keyword search over a ``MemoryStore``.
+        """
+        if self.database is None:
+            return []
+        if self._group(settings, 'memory').get('enabled') is False:
+            return []
+        query = self._memory_query(history)
+        if not query:
+            return []
+        try:
+            from service.memory import search as memory_search
+        except Exception:
+            return []
+        recall = getattr(memory_search, 'search_for_context', None)
+        if callable(recall):
+            # The per-entry cap is separate from the total budget so three
+            # entries of up to MEMORY_ENTRY_CHARS each can reach the prompt.
+            source = self.store if isinstance(
+                getattr(self.store, 'settings', None), dict) else settings
+            try:
+                result = recall(self.database, query, source, MEMORY_LIMIT,
+                                total_chars=MEMORY_LIMIT * MEMORY_ENTRY_CHARS,
+                                entry_chars=MEMORY_ENTRY_CHARS)
+            except Exception:
+                self._log_event('memory_failed')
+                return []
+            return _memory_texts(result)
+        try:
+            return _memory_texts(self._keyword_memories(
+                memory_search, query, settings))
+        except Exception:
+            self._log_event('memory_failed')
+            return []
+
+    def _keyword_memories(self, memory_search, query, settings):
+        from service.memory.store import MemoryStore
+        store = getattr(self.database, 'memory_store_v3', None)
+        if store is None:
+            store = MemoryStore(self.database)
+            try:
+                setattr(self.database, 'memory_store_v3', store)
+            except AttributeError:
+                pass
+        return memory_search.search(store, query, MEMORY_LIMIT, settings=settings)
 
     def _start_cloud(self, settings, policy, moment):
         if self._inflight:
             return
         # SQLite has one connection and it belongs to the service thread, so
-        # the short transcript is read here; the worker only performs the
-        # network call. Building the prompt here also lets the token/cost
-        # ledger reserve the worst-case usage before any money is spent.
+        # the short transcript and the memory recall are read here; the worker
+        # only performs the network call. Building the prompt here also lets
+        # the token/cost ledger reserve the worst-case usage before any money
+        # is spent.
         try:
             history = cloud_prompts.recent_history(
                 self.database, cloud_prompts.DEFAULT_HISTORY_LIMIT)
         except Exception:
             history = []
+        memories = self._recall_memories(history, settings)
         state_label = '' if policy['state'] == 'unknown' else policy['state']
         try:
             # An unknown state (sensing off or unreadable) carries no label at
             # all; a real desktop state is the only thing worth telling the
             # model, and it must never leak to the user.
             messages = cloud_prompts.build_messages(
-                settings, settings.get('persona_id'), state_label, history)
+                settings, settings.get('persona_id'), state_label, history,
+                memories)
         except Exception:
             messages = None
         if messages is not None:
@@ -426,7 +613,8 @@ class ProactiveScheduler:
                 self._post_local(moment, policy)
                 return
         worker = threading.Thread(target=self._run_cloud,
-                                  args=(settings, messages, history, state_label),
+                                  args=(settings, messages, history,
+                                        state_label, memories),
                                   name='proactive-cloud', daemon=True)
         self._inflight = True
         self._worker = worker
@@ -438,13 +626,15 @@ class ProactiveScheduler:
             self._log_event('start_failed')
             self._post_local(moment, policy)
 
-    def _run_cloud(self, settings, messages, history, state_label=''):
+    def _run_cloud(self, settings, messages, history, state_label='',
+                   memories=None):
         result = {'kind': 'local'}
         try:
             key = load_key_for(self.store)
             if messages is None:
                 messages = cloud_prompts.build_messages(
-                    settings, settings.get('persona_id'), state_label, history)
+                    settings, settings.get('persona_id'), state_label, history,
+                    memories)
             generated = cloud_prompts.generate(
                 self._provider(settings), key, messages, cancel_event=self._cancel)
             if generated is not None:
@@ -579,8 +769,17 @@ class ProactiveScheduler:
     def _post_local(self, moment, policy):
         if self.database is None:
             return
+        if not self._phrases_enabled(self._settings()):
+            # The phrase switch belongs to the local fallback only. Without a
+            # phrase library (or with phrases off) a failed cloud call simply
+            # stays silent.
+            self._log_event('skipped_phrases_disabled')
+            return
         categories = policy.get('categories') or []
-        category = categories[0] if categories else None
+        # A policy may permit several intents (the gentle idle policy allows
+        # care, idle and night). Passing the whole list keeps every permitted
+        # kind reachable; an empty list means "any category", as before.
+        category = categories or None
         try:
             with self.database.transaction() as connection:
                 phrase = phrases.select_phrase(connection, category=category,
@@ -594,6 +793,7 @@ class ProactiveScheduler:
 
     def _post(self, text, phrase_id, source, moment):
         self._sent.append(text)
+        self._record_history(text)
         payload = {
             'text': text,
             'phrase_id': phrase_id,
@@ -602,6 +802,22 @@ class ProactiveScheduler:
         }
         self.runtime.post(CLOUD_REQUEST_ID, CLOUD_EVENT, payload)
         self._log_event('posted', 'source=' + source)
+
+    def _record_history(self, text):
+        """Append the delivered line to the shared chat history.
+
+        History is context, not delivery: a storage failure only records an
+        event and the bubble is still posted.
+        """
+        if self.database is None or type(text) is not str or not text.strip():
+            return
+        try:
+            from service.features import proactive_store
+            stored = proactive_store.append_assistant(self.database, text)
+        except Exception:
+            stored = None
+        if stored is None:
+            self._log_event('history_failed')
 
     def _log_event(self, code, message=''):
         """Record one proactive event in the runtime's diagnostic event log.

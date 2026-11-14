@@ -332,32 +332,66 @@ def reset_state(connection, now=None):
     return state
 
 
-# Presentation mapping. The PAD pleasure axis is the only input the renderer
-# needs: it selects one of three expressions and a blend weight in
-# [MIN_EXPRESSION_WEIGHT, 1.0]. Thresholds are inclusive at the boundary.
+# Presentation mapping. The PAD pleasure axis selects the base expression; the
+# psych axes refine it into a richer emotion label without requiring new blend
+# shapes. Every label still renders through one of the three existing
+# expression channels (neutral / happy / sad). Thresholds are inclusive at the
+# boundary.
 HAPPY_THRESHOLD = 0.20
 SAD_THRESHOLD = -0.15
+EXCITED_AROUSAL = 0.35
+TIRED_ENERGY = 0.25
+UPSET_STRESS = 0.50
 MIN_EXPRESSION_WEIGHT = 0.35
+
+# Rich emotion labels the service may send, and the existing expression each
+# one renders through. This is the only copy the service owns; the app keeps a
+# matching table so both sides can fall back without a round trip.
+EXPRESSION_BY_EMOTION = {
+    'neutral': 'neutral',
+    'happy': 'happy',
+    'sad': 'sad',
+    'excited': 'happy',
+    'tired': 'sad',
+    'upset': 'sad',
+}
+
+
+def expression_for(emotion):
+    """Return the existing expression channel an emotion label renders through.
+
+    Unknown, missing and non-string labels fall back to ``neutral``: it is the
+    one face a model without new blend shapes can always show. This function
+    never raises.
+    """
+    if type(emotion) is not str:
+        return 'neutral'
+    return EXPRESSION_BY_EMOTION.get(emotion, 'neutral')
+
+
+def _presentation_axis(state, group, key, fallback):
+    """Return a finite numeric axis value, or ``fallback`` when unusable."""
+    if not isinstance(state, dict):
+        return fallback
+    values = state.get(group)
+    if not isinstance(values, dict):
+        return fallback
+    value = values.get(key)
+    # ``bool`` is an ``int`` subclass but not a meaningful PAD/psych value.
+    if type(value) not in (int, float):
+        return fallback
+    try:
+        # Huge integers make math.isfinite raise OverflowError.
+        if not math.isfinite(value):
+            return fallback
+        return float(value)
+    except (OverflowError, TypeError, ValueError):
+        return fallback
 
 
 def _presentation_pleasure(state):
     """Return the finite pleasure value of a state document, else ``None``."""
-    if not isinstance(state, dict):
-        return None
-    pad = state.get('pad')
-    if not isinstance(pad, dict):
-        return None
-    value = pad.get('pleasure')
-    # ``bool`` is an ``int`` subclass but not a meaningful PAD value.
-    if type(value) not in (int, float):
-        return None
-    try:
-        # Huge integers make math.isfinite raise OverflowError.
-        if not math.isfinite(value):
-            return None
-        return float(value)
-    except (OverflowError, TypeError, ValueError):
-        return None
+    return _presentation_axis(state, 'pad', 'pleasure', None)
 
 
 def _expression_weight(magnitude):
@@ -366,15 +400,49 @@ def _expression_weight(magnitude):
     return round(weight, 4)
 
 
+def _emotion_label(pleasure, arousal, energy, stress):
+    """Pick the rich emotion label for one PAD/psych sample.
+
+    ``happy``/``sad`` stay the pleasure-only labels so callers that only know
+    the PAD axes keep working. The three richer labels need a supporting axis:
+
+    * ``excited`` — pleasant and aroused (pleasure decides, so a happy pet stays
+      happy even when it is tired)
+    * ``upset`` — stressed and sad
+    * ``tired`` — low energy, whether the pleasure is sad or neutral
+
+    Inside the sad band ``upset`` outranks ``tired`` because a stressed and
+    exhausted pet reads as upset first. Inside the neutral band ``upset`` needs
+    non-positive pleasure, so mild stress with a positive reading cannot flip
+    the face.
+    """
+    if pleasure >= HAPPY_THRESHOLD:
+        return 'excited' if arousal >= EXCITED_AROUSAL else 'happy'
+    if pleasure <= SAD_THRESHOLD:
+        if stress >= UPSET_STRESS:
+            return 'upset'
+        return 'tired' if energy <= TIRED_ENERGY else 'sad'
+    if stress >= UPSET_STRESS and pleasure <= 0.0:
+        return 'upset'
+    if energy <= TIRED_ENERGY:
+        return 'tired'
+    return 'neutral'
+
+
 def presentation(state):
     """Map a state document onto ``{'emotion': label, 'weight': float}``.
 
-    ``emotion`` is ``happy`` when ``pad.pleasure`` reaches
-    ``HAPPY_THRESHOLD``, ``sad`` when it falls to ``SAD_THRESHOLD`` or below,
-    and ``neutral`` otherwise. The weight grows with the absolute pleasure
-    value and is always clamped to ``[MIN_EXPRESSION_WEIGHT, 1.0]``. Missing,
-    malformed or non-finite input yields the neutral presentation; this
-    function never raises.
+    ``emotion`` is one of ``neutral``, ``happy``, ``sad`` (the original
+    pleasure-only labels) or the richer ``excited``, ``tired`` and ``upset``.
+    ``excited`` needs pleasure at ``HAPPY_THRESHOLD`` with arousal at
+    ``EXCITED_AROUSAL``; ``upset`` needs stress at ``UPSET_STRESS`` with
+    non-positive pleasure; ``tired`` needs energy at ``TIRED_ENERGY`` or below.
+    The weight grows with the absolute pleasure value and is always clamped to
+    ``[MIN_EXPRESSION_WEIGHT, 1.0]``. Missing, malformed or non-finite input
+    yields the neutral presentation; this function never raises.
+
+    Every label renders through an existing expression; ``expression_for`` is
+    the single source for that mapping, so no new blend shape is required.
     """
     try:
         pleasure = _presentation_pleasure(state)
@@ -383,8 +451,15 @@ def presentation(state):
         pleasure = None
     if pleasure is None:
         return {'emotion': 'neutral', 'weight': 1.0}
-    if pleasure >= HAPPY_THRESHOLD:
-        return {'emotion': 'happy', 'weight': _expression_weight(pleasure)}
-    if pleasure <= SAD_THRESHOLD:
-        return {'emotion': 'sad', 'weight': _expression_weight(-pleasure)}
-    return {'emotion': 'neutral', 'weight': 1.0}
+    try:
+        arousal = _presentation_axis(state, 'pad', 'arousal', 0.0)
+        energy = _presentation_axis(state, 'psych', 'energy', PSYCH_BASELINE['energy'])
+        stress = _presentation_axis(state, 'psych', 'stress', PSYCH_BASELINE['stress'])
+    except Exception:
+        arousal = 0.0
+        energy = PSYCH_BASELINE['energy']
+        stress = PSYCH_BASELINE['stress']
+    emotion = _emotion_label(pleasure, arousal, energy, stress)
+    if emotion == 'neutral':
+        return {'emotion': 'neutral', 'weight': 1.0}
+    return {'emotion': emotion, 'weight': _expression_weight(abs(pleasure))}

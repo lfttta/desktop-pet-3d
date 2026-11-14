@@ -21,9 +21,9 @@ from service.ai.router import Router
 from service.ai.schema import SchemaError, parse_structured, repair_instruction
 from service.expression import style
 from service.memory import writer
-from service.memory.store import MemoryStore
+from service.memory.store import DEFAULT_CATEGORY, DEFAULT_IMPORTANCE, MemoryStore
 from service.secrets import SecretsError, load_key_for
-from service.state import character
+from service.state import character, growth as growth_state
 
 SAFE_FALLBACK = '我现在有点跟不上，等会儿再聊好吗？'
 SAFE_ERRORS = {
@@ -174,16 +174,22 @@ class ChatOrchestrator:
         return OpenAICompatibleProvider(ai_settings, transport=self.transport)
 
     def attach(self, ctx):
-        if self._tick_registered:
-            return
-        register = getattr(ctx, 'register_tick', None)
-        if register is None:
-            return
+        if not self._tick_registered:
+            register = getattr(ctx, 'register_tick', None)
+            if register is not None:
+                try:
+                    register(self.poll)
+                except RuntimeError:
+                    pass
+                else:
+                    self._tick_registered = True
+        # Growth evidence comes from chat memory candidates, so the periodic
+        # scan is activated by chat as well as by the growth commands.
         try:
-            register(self.poll)
-        except RuntimeError:
-            return
-        self._tick_registered = True
+            from service.features import growth as growth_feature
+            growth_feature.register_tick(ctx, store=self.store)
+        except Exception:
+            pass
 
     def submit(self, request_id, text, conversation_id, ctx, messages=None,
                on_final=None):
@@ -208,7 +214,8 @@ class ChatOrchestrator:
 
         ai_settings = settings.get('ai') if isinstance(settings.get('ai'), dict) else {}
         if messages is None:
-            messages = build_messages(self.database, conversation_id, text, settings)
+            messages = build_messages(self.database, conversation_id, text,
+                                      settings, self.store)
         self._log_prompt(settings, messages)
         budget = self.budget.status(ai_settings, reservation(messages, ai_settings))
         if budget['local_only']:
@@ -389,8 +396,11 @@ class ChatOrchestrator:
             route = event.data
             text = route.reply
             memory_ops = None
+            timer_ops = None
             if route.memory_text:
                 text, memory_ops = self._remember(route.memory_text, active.settings)
+            if route.action in ('timer.set', 'timer.cancel'):
+                text, timer_ops = self._apply_timer(active, route)
             payload = self._done_payload(active, {
                 'text': text,
                 'speak': text if route.action in ('wave', 'walk') else '',
@@ -401,6 +411,8 @@ class ChatOrchestrator:
             }, local=True)
             if memory_ops is not None:
                 payload['memory_ops'] = memory_ops
+            if timer_ops is not None:
+                payload['timer_ops'] = timer_ops
             self._notify(active, 'done', {'text': text,
                                           'conversation_id': active.conversation_id})
             self._emit(active.ctx, 'chat.done', payload)
@@ -417,7 +429,8 @@ class ChatOrchestrator:
                 'state_suggestion': {},
             }, local=True, budget=data)
             self._notify(active, 'done', {'text': LOCAL_ONLY_REPLY,
-                                          'conversation_id': active.conversation_id})
+                                          'conversation_id': active.conversation_id,
+                                          'local_only': True})
             self._emit(active.ctx, 'chat.done', payload)
             self._active.pop(active.request_id, None)
             return
@@ -435,7 +448,8 @@ class ChatOrchestrator:
             payload = self._done_payload(active, data)
             text = payload['message']['content']
             self._notify(active, 'done', {'text': text,
-                                          'conversation_id': active.conversation_id})
+                                          'conversation_id': active.conversation_id,
+                                          'degraded': True})
             self._emit(active.ctx, 'chat.done', payload)
             self._active.pop(active.request_id, None)
             return
@@ -530,6 +544,39 @@ class ChatOrchestrator:
             'presentation': character.presentation(state),
         }
 
+    @staticmethod
+    def _candidate_entry(item, max_chars):
+        """Normalize one string or structured memory candidate.
+
+        Structured entries carry the category/importance/source_type the writer
+        needs; plain strings keep the old text-only shape so existing clients
+        and stored payloads stay compatible.
+        """
+        if isinstance(item, str):
+            content = item.strip()
+            if not content:
+                return None
+            return {'content': content[:max_chars]}
+        if not isinstance(item, dict):
+            return None
+        raw = item.get('content', item.get('text'))
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+        category = growth_state.candidate_category(item.get('category'))
+        importance = item.get('importance', DEFAULT_IMPORTANCE)
+        if type(importance) not in (int, float) or isinstance(importance, bool) \
+                or not 0.0 <= float(importance) <= 1.0:
+            importance = DEFAULT_IMPORTANCE
+        source_type = item.get('source_type', 'chat')
+        if not isinstance(source_type, str) or source_type not in writer.SOURCE_TYPES:
+            source_type = 'chat'
+        return {
+            'content': raw.strip()[:max_chars],
+            'category': category,
+            'importance': float(importance),
+            'source_type': source_type,
+        }
+
     def _memory_ops(self, candidates, memory_settings):
         if not isinstance(memory_settings, dict) or not memory_settings.get('enabled', True):
             return []
@@ -542,12 +589,22 @@ class ChatOrchestrator:
         auto_capture = bool(memory_settings.get('auto_capture', False))
         ops = []
         for item in candidates[:8]:
-            if not isinstance(item, str) or not item.strip():
+            entry = self._candidate_entry(item, max_chars)
+            if entry is None:
                 continue
-            content = item.strip()[:max_chars]
+            content = entry['content']
             op = {'operation': 'propose', 'status': 'pending', 'content': content}
+            # Structured candidates expose the metadata so the app can pass it
+            # back through memory.propose when the user presses 记住.
+            for key in ('category', 'importance', 'source_type'):
+                if key in entry:
+                    op[key] = entry[key]
             if auto_capture:
-                outcome = self._propose_memory(content, memory_settings, source_type='chat')
+                outcome = self._propose_memory(
+                    content, memory_settings,
+                    source_type=entry.get('source_type', 'chat'),
+                    category=entry.get('category'),
+                    importance=entry.get('importance'))
                 if outcome is None:
                     op['status'] = 'failed'
                 else:
@@ -565,7 +622,8 @@ class ChatOrchestrator:
         memory = settings.get('memory') if isinstance(settings.get('memory'), dict) else {}
         if not memory.get('enabled', True):
             return '记忆功能现在是关闭的，我没法记住。', []
-        outcome = self._propose_memory(text, memory, source_type='chat')
+        outcome = self._propose_memory(text, memory, source_type='chat',
+                                       category=DEFAULT_CATEGORY)
         if outcome is None:
             return ('我想记下来，但没能保存。',
                     [{'operation': 'propose', 'status': 'failed', 'content': text}])
@@ -582,7 +640,46 @@ class ChatOrchestrator:
             return '我先记下来了，稍后会保存到记忆里。', [op]
         return '这条我没能记住。', [op]
 
-    def _propose_memory(self, text, memory_settings, source_type='chat'):
+    def _apply_timer(self, active, route):
+        """Write a locally routed reminder to the timers table.
+
+        The router only recognises the phrase; the row has to be created here on
+        the service thread, otherwise the heartbeat's due check never sees it and
+        the reply promises a reminder that does not exist. A missing database or
+        a storage error keeps an honest failure reply instead of "好的".
+        """
+        from service.features import timers
+
+        database = getattr(active.ctx, 'database', None)
+        if database is None:
+            return ('提醒没能保存，存储暂时不可用。',
+                    [{'operation': route.action, 'status': 'failed'}])
+        if route.action == 'timer.set':
+            minutes = route.timer_minutes
+            if type(minutes) is not int or not 1 <= minutes <= timers.MAX_MINUTES:
+                return ('这个提醒时间我没法设置。',
+                        [{'operation': 'timer.set', 'status': 'failed',
+                          'text': route.timer_text or ''}])
+            detail = route.timer_text or timers.DEFAULT_TEXT
+            try:
+                timer = timers.create(database, minutes, detail)
+            except (sqlite3.Error, OSError, ValueError, TypeError):
+                return ('提醒没能保存，稍后再试好吗？',
+                        [{'operation': 'timer.set', 'status': 'failed',
+                          'text': detail}])
+            return route.reply, [{'operation': 'timer.set', 'status': 'committed',
+                                  'timer_id': timer['id'], 'due_at': timer['due_at'],
+                                  'text': timer['text']}]
+        try:
+            cancelled = timers.cancel(database)
+        except (sqlite3.Error, OSError, ValueError, TypeError):
+            return ('取消失败，稍后再试好吗？',
+                    [{'operation': 'timer.cancel', 'status': 'failed'}])
+        return route.reply, [{'operation': 'timer.cancel', 'status': 'committed',
+                              'cancelled': cancelled}]
+
+    def _propose_memory(self, text, memory_settings, source_type='chat',
+                        category=None, importance=None):
         if self.database is None:
             return None
         try:
@@ -590,8 +687,13 @@ class ChatOrchestrator:
             if store is None:
                 store = MemoryStore(self.database)
                 setattr(self.database, 'memory_store_v3', store)
+            extra = {}
+            if category is not None:
+                extra['category'] = category
+            if importance is not None:
+                extra['importance'] = importance
             return writer.propose(store, text, source_type=source_type,
-                                  settings=memory_settings)
+                                  settings=memory_settings, **extra)
         except (sqlite3.Error, OSError, ValueError, UnicodeError):
             return None
 

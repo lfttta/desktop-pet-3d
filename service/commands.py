@@ -8,7 +8,7 @@ transport loop and error envelopes stay unchanged.
 
 from service import PROTOCOL_VERSION, SERVICE_VERSION
 from service.features import (ai, autonomy, capabilities, chat, desktop, diag, expression,
-                              growth, memory, state, usage, voice)
+                              growth, memory, state, timers, usage, voice)
 from service.persona import public_catalog
 from service.protocol import ProtocolError
 from service.settings import ValidationError
@@ -95,6 +95,7 @@ HANDLERS = {
     **ai.COMMANDS,
     **expression.COMMANDS,
     **growth.COMMANDS,
+    **timers.COMMANDS,
     **usage.COMMANDS,
     **diag.COMMANDS,
     **desktop.COMMANDS,

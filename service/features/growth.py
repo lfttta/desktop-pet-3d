@@ -1,6 +1,7 @@
 """Personality growth commands and trait locks.
 
-Candidates are generated from stored evidence while ``growth.list`` runs.
+Candidates are generated from stored evidence while ``growth.list`` runs, and
+a runtime tick keeps scanning every ten minutes once the feature is registered.
 Approval, rejection and rollback are explicit commands; every change to a
 growable trait is recorded in ``personality_history`` so it can be reverted.
 Core traits are always locked and are reported as locked even when a caller
@@ -8,6 +9,7 @@ asks to unlock them.
 """
 
 import sqlite3
+import time
 
 from service.protocol import ProtocolError
 from service.settings import ValidationError
@@ -22,6 +24,7 @@ CAPABILITY = {
 }
 
 MAX_ID_CHARS = 128
+TICK_INTERVAL_SECONDS = 600.0
 
 
 def _database(ctx, request_id):
@@ -29,7 +32,47 @@ def _database(ctx, request_id):
     if database is None:
         raise ProtocolError('storage_unavailable', 'Growth storage is unavailable.',
                             request_id)
+    register_tick(ctx)
     return database
+
+
+def register_tick(ctx, store=None):
+    """Register the periodic evidence scan once per database.
+
+    The hook no-ops while ``growth.enabled`` is false and otherwise calls
+    ``sync_candidates`` at most once per ten minutes. Registering from every
+    growth command (and from the chat orchestrator) means candidates appear
+    without ``growth.list`` having to be requested.
+    """
+    database = getattr(ctx, 'database', None)
+    if database is None:
+        return False
+    if getattr(database, 'growth_tick_v1', False):
+        return True
+    register = getattr(ctx, 'register_tick', None)
+    if register is None:
+        return False
+    settings_source = store if store is not None else getattr(ctx, 'store', None)
+    state = {'at': None}
+
+    def hook(now):
+        config = _growth_settings(settings_source)
+        if not config.get('enabled'):
+            return
+        stamp = now if isinstance(now, (int, float)) and not isinstance(now, bool) \
+            else time.monotonic()
+        if state['at'] is not None and stamp - state['at'] < TICK_INTERVAL_SECONDS:
+            return
+        state['at'] = stamp
+        with database.transaction() as connection:
+            growth_state.sync_candidates(connection, config)
+
+    try:
+        register(hook)
+    except RuntimeError:
+        return False
+    setattr(database, 'growth_tick_v1', True)
+    return True
 
 
 def _growth_settings(store):

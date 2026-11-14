@@ -39,6 +39,22 @@ var _last_walk_position := -1.0
 var _walk_stride_meters := 0.0
 var _model_forward := Vector3.FORWARD
 
+## Rich emotion labels the app and service may use, and the existing expression
+## each one renders through. Adding a label must never require a new blend
+## shape: every value here is a key of the character's `expressions` config, and
+## an unknown label falls back to `neutral` through `expression_for_label()`.
+const EXPRESSION_BY_EMOTION := {
+	"neutral": "neutral",
+	"happy": "happy",
+	"sad": "sad",
+	"excited": "happy",
+	"tired": "sad",
+	"upset": "sad",
+}
+## How long a looping clip suggested by an emotion stays before it is released
+## back to idle. One-shot clips end on their own through `_animation_finished`.
+const EMOTION_ACTION_HOLD_SECONDS := 6.0
+
 var config := {}
 var model: Node3D
 var skeleton: Skeleton3D
@@ -55,6 +71,15 @@ var _last_spring_pose := {}
 var spring_motion_max := 0.0
 var _head_height := 0.3
 var _skin_bounds := SkinBounds.new()
+## Clip name of the emotion-suggested action this actor currently owns, or ""
+## when none runs. The cross-cycle 30 s cooldown lives in `emotion_presenter.gd`.
+var _suggested_action := ""
+## Remaining hold for a looping suggested clip; 0 for one-shot clips, which end
+## through `_animation_finished`.
+var _suggested_hold_remaining := 0.0
+## Request id returned by `request_action` for the suggested clip, released when
+## the hold expires. -1 when no suggestion is running.
+var _suggested_request := -1
 
 func load_character(entry: Dictionary) -> bool:
 	var path := str(entry.get("config", ""))
@@ -236,6 +261,51 @@ func _update_spring_inertia(delta: float) -> void:
 func play_action(name_: String) -> void:
 	request_action(name_)
 
+## Plays one action suggested by an emotion.
+##
+## A user action, a chat reply, a walk, a held body or a fall all necessarily
+## report a non-idle `action` (or paused playback), so `idle` is the whole
+## ownership gate and a suggestion can never cut one of them short. A looping
+## clip (`sad_idle`, `sleeping_idle`) is requested held and released after
+## `EMOTION_ACTION_HOLD_SECONDS`; a one-shot clip ends through
+## `_animation_finished`. Returns true only when the clip actually started.
+func suggest_action(name_: String) -> bool:
+	if not action_available_for_emotion():
+		return false
+	if player == null or not player.has_animation("shared/" + name_):
+		return false
+	var hold: bool = action_loops(name_)
+	var request := request_action(name_, "autonomous", 1.0, 1, hold)
+	if request < 0:
+		return false
+	_suggested_action = name_
+	_suggested_request = request
+	_suggested_hold_remaining = EMOTION_ACTION_HOLD_SECONDS if hold else 0.0
+	return true
+
+
+## Drops or ends a suggested action. A clip that is no longer the current action
+## (a one-shot ended, or something else took over) is simply forgotten. A held
+## loop is released once its hold expires; `release_action` ignores a request id
+## the controller has since replaced, so a user action is never cut short.
+func _update_suggested_action(delta: float) -> void:
+	if _suggested_action.is_empty():
+		return
+	if action != _suggested_action:
+		_suggested_action = ""
+		_suggested_hold_remaining = 0.0
+		_suggested_request = -1
+		return
+	if _suggested_hold_remaining <= 0.0:
+		return
+	_suggested_hold_remaining = maxf(0.0, _suggested_hold_remaining - delta)
+	if _suggested_hold_remaining > 0.0:
+		return
+	if _suggested_request > 0:
+		release_action(_suggested_request)
+	_suggested_action = ""
+	_suggested_request = -1
+
 func request_action(name_: String, source := "user", speed := 1.0, direction := 1, hold := false) -> int:
 	if action_controller == null or not is_finite(speed) or speed <= 0 or not player.has_animation("shared/" + name_):
 		return -1
@@ -355,15 +425,61 @@ func _animation_finished(name_: StringName) -> void:
 		# Remember where the turn left the body: a sideways walk must return
 		# here, not to the model's original forward direction.
 		_rest_yaw = rotation.y
+	if action_controller.current_action == _suggested_action:
+		# The suggested clip ended on its own; nothing is left to release.
+		_suggested_action = ""
+		_suggested_hold_remaining = 0.0
+		_suggested_request = -1
 	action_controller.complete(action_controller.current_request)
 
 func set_emotion(name_: String, weight := 1.0) -> bool:
-	if name_ not in ["neutral", "happy", "sad"] or not config.get("expressions", {}).has(name_):
+	# Only known labels with a configured expression are accepted. Unknown
+	# labels stay rejected so the presenter can retry with neutral, which keeps
+	# the face valid without inventing a blend shape.
+	if not EXPRESSION_BY_EMOTION.has(name_):
+		return false
+	var expression := expression_for_label(name_)
+	if not config.get("expressions", {}).has(expression):
 		return false
 	emotion = name_
 	emotion_weight = clampf(weight, 0, 1)
 	update_face()
 	return true
+
+
+## The existing expression channel an emotion label renders through. Every rich
+## label resolves to one of the three config keys; unknown labels fall back to
+## `neutral`, the face a model without new blend shapes can always show.
+static func expression_for_label(name_: String) -> String:
+	return str(EXPRESSION_BY_EMOTION.get(name_, "neutral"))
+
+
+## True when the body is standing idle with nothing else owning it.
+##
+## A user action, a chat reply, a walk, a drag hold or a fall all necessarily
+## report a non-idle `action`, so that single check carries the action-ownership
+## gate. `paused` (preview pause) and an in-flight speech clip are excluded too,
+## and `can_process()` is false while the tray hides the pet, so a suggestion
+## cannot start off screen or talk over a reply.
+func action_available_for_emotion() -> bool:
+	if action != "idle" or paused or not can_process():
+		return false
+	return audio_player == null or not audio_player.playing
+
+
+## True when the shared library's clip for `name_` loops. Used to pick between
+## the hold-and-release path and the natural `_animation_finished` one; an
+## unknown clip reports false, and `request_action` rejects it anyway.
+func action_loops(name_: String) -> bool:
+	if player == null or not player.has_animation("shared/" + name_):
+		return false
+	var clip: Animation = player.get_animation("shared/" + name_)
+	return clip != null and clip.loop_mode != Animation.LOOP_NONE
+
+## Clip name of the action the last emotion suggestion started, or "" when none
+## runs. Exposed for tests and diagnostics.
+func current_suggestion() -> String:
+	return _suggested_action
 
 func play_test_audio() -> void:
 	if _test_audio.is_empty():
@@ -403,6 +519,9 @@ func reset_performance_state() -> void:
 	if action_controller:
 		action_controller.reset()
 		request_action("idle", "idle")
+	_suggested_action = ""
+	_suggested_hold_remaining = 0.0
+	_suggested_request = -1
 	emotion = "neutral"
 	emotion_weight = 1.0
 	blink_override = -1.0
@@ -435,6 +554,7 @@ func _process(delta: float) -> void:
 		sync_turn_heading()
 		_apply_walk_yaw(delta)
 		_update_spring_inertia(delta)
+		_update_suggested_action(delta)
 	update_face()
 
 
@@ -479,7 +599,9 @@ func update_face() -> void:
 	for bindings in expressions.values():
 		for binding in bindings:
 			weights[str(binding.mesh_path) + ":" + str(binding.index)] = {"binding": binding, "value": 0.0}
-	for binding in expressions.get(emotion, []):
+	# `emotion` may be a rich label (`excited`, `tired`, `upset`); the face it
+	# shows is always one of the configured expression channels.
+	for binding in expressions.get(expression_for_label(emotion), []):
 		var key := str(binding.mesh_path) + ":" + str(binding.index)
 		# Once audio owns the mouth, stopping must keep every vowel closed.
 		var vowel := int(binding.index) in [5, 6, 7, 8, 9]
@@ -528,24 +650,25 @@ func project_hit_regions(camera: Camera3D) -> Array:
 	var center := _bone_position("Hips")
 	var pixel_scale := camera.unproject_position(center).distance_to(camera.unproject_position(center + Vector3.UP))
 	var chest := "Chest" if bone_map.has("Chest") else "Spine"
-	_add_region(result, camera, "Hips", chest, 0.16 * pixel_scale)
-	_add_region(result, camera, chest, "Head", 0.10 * pixel_scale)
+	_add_region(result, camera, "Hips", chest, 0.16 * pixel_scale, "body")
+	_add_region(result, camera, chest, "Head", 0.10 * pixel_scale, "body")
 	# A head joint commonly sits at the neck, especially in stylized models.
 	# Fit the visible head height instead of treating that joint as its center.
 	var head := _bone_position("Head")
-	result.append({"a": camera.unproject_position(head + Vector3.UP * _head_height * 0.3), "b": camera.unproject_position(head + Vector3.UP * _head_height * 0.7), "radius": _head_height * 0.33 * pixel_scale})
+	result.append({"id": "head", "a": camera.unproject_position(head + Vector3.UP * _head_height * 0.3), "b": camera.unproject_position(head + Vector3.UP * _head_height * 0.7), "radius": _head_height * 0.33 * pixel_scale})
 	for side in ["Left", "Right"]:
-		_add_region(result, camera, side + "Shoulder", side + "UpperArm", 0.065 * pixel_scale)
-		_add_region(result, camera, side + "UpperArm", side + "LowerArm", 0.065 * pixel_scale)
-		_add_region(result, camera, side + "LowerArm", side + "Hand", 0.065 * pixel_scale)
-		_add_region(result, camera, side + "UpperLeg", side + "LowerLeg", 0.09 * pixel_scale)
-		_add_region(result, camera, side + "LowerLeg", side + "Foot", 0.075 * pixel_scale)
-		_add_region(result, camera, side + "Foot", side + "Toes", 0.065 * pixel_scale)
+		_add_region(result, camera, side + "Shoulder", side + "UpperArm", 0.065 * pixel_scale, "hand")
+		_add_region(result, camera, side + "UpperArm", side + "LowerArm", 0.065 * pixel_scale, "hand")
+		_add_region(result, camera, side + "LowerArm", side + "Hand", 0.065 * pixel_scale, "hand")
+		_add_region(result, camera, side + "UpperLeg", side + "LowerLeg", 0.09 * pixel_scale, "leg")
+		_add_region(result, camera, side + "LowerLeg", side + "Foot", 0.075 * pixel_scale, "leg")
+		_add_region(result, camera, side + "Foot", side + "Toes", 0.065 * pixel_scale, "foot")
 	return result
 
-func _add_region(regions: Array, camera: Camera3D, start: String, end: String, radius: float) -> void:
+func _add_region(regions: Array, camera: Camera3D, start: String, end: String, radius: float,
+		id := "body") -> void:
 	if bone_map.has(start) and bone_map.has(end):
-		regions.append({"a": camera.unproject_position(_bone_position(start)), "b": camera.unproject_position(_bone_position(end)), "radius": radius})
+		regions.append({"id": id, "a": camera.unproject_position(_bone_position(start)), "b": camera.unproject_position(_bone_position(end)), "radius": radius})
 
 func describe() -> Dictionary:
 	var positions := {}

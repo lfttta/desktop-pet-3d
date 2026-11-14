@@ -118,7 +118,7 @@ func _test_settings_tabs() -> void:
 			"emoji_frequency": 0.2,
 		}},
 		"growth": {"locked_traits": ["warmth"]},
-	}, [])
+	})
 	check(is_equal_approx(float(window.expression_panel.sliders["casualness"].value), 0.8), "populate restores expression style")
 	check(window.growth_panel._lock_checks.has("warmth"), "populate restores locked traits")
 	var patches: Array = []

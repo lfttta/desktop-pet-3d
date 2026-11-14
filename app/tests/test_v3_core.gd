@@ -270,7 +270,7 @@ func _test_settings_window() -> void:
 	window.visible = false
 	root.add_child(window)
 	await process_frame
-	window.populate({}, [])
+	window.populate({})
 	check(window.ai_base_url.text == "https://api.deepseek.com", "AI base_url defaults to DeepSeek")
 	check(window.ai_model.text == "deepseek-chat", "AI model defaults to deepseek-chat")
 	check(is_equal_approx(window.ai_temperature.value, 0.8), "AI temperature default is 0.8")
@@ -304,7 +304,7 @@ func _test_settings_window() -> void:
 	host.add_child(bound)
 	await process_frame
 	bound.show_status("ready", "后台服务已连接")
-	bound.populate({}, [])
+	bound.populate({})
 	check(bound.ai_key_button.disabled == false, "AI key controls start enabled when the service is ready")
 	check(bound.quiet_button.disabled, "autonomy command stays disabled while unavailable")
 	bound.ai_key.text = "dummy-key"

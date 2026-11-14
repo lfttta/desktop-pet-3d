@@ -7,6 +7,30 @@ const ChatWindow = preload("res://scripts/ui/chat_window.gd")
 const EmotionPresenter = preload("res://scripts/state/emotion_presenter.gd")
 const TtsPlayer = preload("res://scripts/audio/tts_player.gd")
 const Hotkeys = preload("res://scripts/platform/hotkeys.gd")
+
+## Reminders queued while the pet was hidden replay as one bubble. Beyond this
+## many the oldest are dropped rather than showing an unreadable wall of text.
+const MAX_DEFERRED_TIMER_BUBBLES := 10
+
+## The stock client forwards server-initiated `autonomy.bubble` events but drops
+## every other frame that has no pending request. `timer.due` is exactly such a
+## frame (the service posts it with the synthetic id "timer"), and so are the
+## speech results: `tts.synthesize` answers at once and the service posts
+## `tts.ready`/`tts.failed` under the synthesis request id afterwards. This thin
+## subclass relays those types to the same `event_received` signal without
+## touching the transport's request bookkeeping.
+class DesktopServiceClient extends ServiceClient:
+	func _dispatch(message: Dictionary) -> void:
+		var id := str(message.get("id", ""))
+		var known := pending.has(id)
+		var payload: Variant = message.get("payload", {})
+		super._dispatch(message)
+		if known or not payload is Dictionary:
+			return
+		var type := str(message.get("type", ""))
+		if type == "timer.due" or type == "tts.ready" or type == "tts.failed":
+			event_received.emit(id, type, payload)
+
 var client: Node
 var saved_settings := AppSettings.defaults()
 ## The service's bubble group. Defaults match service/settings.py so a pre-v7
@@ -15,8 +39,11 @@ var bubble := {"enabled": true, "show_replies": true, "duration_seconds": 4}
 ## The service's greeting group. Defaults match service/settings.py so a pre-v7
 ## service that sends no group still greets the way it used to.
 var greeting_group := {"enabled": true, "on_start": true, "cooldown_minutes": 60}
+## The service's voice group. Defaults match service/settings.py, where speech
+## synthesis runs off the service loop and speaking is on; the player refuses to
+## send anything while enabled is false.
+var voice_group := {"enabled": true, "voice": "", "rate": 0, "volume": 70}
 var data_directory := ""
-var displays: Array = []
 var settings_window: Window
 var chat_window: Window
 var emotion_presenter: Node
@@ -26,15 +53,42 @@ var _app_ready := false
 var _greeted_on_start := false
 var _closing := false
 var _applying := false
-var _display_fallback := false
 var _save_due := 0
+## Wheel zoom is persisted 300 ms after the last notch, not on every frame.
+var _wheel_save_due := 0
 var _saving := {}
-var _last_display_state := ""
 var _warnings: Array = []
 var _last_save_error := ""
 ## The pair the native layer has actually registered. Empty until the first
 ## apply, which is also the cue that no fallback exists yet.
 var _active_hotkeys: Array = []
+## Timer ids already shown, so a repeated server event cannot pop the same
+## reminder twice.
+##
+## The key is `id|due_at`, not the id alone: the timers table's primary key is
+## `INTEGER PRIMARY KEY` without AUTOINCREMENT, so after "取消提醒" deletes a row
+## the next reminder may reuse its id. Keying on the id alone swallowed the new
+## reminder.
+var _shown_timer_ids := {}
+## Reminder texts that arrived while the pet was hidden. The bubble canvas is
+## invisible then (`_bubble_layer.visible` is false), so a bubble shown at that
+## moment would expire unseen; the queue replays when the tray shows the pet
+## again. `_shown_timer_ids` has already marked the event, so a replayed
+## reminder can never pop twice.
+var _deferred_timer_bubbles: Array = []
+## Ticks of the chat request in flight, or -1 when none. The session's
+## `request_sent` starts the clock and every terminal signal (reply, error,
+## cancel, unavailable) clears it, so the waiting line measures a real request's
+## age instead of counting from a stale send.
+var _chat_request_ms := -1
+## Whether the in-flight request already had its one waiting attempt. Stopping
+## after the first attempt keeps a cooled-down or silenced try from being
+## retried — and the phrase file re-parsed — on every frame of a long stream.
+var _waiting_announced := false
+## Injectable tick source for the waiting measurement, the same pattern as
+## pet_window.gd's greeting_clock: left invalid the real clock is used, and a
+## test swaps it in so it can move past the waiting threshold without waiting.
+var chat_request_clock: Callable = Callable()
 
 func _ready() -> void:
 	_parse_options()
@@ -67,28 +121,35 @@ func _ready() -> void:
 		return
 	if not _initialize_native():
 		return
-	client = ServiceClient.new()
+	client = DesktopServiceClient.new()
 	add_child(client)
 	client.connected.connect(_on_connected)
 	client.settings_received.connect(_on_settings_received)
 	client.status_changed.connect(_on_service_status)
 	client.request_finished.connect(_on_request_finished)
+	client.event_received.connect(_on_service_event)
 	var command := _service_command()
 	client.configure(command.executable, command.arguments, bridge)
 	client.start()
 	var deadline := Time.get_ticks_msec() + 8500
 	while client.state in ["starting", "restarting"] and Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
-	displays = _read_displays()
-	_last_display_state = JSON.stringify(displays)
-	_select_display()
 	super._ready()
+	# The pet lives on the primary screen only. `super._ready` reads the window's
+	# current screen, which is also the primary one at startup; pin it explicitly
+	# so a window restored by Windows cannot pick a secondary monitor.
+	screen = maxi(0, DisplayServer.get_primary_screen())
 	get_window().title = "Pet3D"
 	_app_ready = true
 	# The service may have delivered settings during the startup wait above;
 	# apply the saved behavior and frame caps now that the window exists.
 	apply_runtime_settings(saved_settings)
 	_restore_placement()
+	# The restored window is the only knowledge the motion controller has of
+	# where the feet are. Without this bounds sync `anchor` is still (0,0), the
+	# ground-line guard in `_begin_walk` compares 0 to 0 and a menu walk drops the
+	# pet a full body height the moment it starts.
+	_ensure_motion_bounds()
 	_create_windows()
 	_apply_hotkeys(saved_settings)
 	# Settings may already have arrived during the startup wait, so the ready
@@ -148,11 +209,49 @@ func _process(delta: float) -> void:
 	if not _app_ready or _closing:
 		return
 	super._process(delta)
+	_announce_chat_waiting()
+	_poll_wheel()
+	_flush_wheel_save()
 	if _save_due > 0 and Time.get_ticks_msec() >= _save_due:
 		_save_due = 0
 		var patch := _placement_patch()
 		if not patch.is_empty():
 			_save_patch(patch, false)
+
+## Reads the native wheel accumulator once per frame. The bridge reports raw
+## WM_MOUSEWHEEL deltas (WHEEL_DELTA = 120 per notch, signed), so a notch is
+## 0.05 of scale and a high-resolution wheel can report a fraction.
+func _poll_wheel() -> void:
+	if bridge == null or not bridge.has_method("poll_wheel_delta"):
+		return
+	_apply_wheel_delta(int(bridge.poll_wheel_delta()))
+
+## Applies one wheel delta, clamped to the same 0.5..2.0 range as the slider and
+## the service validator. Returns the new scale so tests do not depend on window
+## sizing (headless does not resize the HWND).
+func _apply_wheel_delta(delta: int) -> float:
+	if delta == 0:
+		return float(saved_settings.get("scale", 1.0))
+	var steps := float(delta) / 120.0
+	var current := float(saved_settings.get("scale", 1.0))
+	var next := clampf(current + steps * 0.05, 0.5, 2.0)
+	if is_equal_approx(next, current):
+		return current
+	saved_settings["scale"] = next
+	_resize_role()
+	_constrain_window()
+	_wheel_save_due = Time.get_ticks_msec() + 300
+	return next
+
+## Persists the wheel-selected scale once the 300 ms quiet period has passed.
+func _flush_wheel_save(now_ms := -1) -> void:
+	if _wheel_save_due <= 0:
+		return
+	var now := Time.get_ticks_msec() if now_ms < 0 else now_ms
+	if now < _wheel_save_due:
+		return
+	_wheel_save_due = 0
+	_save_patch({"scale": float(saved_settings.get("scale", 1.0))}, false)
 
 func _update_input() -> void:
 	var was_dragging: bool = drag.active
@@ -161,43 +260,33 @@ func _update_input() -> void:
 		_queue_position_save()
 
 func _handle_tray(action: int) -> void:
+	var was_hidden := hidden
 	if action == 6:
 		_open_settings()
 	elif action == 7:
 		_open_chat()
 	else:
 		super._handle_tray(action)
+	# The tray's show/hide toggle is the only path that shows a hidden pet
+	# again (the recover command lands here too); reminders that arrived while
+	# hidden replay the moment the pet is visible.
+	if was_hidden and not hidden:
+		_flush_deferred_timer_bubbles()
 
 func _recover_position() -> void:
 	super._recover_position()
 	if _app_ready:
 		_queue_position_save()
 
-func _read_displays() -> Array:
-	var result: Variant = JSON.parse_string(bridge.get_displays_json()) if bridge else []
-	return result if result is Array else []
-
-func _select_display() -> void:
-	var selection := AppSettings.select_display(displays, str(saved_settings.get("screen_id", "")))
-	_display_fallback = selection.fallback
-	var display: Dictionary = selection.display
-	if display.is_empty():
-		return
-	var position: Array = display.position
-	for index in DisplayServer.get_screen_count():
-		if DisplayServer.screen_get_position(index) == Vector2i(int(position[0]), int(position[1])):
-			screen = index
-			return
-	screen = maxi(0, DisplayServer.get_primary_screen())
-
 func _restore_placement() -> void:
-	_select_display()
 	if DisplayServer.get_name() == "headless":
 		return
-	var work := DisplayServer.screen_get_usable_rect(screen)
+	# The pet only ever occupies the primary screen's work area. `screen_id` is
+	# still accepted in settings documents for compatibility but is never read:
+	# a saved placement is a fraction of the primary work area.
+	screen = maxi(0, DisplayServer.get_primary_screen())
+	var work := _work_area()
 	var placement: Dictionary = saved_settings.get("placement", AppSettings.defaults().placement)
-	if _display_fallback:
-		placement = AppSettings.defaults().placement
 	_attached_edges = Vector2i(int(placement.get("edge_x", 1)), int(placement.get("edge_y", 1)))
 	var subject := _subject_rect()
 	get_window().position = ScreenMath.pin_edges(AppSettings.position_from(placement, subject, work), subject, work, _attached_edges)
@@ -206,15 +295,12 @@ func _restore_placement() -> void:
 func _check_screen() -> void:
 	if not _app_ready:
 		return
-	var latest := _read_displays()
-	var signature := JSON.stringify(latest)
-	if signature != _last_display_state:
-		_last_display_state = signature
-		displays = latest
-		_cancel_drag()
-		_restore_placement()
-		if settings_window and settings_window.visible:
-			settings_window.populate(saved_settings, displays)
+	if DisplayServer.get_name() != "headless":
+		var primary := maxi(0, DisplayServer.get_primary_screen())
+		if primary != screen:
+			screen = primary
+			_cancel_drag()
+			_restore_placement()
 	if bridge and DisplayServer.get_name() == "Windows":
 		var actual_scale: float = bridge.get_dpi_scale()
 		if not is_equal_approx(actual_scale, dpi_scale):
@@ -224,9 +310,9 @@ func _check_screen() -> void:
 	super._check_screen()
 
 func _placement_patch() -> Dictionary:
-	if _display_fallback or DisplayServer.get_name() == "headless" or actor == null:
+	if DisplayServer.get_name() == "headless" or actor == null:
 		return {}
-	return {"placement": AppSettings.placement(get_window().position, _subject_rect(), DisplayServer.screen_get_usable_rect(screen), _attached_edges)}
+	return {"placement": AppSettings.placement(get_window().position, _subject_rect(), _work_area(), _attached_edges)}
 
 func _queue_position_save() -> void:
 	if _app_ready and not _closing:
@@ -236,14 +322,21 @@ func _create_windows() -> void:
 	settings_window = SettingsWindow.new()
 	settings_window.visible = false
 	add_child(settings_window)
+	settings_window.min_size = Vector2i.ZERO
 	settings_window.size = Vector2i(Vector2(560, 440) * dpi_scale)
+	settings_window.set_meta("preferred_size", settings_window.size)
+	settings_window.visibility_changed.connect(_refresh_fps)
 	settings_window.save_requested.connect(_on_save_requested)
 	settings_window.recover_requested.connect(func(): _handle_tray(2))
 	settings_window.retry_requested.connect(client.retry)
+	settings_window.growth_applied.connect(func(): say_celebration())
 	chat_window = ChatWindow.new()
 	chat_window.visible = false
 	add_child(chat_window)
+	chat_window.min_size = Vector2i.ZERO
 	chat_window.size = Vector2i(Vector2(520, 400) * dpi_scale)
+	chat_window.set_meta("preferred_size", chat_window.size)
+	chat_window.visibility_changed.connect(_refresh_fps)
 	chat_window.retry_requested.connect(client.retry)
 	chat_window.configure_chat(client, saved_settings)
 	tts_player = TtsPlayer.new()
@@ -252,8 +345,11 @@ func _create_windows() -> void:
 	_connect_chat_bubble()
 	_connect_chat_reply()
 	_connect_chat_speech()
+	_connect_chat_phrases()
+	_connect_local_speech()
 	_apply_bubble_settings()
 	_apply_greeting_settings()
+	_apply_voice_settings()
 	if not bubble_reply_submitted.is_connected(_on_bubble_reply_submitted):
 		bubble_reply_submitted.connect(_on_bubble_reply_submitted)
 	if not bubble_chat_requested.is_connected(_on_bubble_chat_requested):
@@ -332,15 +428,18 @@ func _apply_greeting_settings() -> void:
 		int(greeting_group.get("cooldown_minutes", 60)))
 
 ## Registers the configured global hotkeys and, when another program already
-## owns one, restores the pair that worked and writes that pair back so the
+## owns one, restores the triple that worked and writes that triple back so the
 ## file never claims a binding the process does not have.
+##
+## The native bridge only exists on Windows, so testing the wiring headlessly
+## injects a fake bridge instead of checking the platform name here.
 func _apply_hotkeys(settings: Dictionary) -> void:
-	if bridge == null or DisplayServer.get_name() != "Windows":
+	if bridge == null or not bridge.has_method("configure_hotkeys"):
 		return
 	var wanted := Hotkeys.bindings(settings)
 	if _active_hotkeys == wanted:
 		return
-	var outcome := Hotkeys.resolve(bridge, str(wanted[0]), str(wanted[1]), _active_hotkeys)
+	var outcome := Hotkeys.resolve(bridge, str(wanted[0]), str(wanted[1]), _active_hotkeys, str(wanted[2]))
 	_active_hotkeys = outcome.active
 	if outcome.ok:
 		return
@@ -349,8 +448,16 @@ func _apply_hotkeys(settings: Dictionary) -> void:
 		settings_window.show_hotkeys(_active_hotkeys)
 		settings_window.show_message(message, true)
 	_show_notice("热键没有生效", message)
-	if _active_hotkeys.size() == 2 and _active_hotkeys != wanted and _app_ready and not _closing:
-		_save_patch({"hotkeys": {"recover": _active_hotkeys[0], "exit": _active_hotkeys[1]}}, false)
+	if _active_hotkeys.size() >= 2 and _active_hotkeys != wanted and _app_ready and not _closing:
+		_save_patch({"hotkeys": _active_hotkeys_patch(_active_hotkeys)}, false)
+
+## The hotkey fields this settings schema can accept. `chat` only exists from
+## schema v10; sending it to an older service rejects the whole patch.
+func _active_hotkeys_patch(active: Array) -> Dictionary:
+	var patch := {"recover": str(active[0]), "exit": str(active[1])}
+	if active.size() >= 3 and int(saved_settings.get("schema_version", 0)) >= 10:
+		patch["chat"] = str(active[2])
+	return patch
 
 ## Shows the start greeting once, after the client reported ready and the
 ## settings document has been applied. Deferred so the first frame of the pet is
@@ -389,22 +496,188 @@ func _connect_chat_speech() -> void:
 	if not session.is_connected("speech_requested", tts_player.speak):
 		session.connect("speech_requested", tts_player.speak)
 
+## Wires the chat session to the pet's app-side phrase pools, so the apology and
+## waiting libraries are actually reachable: a failed request lets the pet
+## apologize once, and a request still running past the waiting threshold gets
+## one waiting line. The pickers in pet_window.gd keep their own cooldowns, so a
+## burst of failures cannot spam the bubble.
+##
+## The apology listens on `error_received`, not `failed`: the session emits
+## `failed` alone for local input checks (blank or oversize text) where nothing
+## was answered yet, while `error_received` only fires for a request that really
+## went out and came back with an error.
+func _connect_chat_phrases() -> void:
+	if chat_window == null:
+		return
+	var session: Object = chat_window.get("_session")
+	if session == null:
+		return
+	for pair in [["request_sent", _on_chat_request_sent],
+			["error_received", _on_chat_request_failed],
+			["assistant_message", _on_chat_reply_settled],
+			["cancelled", _on_chat_cancelled],
+			["unavailable", _on_chat_unavailable]]:
+		if session.has_signal(str(pair[0])) and not session.is_connected(str(pair[0]), pair[1]):
+			session.connect(str(pair[0]), pair[1])
+
+## A new request started: restart the waiting measurement.
+func _on_chat_request_sent(_id: String, _text: String) -> void:
+	_chat_request_ms = _chat_now_ms()
+	_waiting_announced = false
+
+## The request failed: settle it and let the pet say an apology. The picker
+## checks bubble.enabled and its own cooldown, so a disabled or recently
+## apologized pet stays silent instead of repeating itself.
+func _on_chat_request_failed(_code: String, _message: String, _retryable: bool) -> void:
+	_settle_chat_request()
+	say_apology()
+
+func _on_chat_reply_settled(_text: String) -> void:
+	_settle_chat_request()
+
+func _on_chat_cancelled() -> void:
+	_settle_chat_request()
+
+func _on_chat_unavailable(_message: String) -> void:
+	_settle_chat_request()
+
+## Ends the waiting measurement for the current request.
+func _settle_chat_request() -> void:
+	_chat_request_ms = -1
+
+## Current ticks for the waiting measurement, honouring the injectable clock.
+func _chat_now_ms() -> int:
+	if chat_request_clock.is_valid():
+		return int(chat_request_clock.call())
+	return Time.get_ticks_msec()
+
+## Lets the pet acknowledge a chat request that is still streaming past the
+## waiting threshold. Runs every frame but does no work while no request is in
+## flight or the attempt was made; the picker re-checks the threshold itself.
+func _announce_chat_waiting() -> void:
+	if _chat_request_ms < 0 or _waiting_announced:
+		return
+	var elapsed := float(_chat_now_ms() - _chat_request_ms) / 1000.0
+	if elapsed < WAITING_PHRASE_SECONDS:
+		return
+	# One attempt per request, whatever the picker decides: a silenced attempt
+	# (cooldown, bubbles off) must not retry the phrase file on every frame.
+	_waiting_announced = true
+	say_waiting(elapsed)
+
+## Forwards the pet's own click and start-greeting lines to the speech player.
+## The player checks voice.enabled itself, so a disabled switch keeps those
+## lines bubble-only without extra wiring here.
+func _connect_local_speech() -> void:
+	if tts_player == null:
+		return
+	if not local_line_spoken.is_connected(tts_player.speak):
+		local_line_spoken.connect(tts_player.speak)
+
+## Copies the voice group from the settings document into the player, so the
+## speaking switch follows the service without a restart.
+func _apply_voice_settings() -> void:
+	var group: Variant = saved_settings.get("voice", {})
+	if group is Dictionary:
+		for key in voice_group.keys():
+			if (group as Dictionary).has(key):
+				voice_group[key] = (group as Dictionary)[key]
+	if tts_player != null:
+		tts_player.set_voice_enabled(bool(voice_group.get("enabled", true)))
+
+## Server-initiated events. `timer.due` arrives once per reminder from the
+## service, but a reconnect or a retried transport frame could repeat it; the id
+## set keeps the same reminder from popping twice. The text uses the same bubble
+## switches and duration as every other desktop bubble.
+func _on_service_event(_id: String, type: String, payload: Dictionary) -> void:
+	if type != "timer.due":
+		return
+	var text := str(payload.get("text", "")).strip_edges()
+	if text.is_empty():
+		return
+	var timer_id := str(payload.get("id", ""))
+	if not timer_id.is_empty():
+		var key := timer_id + "|" + str(payload.get("due_at", ""))
+		if _shown_timer_ids.has(key):
+			return
+		# A long session can see many reminders; drop the history rather than grow
+		# without bound. The visible bubble has already expired by then anyway.
+		if _shown_timer_ids.size() >= 200:
+			_shown_timer_ids.clear()
+		_shown_timer_ids[key] = true
+	if hidden:
+		# While hidden the bubble canvas is invisible, so showing the text now
+		# would silently consume the reminder; queue it for the next unhide.
+		while _deferred_timer_bubbles.size() >= MAX_DEFERRED_TIMER_BUBBLES:
+			_deferred_timer_bubbles.pop_front()
+		_deferred_timer_bubbles.append(text)
+		return
+	show_bubble(text, _bubble_seconds())
+
+## Replays reminders that arrived while the pet was hidden. Everything queued
+## goes into one bubble, so a hidden stretch still shows every missed reminder
+## exactly once — the docs' "同一个提醒不会重复弹" promise stays true. With
+## bubble.enabled off the pet shows nothing, and the queued text is dropped the
+## same way an on-screen reminder would be.
+func _flush_deferred_timer_bubbles() -> void:
+	if hidden or _deferred_timer_bubbles.is_empty():
+		return
+	var text := "；".join(PackedStringArray(_deferred_timer_bubbles))
+	_deferred_timer_bubbles.clear()
+	show_bubble(text, _bubble_seconds())
+
 func _open_settings() -> void:
 	if settings_window:
-		settings_window.populate(saved_settings, displays)
+		settings_window.populate(saved_settings)
 		_place_utility_window(settings_window)
 		settings_window.open()
+		_refresh_fps()
 
+## Opens the chat window with the caret in the message field. The tray menu and
+## the global "open chat" hotkey both land here, as does the reply bar's button.
 func _open_chat() -> void:
 	if chat_window:
 		_place_utility_window(chat_window)
 		chat_window.open()
+		if chat_window.has_method("focus_input"):
+			chat_window.focus_input()
+		_refresh_fps()
 
-func _place_utility_window(window: Window) -> void:
-	var target_screen := clampi(screen, 0, maxi(0, DisplayServer.get_screen_count() - 1))
-	var work := DisplayServer.screen_get_usable_rect(target_screen)
-	window.current_screen = target_screen
+## Sizes a utility window to the primary work area before centering it. On a
+## small screen the design size would otherwise hang off the desktop; the
+## content scale shrinks with it, so every control stays reachable.
+func _place_utility_window(window: Window, work := Rect2i()) -> void:
+	if work.size.x <= 0 or work.size.y <= 0:
+		work = _utility_work_area()
+	if work.size.x <= 0 or work.size.y <= 0:
+		return
+	var margin := 16
+	var preferred: Vector2i = window.get_meta("preferred_size", window.size)
+	var fitted := AppSettings.fit_window_size(preferred, work, margin)
+	window.min_size = Vector2i.ZERO
+	window.size = fitted
 	window.position = AppSettings.utility_position(window.size, work)
+
+## Primary screen work area. Headless tests pin one through `work_area_override`.
+func _utility_work_area() -> Rect2i:
+	if work_area_override.size.x > 0 and work_area_override.size.y > 0:
+		return work_area_override
+	return DisplayServer.screen_get_usable_rect(maxi(0, DisplayServer.get_primary_screen()))
+
+## While settings or chat is on screen the pet must not drop to the hidden
+## frame cap: those windows are rendered by the same process and would feel
+## frozen. The idle cap is the floor, even when hidden_fps is configured higher.
+func _hidden_fps_target() -> int:
+	if _utility_visible():
+		return idle_fps
+	return hidden_fps
+
+func _utility_visible() -> bool:
+	return (settings_window != null and settings_window.visible) \
+		or (chat_window != null and chat_window.visible)
+
+func _refresh_fps() -> void:
+	Engine.max_fps = _active_fps()
 
 func _on_save_requested(patch: Dictionary) -> void:
 	_save_due = 0
@@ -446,12 +719,12 @@ func _on_settings_received(settings: Dictionary) -> void:
 	_applying = true
 	if previous.get("scale") != saved_settings.scale:
 		_resize_role()
-	if previous.get("scale") != saved_settings.scale or previous.get("screen_id") != saved_settings.screen_id:
 		_restore_placement()
 	_applying = false
 	apply_runtime_settings(saved_settings)
 	_apply_bubble_settings()
 	_apply_greeting_settings()
+	_apply_voice_settings()
 	_apply_hotkeys(saved_settings)
 	if chat_window:
 		chat_window.update_settings(saved_settings)
@@ -498,7 +771,6 @@ func _status() -> Dictionary:
 	data["service_pid"] = client.process_pid if client else 0
 	data["service_state"] = client.state if client else "stopped"
 	data["saved_settings"] = saved_settings
-	data["display_fallback"] = _display_fallback
 	data["last_save_error"] = _last_save_error
 	data["warnings"] = _warnings
 	return data

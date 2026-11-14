@@ -12,14 +12,14 @@ static func position_from(saved: Dictionary, subject: Rect2, work: Rect2i) -> Ve
 	var foot := Vector2(work.position) + Vector2(float(saved.get("x", 1)) * work.size.x, float(saved.get("y", 1)) * work.size.y)
 	return Vector2i((foot - Vector2(subject.get_center().x, subject.end.y)).round())
 
-static func select_display(displays: Array, wanted: String) -> Dictionary:
-	for display: Dictionary in displays:
-		if not wanted.is_empty() and display.get("id") == wanted:
-			return {"display": display, "fallback": false}
-	for display: Dictionary in displays:
-		if display.get("primary", false):
-			return {"display": display, "fallback": not wanted.is_empty()}
-	return {"display": displays[0] if not displays.is_empty() else {}, "fallback": not wanted.is_empty()}
+## Shrinks one utility window so it fits inside the work area with `margin` on
+## each side. The desktop pet lives on the primary screen only, so every caller
+## passes that screen's usable rect.
+static func fit_window_size(window_size: Vector2i, work: Rect2i, margin := 0) -> Vector2i:
+	var available := Vector2i(
+		maxi(1, work.size.x - margin * 2),
+		maxi(1, work.size.y - margin * 2))
+	return Vector2i(mini(window_size.x, available.x), mini(window_size.y, available.y))
 
 static func utility_position(window_size: Vector2i, work: Rect2i) -> Vector2i:
 	var visible_size := Vector2i(mini(window_size.x, work.size.x), mini(window_size.y, work.size.y))

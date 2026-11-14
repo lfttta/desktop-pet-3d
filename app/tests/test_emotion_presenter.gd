@@ -1,8 +1,10 @@
 extends SceneTree
-## Emotion presentation wiring: delta application, hysteresis, neutral fallback
-## and the periodic state.get refresh.
+## Emotion presentation wiring: delta application, hysteresis, neutral fallback,
+## the rich-label mapping, emotion-triggered actions (cooldown + idle gate) and
+## the periodic state.get refresh.
 
 const EmotionPresenter = preload("res://scripts/state/emotion_presenter.gd")
+const CharacterView = preload("res://scripts/character_view.gd")
 
 var checks := 0
 var failures := 0
@@ -25,6 +27,15 @@ func _run() -> void:
 	_test_failed_apply_now()
 	_test_non_finite_weight()
 	_test_missing_actor()
+	_test_rich_labels_apply()
+	_test_expression_mapping()
+	_test_view_expression_fallback()
+	_test_action_mapping()
+	_test_action_cooldown()
+	_test_action_only_when_idle()
+	_test_action_not_repeated_per_presentation()
+	_test_view_action_gate()
+	await _test_real_view_integration()
 	print("EMOTION_PRESENTER_TESTS checks=", checks, " failures=", failures)
 	quit(0 if failures == 0 else 1)
 
@@ -290,6 +301,280 @@ func _test_missing_actor() -> void:
 	host.free()
 	service.free()
 
+func _test_rich_labels_apply() -> void:
+	var service := FakeService.new()
+	var host := FakeHost.new()
+	root.add_child(service)
+	root.add_child(host)
+	host.actor = FakeActor.new()
+	host.add_child(host.actor)
+	var presenter := EmotionPresenter.new()
+	root.add_child(presenter)
+	presenter.configure(service, host)
+
+	for emotion in ["excited", "tired", "upset"]:
+		presenter.apply_delta({"presentation": {"emotion": emotion, "weight": 0.7}})
+		check(host.actor.calls[-1].emotion == emotion,
+			"a known rich label reaches the actor: " + emotion)
+		check(is_equal_approx(float(host.actor.calls[-1].weight), 0.7),
+			"a rich label keeps its blend weight: " + emotion)
+		check(presenter._emotion == emotion, "the cache records the rich label: " + emotion)
+
+	# An unknown label still maps to neutral rather than to a new face.
+	presenter.apply_delta({"presentation": {"emotion": "angry", "weight": 0.7}})
+	check(host.actor.calls[-1].emotion == "neutral", "an unknown label still maps to neutral")
+
+	presenter.free()
+	host.free()
+	service.free()
+
+func _test_expression_mapping() -> void:
+	check(CharacterView.expression_for_label("neutral") == "neutral", "neutral renders neutral")
+	check(CharacterView.expression_for_label("happy") == "happy", "happy renders happy")
+	check(CharacterView.expression_for_label("sad") == "sad", "sad renders sad")
+	check(CharacterView.expression_for_label("excited") == "happy", "excited renders through happy")
+	check(CharacterView.expression_for_label("tired") == "sad", "tired renders through sad")
+	check(CharacterView.expression_for_label("upset") == "sad", "upset renders through sad")
+	check(CharacterView.expression_for_label("angry") == "neutral", "an unknown label falls back to neutral")
+	check(CharacterView.expression_for_label("") == "neutral", "an empty label falls back to neutral")
+	# The mapping must not invent a face the model does not ship.
+	var faces := {}
+	for emotion in CharacterView.EXPRESSION_BY_EMOTION:
+		faces[CharacterView.expression_for_label(emotion)] = true
+	check(faces.keys().all(func(face): return face in ["neutral", "happy", "sad"]),
+		"every label maps onto an existing expression")
+
+func _test_view_expression_fallback() -> void:
+	# A minimal view without a loaded model still validates labels against its
+	# expression config, which is the only fallback the presenter relies on.
+	var view := CharacterView.new()
+	view.config = {"expressions": {"neutral": [], "happy": [], "sad": []}}
+	var seen := []
+	for emotion in ["excited", "tired", "upset"]:
+		var applied: bool = view.set_emotion(emotion, 0.5)
+		check(applied, "the view accepts rich label " + emotion)
+		seen.append(view.emotion)
+		check(CharacterView.expression_for_label(view.emotion) in ["happy", "sad"],
+			"rich label " + emotion + " resolves to an existing face")
+	check(not view.set_emotion("angry"), "the view rejects an unknown label")
+	check(view.emotion == seen[-1], "a rejected label does not change the face")
+	# The neutral fallback path the presenter uses must always be accepted.
+	check(view.set_emotion("neutral"), "the view accepts neutral for the fallback retry")
+	view.free()
+
+func _test_action_mapping() -> void:
+	check(EmotionPresenter.EMOTION_ACTIONS.get("happy") == "cheering", "happy suggests cheering")
+	check(EmotionPresenter.EMOTION_ACTIONS.get("sad") == "sad_idle", "sad suggests sad_idle")
+	check(EmotionPresenter.EMOTION_ACTIONS.get("tired") == "sleeping_idle", "tired suggests sleeping_idle")
+	check(EmotionPresenter.EMOTION_ACTIONS.get("excited") == "cheering", "excited suggests cheering")
+	check(EmotionPresenter.EMOTION_ACTIONS.get("upset") == "shrugging", "upset suggests shrugging")
+	check(not EmotionPresenter.EMOTION_ACTIONS.has("neutral"), "neutral suggests no action")
+
+func _test_action_cooldown() -> void:
+	var service := FakeService.new()
+	var host := FakeHost.new()
+	root.add_child(service)
+	root.add_child(host)
+	host.actor = FakeActor.new()
+	host.add_child(host.actor)
+	var presenter := EmotionPresenter.new()
+	root.add_child(presenter)
+	presenter.configure(service, host)
+
+	presenter.apply_delta({"presentation": {"emotion": "happy", "weight": 0.8}})
+	check(host.actor.actions == ["cheering"], "a happy presentation plays cheering")
+	check(is_equal_approx(presenter.action_cooldown("cheering"), 30.0),
+		"the played action starts a 30 second cooldown")
+	# `cheering` is a one-shot; the real view returns to idle when the clip ends.
+	host.actor.finish_action()
+
+	# Leaving and returning to the same label inside the cooldown must not replay.
+	presenter.apply_delta({"presentation": {"emotion": "sad", "weight": 0.8}})
+	check(host.actor.actions == ["cheering", "sad_idle"], "sad plays its own action")
+	host.actor.finish_action()
+	presenter.apply_delta({"presentation": {"emotion": "happy", "weight": 0.8}})
+	check(host.actor.actions == ["cheering", "sad_idle"],
+		"returning to happy inside the cooldown does not replay cheering")
+
+	# A different emotion that shares cheering shares the same cooldown.
+	presenter.apply_delta({"presentation": {"emotion": "excited", "weight": 0.8}})
+	check(host.actor.actions == ["cheering", "sad_idle"],
+		"excited shares the cheering cooldown")
+
+	# 29.9 s is still inside the cooldown...
+	presenter._process(29.9)
+	check(presenter.action_cooldown("cheering") > 0.0, "the cooldown is still running at 29.9 s")
+	# A label transition to an action that is still cooling down is swallowed:
+	# leaving and returning must not replay the clip inside the 30 s window.
+	presenter.apply_delta({"presentation": {"emotion": "upset", "weight": 0.8}})
+	check(host.actor.actions == ["cheering", "sad_idle", "shrugging"],
+		"a label change plays its own action while cheering cools down")
+	host.actor.finish_action()
+	presenter.apply_delta({"presentation": {"emotion": "happy", "weight": 0.8}})
+	check(host.actor.actions == ["cheering", "sad_idle", "shrugging"],
+		"returning to happy inside the cooldown does not replay cheering")
+	# ...and crossing 30 s releases it, so the next label change may replay.
+	presenter._process(0.2)
+	check(presenter.action_cooldown("cheering") == 0.0, "the cooldown expires after 30 s")
+	presenter.apply_delta({"presentation": {"emotion": "excited", "weight": 0.8}})
+	check(host.actor.actions == ["cheering", "sad_idle", "shrugging", "cheering"],
+		"the action is available again after the 30 second cooldown")
+
+	presenter.free()
+	host.free()
+	service.free()
+
+func _test_action_only_when_idle() -> void:
+	var service := FakeService.new()
+	var host := FakeHost.new()
+	root.add_child(service)
+	root.add_child(host)
+	host.actor = FakeActor.new()
+	host.actor.action = "wave"
+	host.actor.action_source = "user"
+	host.add_child(host.actor)
+	var presenter := EmotionPresenter.new()
+	root.add_child(presenter)
+	presenter.configure(service, host)
+
+	presenter.apply_delta({"presentation": {"emotion": "happy", "weight": 0.8}})
+	check(host.actor.face_calls == 1, "the face still applies while the pet is busy")
+	check(host.actor.actions.is_empty(), "a user action keeps its clip; no emotion action plays")
+
+	# The label was not consumed, so the next presentation while idle may play it.
+	host.actor.action = "idle"
+	host.actor.action_source = "idle"
+	presenter.apply_delta({"presentation": {"emotion": "happy", "weight": 0.8}})
+	check(host.actor.actions == ["cheering"],
+		"a deferred suggestion plays once the pet is idle again")
+
+	# A chat reply owns the body the same way.
+	host.actor.action = "laughing"
+	host.actor.action_source = "chat"
+	presenter.apply_delta({"presentation": {"emotion": "sad", "weight": 0.8}})
+	check(host.actor.actions == ["cheering"], "a chat action keeps its clip too")
+
+	presenter.free()
+	host.free()
+	service.free()
+
+func _test_action_not_repeated_per_presentation() -> void:
+	var service := FakeService.new()
+	var host := FakeHost.new()
+	root.add_child(service)
+	root.add_child(host)
+	host.actor = FakeActor.new()
+	host.add_child(host.actor)
+	var presenter := EmotionPresenter.new()
+	root.add_child(presenter)
+	presenter.configure(service, host)
+
+	presenter.apply_delta({"presentation": {"emotion": "happy", "weight": 0.8}})
+	check(host.actor.actions.size() == 1, "the first happy presentation plays an action")
+	# Repeating the identical presentation is swallowed by hysteresis, so no
+	# action is retriggered; this is the per-frame / per-poll guard.
+	for i in 5:
+		presenter.apply_delta({"presentation": {"emotion": "happy", "weight": 0.8}})
+	check(host.actor.actions.size() == 1, "an identical presentation does not replay the action")
+	# A weight-only change still keeps the same face and must not replay either.
+	presenter.apply_delta({"presentation": {"emotion": "happy", "weight": 0.95}})
+	check(host.actor.actions.size() == 1, "a weight-only change does not replay the action")
+
+	presenter.free()
+	host.free()
+	service.free()
+
+func _test_view_action_gate() -> void:
+	# The real view's gate is asserted without loading a model: `action`,
+	# `paused`, an in-flight speech clip and the process mode are what it reads.
+	var view := CharacterView.new()
+	view.config = {"expressions": {"neutral": [], "happy": [], "sad": []}}
+	root.add_child(view)
+	check(view.action_available_for_emotion(), "an idle, unpaused view accepts a suggestion")
+	view.action = "wave"
+	check(not view.action_available_for_emotion(), "a non-idle action blocks a suggestion")
+	view.action = "idle"
+	view.paused = true
+	check(not view.action_available_for_emotion(), "a paused performance blocks a suggestion")
+	view.paused = false
+	check(view.action_available_for_emotion(), "unpausing restores the gate")
+	# The tray hides the pet by disabling its process mode; a suggestion must not
+	# start while the body cannot advance its own animation.
+	view.process_mode = Node.PROCESS_MODE_DISABLED
+	check(not view.action_available_for_emotion(), "a disabled (hidden) view blocks a suggestion")
+	view.process_mode = Node.PROCESS_MODE_INHERIT
+	check(view.action_available_for_emotion(), "re-enabling the process mode restores the gate")
+	# A per-frame hold update on a view with no model is a safe no-op.
+	view._update_suggested_action(1.0)
+	check(view.current_suggestion() == "", "no pending suggestion on a fresh view")
+	view.free()
+
+## End-to-end over the real character view: the presenter applies a rich label,
+## the view renders it through an existing face, and the suggested clip really
+## starts (then returns to a usable state). This is the check the fakes above
+## cannot give: that `suggest_action` is wired to real clips.
+func _test_real_view_integration() -> void:
+	var view := CharacterView.new()
+	root.add_child(view)
+	await process_frame
+	check(view.load_character({"config": "res://assets_data/godette.json"}),
+		"the real character view loads")
+	await process_frame
+	var host := FakeHost.new()
+	host.actor = view
+	root.add_child(host)
+	var service := FakeService.new()
+	root.add_child(service)
+	var presenter := EmotionPresenter.new()
+	root.add_child(presenter)
+	presenter.configure(service, host)
+
+	# The weight is deliberately different from neutral's 1.0 so hysteresis
+	# cannot swallow the first presentation.
+	presenter.apply_delta({"presentation": {"emotion": "excited", "weight": 0.8}})
+	check(view.emotion == "excited", "the real view keeps the rich label")
+	check(view.action == "cheering", "excited really starts the cheering clip")
+	check(is_equal_approx(presenter.action_cooldown("cheering"), 30.0),
+		"the real view's cheering starts the cooldown")
+
+	# Wait for the one-shot to finish so the view is idle again, then show a
+	# label whose clip loops. The clip is 2.9 s; the budget is generous so a slow
+	# headless frame cannot turn this into a flake.
+	await _wait_until(func(): return view.action == "idle", 10.0)
+	check(view.action == "idle", "the cheering clip returns the view to idle")
+	presenter.apply_delta({"presentation": {"emotion": "sad", "weight": 0.8}})
+	check(view.action == "sad_idle", "sad really starts the sad_idle clip")
+	check(view.action_available_for_emotion() == false, "a running clip closes the idle gate")
+	# `sad_idle` loops, so the view holds it and releases after the hold.
+	view._update_suggested_action(CharacterView.EMOTION_ACTION_HOLD_SECONDS + 0.1)
+	check(view.action == "idle", "the held loop returns to idle when its hold expires")
+	check(view.emotion == "sad", "ending the loop leaves the face alone")
+	check(presenter.action_cooldown("sad_idle") > 0.0, "the loop's action is also on cooldown")
+
+	# Face blending still resolves the rich label through the existing shape.
+	view.update_face()
+	check(view.expression_for_label("excited") == "happy", "the real view resolves excited to happy")
+	check(view.expression_for_label("tired") == "sad", "the real view resolves tired to sad")
+
+	# The face shows through the existing blend shapes rather than a new one.
+	check(view.set_emotion("upset", 0.5), "the real view accepts upset")
+	check(view.expression_for_label(view.emotion) == "sad", "upset renders through sad")
+	check(view.set_emotion("neutral", 1.0), "the real view accepts neutral again")
+
+	presenter.free()
+	service.free()
+	host.free()
+	view.free()
+	await process_frame
+
+## Polls `condition` until true or `seconds` elapse, advancing the tree.
+func _wait_until(condition: Callable, seconds: float) -> void:
+	var deadline := Time.get_ticks_msec() + int(seconds * 1000.0)
+	while Time.get_ticks_msec() < deadline:
+		await process_frame
+		if bool(condition.call()):
+			return
+
 class FakeService extends Node:
 	signal request_finished(id: String, type: String, payload: Dictionary)
 	signal event_received(id: String, type: String, payload: Dictionary)
@@ -314,21 +599,46 @@ class FakeHost extends Node:
 	var actor
 
 class FakeActor extends Node:
-	# Mirrors character_view.gd: the actor reports the face it currently shows.
+	# Mirrors character_view.gd: the actor reports the face it currently shows,
+	# whether an emotion action may start, and records each accepted one.
 	var emotion := "neutral"
 	var emotion_weight := 1.0
+	var action := "idle"
+	var action_source := "idle"
+	var paused := false
 	var calls: Array = []
+	var face_calls := 0
+	var actions: Array = []
 	var reject: Array = []
 
 	func set_emotion(name_: String, weight := 1.0) -> bool:
 		calls.append({"emotion": name_, "weight": weight})
+		face_calls += 1
 		if name_ in reject:
 			return false
 		emotion = name_
 		emotion_weight = weight
 		return true
 
+	func action_available_for_emotion() -> bool:
+		return action == "idle" and not paused
+
+	func suggest_action(name_: String) -> bool:
+		if not action_available_for_emotion():
+			return false
+		actions.append(name_)
+		action = name_
+		action_source = "autonomous"
+		return true
+
+	## Mirrors character_view.gd: a one-shot ends through `_animation_finished`.
+	func finish_action() -> void:
+		action = "idle"
+		action_source = "idle"
+
 	func reset_face() -> void:
 		# Same effect as character_view.reset_performance_state().
 		emotion = "neutral"
 		emotion_weight = 1.0
+		action = "idle"
+		action_source = "idle"

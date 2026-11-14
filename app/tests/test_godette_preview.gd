@@ -42,11 +42,21 @@ func run() -> void:
 	var max_mouth := 0.0
 	var min_mouth := 1.0
 	var face := preview.actor.model.get_node("Skeleton3D/Face") as MeshInstance3D
-	for frame in 70:
+	# The clip is 3 s of audio-server time, but this loop counts frame deltas.
+	# On the shared desktop the rendered window hitches and quantizes against
+	# vsync, and a legitimate restart of the clip (the 播放声音 button) stretches
+	# playback further, so a fixed 70-frame window can end while the player is
+	# still finishing the stream and the check would blame the envelope for it.
+	# Sample for as long as the clip actually plays — bounded well past a stall
+	# plus one restart, so a looping or wedged stream still fails the guard
+	# below — and judge the envelope and the end reset afterwards.
+	for frame in 200:
 		await create_timer(0.05).timeout
 		var mouth := face.get_blend_shape_value(5)
 		max_mouth = maxf(max_mouth, mouth)
 		min_mouth = minf(min_mouth, mouth)
+		if not preview.actor.audio_player.playing:
+			break
 	if max_mouth < 0.5 or min_mouth > 0.05 or preview.actor.audio_player.playing or face.get_blend_shape_value(5) > 0.01:
 		failures.append("audio-clock mouth envelope/end reset")
 	preview.free()

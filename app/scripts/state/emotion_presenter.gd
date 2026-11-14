@@ -3,11 +3,35 @@ extends Node
 ## actor. Presentation arrives with chat completions and from periodic
 ## state.get polls; the last applied value is cached so a fresh actor can be
 ## set up again without waiting for the service.
+##
+## Emotion labels are richer than the faces the model can show: `excited`,
+## `tired` and `upset` all render through one of the existing neutral / happy /
+## sad expressions, so no new blend shape is needed. An unknown label falls back
+## to neutral.
+##
+## When a presentation is applied, the presenter offers the matching action to
+## the actor on a label change. The actor decides whether it is idle and
+## unowned; the presenter owns the 30 s per-action cooldown, so label flapping
+## cannot retrigger a clip and `happy`/`excited` share one cooldown for
+## `cheering`. A persistent label plays once, not every poll.
 
 const REFRESH_SECONDS := 20.0
 const HYSTERESIS := 0.12
-const EMOTIONS := ["neutral", "happy", "sad"]
+const EMOTIONS := ["neutral", "happy", "sad", "excited", "tired", "upset"]
 const REQUEST_TIMEOUT := 8.0
+
+## Action each emotion suggests. `happy` and `excited` share `cheering`, which
+## is why the cooldown is keyed by action rather than emotion. `sad_idle` and
+## `sleeping_idle` are loop clips; the actor holds and releases them.
+const EMOTION_ACTIONS := {
+	"happy": "cheering",
+	"sad": "sad_idle",
+	"tired": "sleeping_idle",
+	"excited": "cheering",
+	"upset": "shrugging",
+}
+## Seconds before the same action may be suggested again.
+const ACTION_COOLDOWN_SECONDS := 30.0
 
 var _service
 var _host
@@ -15,6 +39,12 @@ var _request_id := ""
 var _emotion := ""
 var _weight := 1.0
 var _elapsed := 0.0
+## Emotion label whose suggestion has been resolved: played, cooling down, or
+## unavailable. A label that arrives while the body is busy is deliberately not
+## recorded, so the same label can offer its action once the pet is idle again.
+var _action_emotion := ""
+## Remaining cooldown per action name, in seconds.
+var _action_cooldowns := {}
 
 func configure(service, host) -> void:
 	_service = service
@@ -50,6 +80,7 @@ func apply_now() -> bool:
 	return applied
 
 func _process(delta: float) -> void:
+	_tick_cooldowns(delta)
 	_elapsed += delta
 	if _elapsed < REFRESH_SECONDS:
 		return
@@ -92,6 +123,9 @@ func _apply(presentation: Dictionary) -> void:
 	# same presentation must be able to restore it.
 	if emotion == _actor_emotion(actor) \
 			and absf(blend - _actor_weight(actor)) < HYSTERESIS:
+		# The face is already correct, but a suggestion skipped earlier because
+		# the body was busy may still be pending for this label.
+		_suggest_action(actor, emotion)
 		return
 	var applied := bool(actor.set_emotion(emotion, blend))
 	if not applied and emotion != "neutral":
@@ -103,6 +137,51 @@ func _apply(presentation: Dictionary) -> void:
 	# Only an accepted expression updates the cache.
 	_emotion = emotion
 	_weight = blend
+	_suggest_action(actor, emotion)
+
+## Offers the action matching an accepted emotion label.
+##
+## A label is resolved once: transition into it plays its clip, and the same
+## label showing again (a weight-only update, a repeated `state.get` poll) does
+## nothing. The per-action cooldown is a second gate, so leaving and returning to
+## a label inside 30 s cannot replay its clip. The actor owns the idle and
+## ownership gate (`action_available_for_emotion`); when it refuses because the
+## pet is busy the label is *not* marked resolved, so a later presentation can
+## still offer the clip once the pet is idle.
+func _suggest_action(actor: Variant, emotion: String) -> void:
+	if emotion == _action_emotion:
+		return
+	var name_: String = str(EMOTION_ACTIONS.get(emotion, ""))
+	if name_.is_empty():
+		_action_emotion = emotion
+		return
+	if actor.has_method("action_available_for_emotion") \
+			and not bool(actor.action_available_for_emotion()):
+		return
+	if float(_action_cooldowns.get(name_, 0.0)) > 0.0:
+		_action_emotion = emotion
+		return
+	if not actor.has_method("suggest_action") \
+			or not bool(actor.suggest_action(name_)):
+		_action_emotion = emotion
+		return
+	_action_emotion = emotion
+	_action_cooldowns[name_] = ACTION_COOLDOWN_SECONDS
+
+## Remaining cooldown of one suggested action, in seconds. Exposed so a test can
+## assert the gate without waiting 30 real seconds.
+func action_cooldown(name_: String) -> float:
+	return float(_action_cooldowns.get(name_, 0.0))
+
+func _tick_cooldowns(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	for name_ in _action_cooldowns.keys():
+		var remaining := float(_action_cooldowns[name_]) - delta
+		if remaining <= 0.0:
+			_action_cooldowns.erase(name_)
+		else:
+			_action_cooldowns[name_] = remaining
 
 ## The actor's current label, or the cache when the actor exposes no state.
 func _actor_emotion(actor: Variant) -> String:

@@ -36,9 +36,13 @@ func _test_bar() -> void:
 	await process_frame
 	var lines: Array = []
 	var cancels := [0]
+	var cancel_texts: Array = []
 	var chats := [0]
 	bar.submitted.connect(func(text: String): lines.append(text))
-	bar.cancelled.connect(func(): cancels[0] += 1)
+	bar.cancelled.connect(func(text: String):
+		cancels[0] += 1
+		cancel_texts.append(text)
+	)
 	bar.chat_requested.connect(func(): chats[0] += 1)
 
 	check(not bar.is_open(), "the bar starts hidden")
@@ -63,19 +67,32 @@ func _test_bar() -> void:
 	var escape := InputEventKey.new()
 	escape.keycode = KEY_ESCAPE
 	escape.pressed = true
+	bar.entry.text = "写了一半"
 	bar.entry.gui_input.emit(escape)
 	check(cancels[0] == 1, "escape cancels")
+	check(cancel_texts == ["写了一半"], "escape cancellation carries the draft, got %s" % [cancel_texts])
 	check(not bar.is_open(), "escape closes the bar")
 
+	# Dismissing by clicking elsewhere must not throw the draft away either.
 	bar.open_at(Vector2i(100, 200))
+	check(bar.entry.text == "写了一半", "reopening restores the draft, got '%s'" % bar.entry.text)
+	bar.entry.text = "换个窗口再回来"
+	bar.focus_exited.emit()
+	check(cancels[0] == 2 and cancel_texts[1] == "换个窗口再回来",
+		"focus loss carries the current draft")
+	bar.open_at(Vector2i(100, 200))
+	check(bar.entry.text == "换个窗口再回来", "the focus-loss draft is restored")
+
+	# Submitting clears the draft: the next open starts empty.
+	bar.entry.text_submitted.emit("  发出去了  ")
+	check(lines == ["晚上好", "发出去了"], "the restored draft is submitted, got %s" % [lines])
+	bar.open_at(Vector2i(100, 200))
+	check(bar.entry.text == "", "a submitted line is not restored as a draft")
+	bar.entry.text_submitted.emit("   ")
+
 	bar.chat_button.pressed.emit()
 	check(chats[0] == 1, "the chat button asks for the chat window")
 	check(not bar.is_open(), "the chat button closes the bar")
-
-	bar.open_at(Vector2i(100, 200))
-	bar.focus_exited.emit()
-	check(cancels[0] == 2, "losing focus cancels")
-	check(not bar.is_open(), "losing focus closes the bar")
 	bar.free()
 
 

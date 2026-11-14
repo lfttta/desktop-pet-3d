@@ -8,6 +8,14 @@ const MainWindow = preload("res://scripts/main.gd")
 const PHRASES := "res://../data/expression/phrases.json"
 const CLICK_CATEGORIES := ["greeting", "care"]
 const GREETING_CATEGORIES := ["greeting"]
+const APOLOGY_CATEGORIES := ["apology"]
+const WAITING_CATEGORIES := ["waiting"]
+const CELEBRATION_CATEGORIES := ["celebration"]
+const EMOTION_CATEGORIES := {
+	"happy": ["happy"], "excited": ["happy"],
+	"sad": ["sad"], "upset": ["sad"],
+	"tired": ["tired"],
+}
 
 var checks := 0
 var failures := 0
@@ -38,6 +46,9 @@ func _run() -> void:
 	_test_time_windows()
 	_test_cooldown()
 	_test_settings_handoff()
+	_test_library_content()
+	await _test_mood_click_phrases()
+	await _test_apology_and_waiting()
 	await _test_displays()
 	print("GREETING_TESTS checks=", checks, " failures=", failures)
 	quit(0 if failures == 0 else 1)
@@ -124,6 +135,160 @@ func _test_settings_handoff() -> void:
 	window._apply_greeting_settings()
 	check(not bool(window.greeting.get("enabled", true)),
 		"a pre-v7 document leaves the applied greeting switches alone")
+	window.free()
+
+
+## The shipped library is data the tests read directly: volume, the per-intent
+## pools the window asks for, and the 8-24 character voice rule.
+func _test_library_content() -> void:
+	var entries := _library()
+	check(entries.size() >= 150, "the library has at least 150 phrases, got %d" % entries.size())
+
+	var ids := {}
+	var texts := {}
+	var counts := {}
+	for entry in entries:
+		var phrase_id := str(entry.get("id", ""))
+		var text := str(entry.get("text", "")).strip_edges()
+		check(not phrase_id.is_empty(), "every phrase has an id")
+		check(not ids.has(phrase_id), "duplicate phrase id '%s'" % phrase_id)
+		ids[phrase_id] = true
+		check(not texts.has(text), "duplicate phrase text '%s'" % text)
+		texts[text] = true
+		check(text.length() >= 8 and text.length() <= 24,
+			"phrase '%s' is 8-24 characters, got %d" % [phrase_id, text.length()])
+		var category := str(entry.get("category", ""))
+		counts[category] = int(counts.get(category, 0)) + 1
+
+	for category in ["greeting", "care", "idle", "night", "happy", "sad",
+			"apology", "waiting", "celebration", "tired"]:
+		check(int(counts.get(category, 0)) >= 10,
+			"category %s has at least 10 phrases, got %d" % [category, int(counts.get(category, 0))])
+	check(int(counts.get("night", 0)) >= 12,
+		"night has at least 12 phrases, got %d" % int(counts.get("night", 0)))
+
+	for window in ["morning", "afternoon", "evening", "night"]:
+		var found := 0
+		for entry in entries:
+			var entry_window := str(entry.get("time_window", "any"))
+			if entry_window == window:
+				found += 1
+		check(found >= 10, "window %s has at least 10 phrases, got %d" % [window, found])
+
+
+## A happy or sad expression widens the click pool; neutral keeps the base
+## greeting/care pool. Every drawn line must belong to the union the window
+## advertises, which is the base categories plus the mapped mood category.
+func _test_mood_click_phrases() -> void:
+	var window := PetWindow.new()
+	root.add_child(window)
+	await process_frame
+	var clock := FixedClock.new()
+	clock.hour = 10
+	clock.minutes = 5000.0
+	window.greeting_clock = clock.now
+	window.set_greeting_settings(true, true, 60)
+
+	var moods := {
+		"neutral": [], "happy": ["happy"], "sad": ["sad"],
+		"excited": ["happy"], "upset": ["sad"], "tired": ["tired"],
+	}
+	for emotion in moods:
+		# Force the expression the picker reads and assert the mapping
+		# deterministically; the draws below then check the advertised union.
+		if window.actor and window.actor.has_method("set_emotion"):
+			window.actor.set_emotion(emotion, 1.0)
+		var expected := "" if emotion == "neutral" else str(moods[emotion][0])
+		check(window._mood_phrase_category() == expected,
+			"%s maps to mood category '%s', got '%s'" % [emotion, expected,
+				window._mood_phrase_category()])
+		var allowed := _texts_for(clock.hour, PetWindow.time_window_for(clock.hour),
+			CLICK_CATEGORIES + moods[emotion])
+		for _index in 60:
+			clock.minutes += 120.0
+			var phrase := window._pick_click_phrase()
+			check(not phrase.is_empty(), "%s pet says a click phrase" % emotion)
+			check(allowed.has(phrase),
+				"%s pet returned an out-of-pool phrase: '%s'" % [emotion, phrase])
+	window.free()
+
+	# Both mood pools must actually be reachable: each mood line has to be
+	# selectable for a click once the mood category joins the base pool.
+	for emotion in EMOTION_CATEGORIES:
+		var mood_texts := _texts_for(10, PetWindow.time_window_for(10), EMOTION_CATEGORIES[emotion])
+		check(not mood_texts.is_empty(), "the library carries %s lines" % emotion)
+		var union := _texts_for(10, PetWindow.time_window_for(10),
+			CLICK_CATEGORIES + EMOTION_CATEGORIES[emotion])
+		for text in mood_texts:
+			check(union.has(text), "%s line '%s' is selectable for a click" % [emotion, text])
+
+
+## A failed chat can say an apology; a request past eight seconds can say a
+## waiting line. Both are app-side, so their own cooldown must hold.
+func _test_apology_and_waiting() -> void:
+	var window := PetWindow.new()
+	root.add_child(window)
+	await process_frame
+	var clock := FixedClock.new()
+	clock.hour = 9
+	clock.minutes = 2000.0
+	window.greeting_clock = clock.now
+	window.set_greeting_settings(true, true, 60)
+	window.set_bubble_seconds(5.0)
+
+	var apologies := _texts_for(clock.hour, PetWindow.time_window_for(clock.hour),
+		APOLOGY_CATEGORIES)
+	check(not apologies.is_empty(), "the library carries apology lines")
+	check(window.say_apology(), "a failed chat says an apology")
+	check(_bubble_visible(window), "the apology reaches the bubble")
+	check(apologies.has(window.speech_bubble.label.text),
+		"the apology is an apology line: '%s'" % window.speech_bubble.label.text)
+	check(is_equal_approx(window.speech_bubble.duration, 5.0),
+		"the apology uses bubble.duration_seconds")
+	window.hide_bubble()
+
+	clock.minutes += 1.0
+	check(not window.say_apology(), "a second failure inside the apology cooldown stays silent")
+	clock.minutes += PetWindow.APOLOGY_COOLDOWN_MINUTES
+	check(window.say_apology(), "past the apology cooldown a failure speaks again")
+	window.hide_bubble()
+
+	var waiting := _texts_for(clock.hour, PetWindow.time_window_for(clock.hour),
+		WAITING_CATEGORIES)
+	check(not waiting.is_empty(), "the library carries waiting lines")
+	check(not window.say_waiting(7.9), "7.9 s is still too early for a waiting line")
+	check(window.say_waiting(8.0), "8 s is late enough for a waiting line")
+	check(waiting.has(window.speech_bubble.label.text),
+		"the waiting line comes from the waiting pool: '%s'" % window.speech_bubble.label.text)
+	window.hide_bubble()
+
+	clock.minutes += 1.0
+	check(not window.say_waiting(8.0), "a second waiting line inside the cooldown stays silent")
+	clock.minutes += PetWindow.WAITING_COOLDOWN_MINUTES
+	check(window.say_waiting(8.0), "past the waiting cooldown the line may speak again")
+	window.hide_bubble()
+
+	# Applying a growth candidate says one celebration line, on its own
+	# cooldown so a batch of approvals does not repeat the same cheer.
+	var celebrations := _texts_for(clock.hour, PetWindow.time_window_for(clock.hour),
+		CELEBRATION_CATEGORIES)
+	check(not celebrations.is_empty(), "the library carries celebration lines")
+	check(window.say_celebration(), "applying a growth candidate says a celebration")
+	check(celebrations.has(window.speech_bubble.label.text),
+		"the celebration comes from the celebration pool: '%s'" % window.speech_bubble.label.text)
+	window.hide_bubble()
+	clock.minutes += 0.5
+	check(not window.say_celebration(), "a second celebration inside its cooldown stays silent")
+	clock.minutes += PetWindow.CELEBRATION_COOLDOWN_MINUTES
+	check(window.say_celebration(), "past the celebration cooldown another approval speaks")
+
+	# A disabled bubble silences the app-side extras.
+	window.set_bubble_enabled(false)
+	clock.minutes += 120.0
+	check(not window.say_apology(), "bubble.enabled=false keeps the apology silent")
+	check(not window.say_waiting(30.0), "bubble.enabled=false keeps the waiting line silent")
+	check(not window.say_celebration(), "bubble.enabled=false keeps the celebration silent")
+	window.set_bubble_enabled(true)
 	window.free()
 
 

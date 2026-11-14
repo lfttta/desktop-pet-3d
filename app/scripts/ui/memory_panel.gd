@@ -231,7 +231,11 @@ func _request_propose() -> void:
 	if text.is_empty():
 		status.text = "记忆内容不能为空。"
 		return
-	var id: String = _service.request("memory.propose", {"text": text}, 10.0)
+	var id: String = _service.request("memory.propose", {
+		"text": text,
+		"category": "general",
+		"importance": 0.5,
+	}, 10.0)
 	if id.is_empty():
 		status.text = "记录失败：后台服务不可用。"
 		return

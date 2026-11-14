@@ -25,6 +25,8 @@ func _run() -> void:
 	await _test_behavior_performance_settings()
 	await _test_behavior_legacy_schema()
 	await _test_bubble_greeting_settings()
+	await _test_expression_tone()
+	await _test_expression_tone_legacy_schema()
 	_test_runtime_settings()
 	print("DESKTOP_SETTINGS_TESTS checks=", checks, " failures=", failures)
 	quit(0 if failures == 0 else 1)
@@ -59,7 +61,7 @@ func _test_controls_and_save() -> void:
 	host.add_child(window)
 	await process_frame
 	window.show_status("ready", "后台服务已连接")
-	window.populate(_settings(), [])
+	window.populate(_settings())
 	await process_frame
 
 	check(window.desktop_enabled != null, "autonomy page has a desktop_enabled switch")
@@ -118,7 +120,7 @@ func _test_controls_and_save() -> void:
 
 	# A second populate inside the throttle window must not poll again.
 	var before := fake.requests.size()
-	window.populate(_settings(), [])
+	window.populate(_settings())
 	check(fake.requests.size() == before, "populate within 10 seconds skips the desktop poll")
 
 	window._select_policy(window.fullscreen_policy, "silent")
@@ -146,10 +148,11 @@ func _test_controls_and_save() -> void:
 	check(patch.autonomy.cloud_enabled == false, "save patch carries the cloud switch")
 	check(patch.autonomy.has("quiet_start") and patch.autonomy.quiet_start == "22:30",
 		"save patch keeps the existing quiet hours")
-	# Keys that gained controls in this pass: each must actually travel, and the
-	# defaults must keep speaking and prompt logging off.
-	check(patch.has("voice") and patch.voice.enabled == false,
-		"voice stays off by default and the switch travels in the patch")
+	# Keys that gained controls in this pass: each must actually travel. Speech
+	# follows the service's own default (synthesis runs off the service loop), so
+	# a document without a voice group populates as on; prompt logging stays off.
+	check(patch.has("voice") and patch.voice.enabled == true,
+		"voice defaults to on and the switch travels in the patch")
 	check(patch.has("privacy") and patch.privacy.log_prompts == false,
 		"prompt logging is off by default and travels in the patch")
 	check(int(patch.ai.max_tokens) == 800, "max_tokens round-trips into the patch")
@@ -181,7 +184,7 @@ func _test_unavailable() -> void:
 	host.add_child(window)
 	await process_frame
 	window.show_status("stopped", "后台服务未连接")
-	window.populate({}, [])
+	window.populate({})
 	await process_frame
 
 	check(window.desktop_enabled.disabled, "desktop sensing is disabled while the service is down")
@@ -194,14 +197,14 @@ func _test_unavailable() -> void:
 	# A service that predates schema v5 rejects the desktop group, so the
 	# controls stay locked instead of letting the user edit an unsaveable value.
 	window.show_status("ready", "后台服务已连接")
-	window.populate({}, [])
+	window.populate({})
 	await process_frame
 	check(window.desktop_enabled.disabled, "desktop controls stay locked for a pre-v5 service")
 
 	# Reconnect with a v5 service, then let it report the command as missing.
 	window.show_status("ready", "后台服务已连接")
 	window._desktop_status_due = 0  # emulate the 10 second throttle expiring
-	window.populate(_settings(), [])
+	window.populate(_settings())
 	await process_frame
 	check(not window.desktop_enabled.disabled, "controls unlock once a v5 service is ready")
 	var request: Dictionary = fake.requests[fake.requests.size() - 1]
@@ -249,7 +252,7 @@ func _test_legacy_schema() -> void:
 	legacy["schema_version"] = 4
 	legacy.erase("desktop")
 	legacy["autonomy"].erase("cloud_enabled")
-	window.populate(legacy, [])
+	window.populate(legacy)
 	var patches: Array = []
 	window.save_requested.connect(func(value: Dictionary): patches.append(value))
 	window._save()
@@ -283,7 +286,7 @@ func _test_behavior_performance_settings() -> void:
 	settings["behavior"] = {"enabled": false}
 	settings["performance"] = {"idle_fps": 45, "drag_fps": 90, "hidden_fps": 10}
 	settings["autonomy"]["default_quiet_minutes"] = 60
-	window.populate(settings, [])
+	window.populate(settings)
 	await process_frame
 
 	check(window.behavior_enabled != null, "basic page has a behavior switch")
@@ -313,7 +316,7 @@ func _test_behavior_performance_settings() -> void:
 	# Out-of-range saved values clamp into the spin boxes instead of being kept.
 	settings["performance"] = {"idle_fps": 999, "drag_fps": 1, "hidden_fps": 99}
 	settings["autonomy"]["default_quiet_minutes"] = 999
-	window.populate(settings, [])
+	window.populate(settings)
 	await process_frame
 	check(window.idle_fps.value == 60, "an oversized idle fps clamps to 60")
 	check(window.drag_fps.value == 30, "an undersized drag fps clamps to 30")
@@ -359,7 +362,7 @@ func _test_behavior_legacy_schema() -> void:
 	host.add_child(window)
 	await process_frame
 	window.show_status("ready", "后台服务已连接")
-	window.populate(_settings(), [])
+	window.populate(_settings())
 	await process_frame
 	check(window.behavior_enabled.disabled, "a v5 service leaves the behavior switch locked")
 	check(not window.idle_fps.editable and not window.drag_fps.editable
@@ -398,7 +401,7 @@ func _test_bubble_greeting_settings() -> void:
 	# defaults, and those defaults must be what the save sends.
 	var settings := _settings()
 	settings["schema_version"] = 7
-	window.populate(settings, [])
+	window.populate(settings)
 	await process_frame
 	check(window.bubble_enabled != null, "autonomy page has a bubble switch")
 	check(window.bubble_duration != null, "autonomy page has a bubble duration spin box")
@@ -441,7 +444,7 @@ func _test_bubble_greeting_settings() -> void:
 	# spin box instead of reaching the service and being rejected.
 	settings["bubble"] = {"enabled": false, "duration_seconds": 99, "show_replies": false}
 	settings["greeting"] = {"enabled": false, "on_start": false, "cooldown_minutes": 1}
-	window.populate(settings, [])
+	window.populate(settings)
 	await process_frame
 	check(not window.bubble_enabled.button_pressed, "populate restores bubble.enabled")
 	check(not window.bubble_show_replies.button_pressed,
@@ -480,6 +483,95 @@ func _test_bubble_greeting_settings() -> void:
 		"autostart targets the current user's Run key")
 	check(reg_body.contains(OS.get_executable_path().replace("\\", "\\\\")),
 		"autostart points at this executable")
+
+	window.free()
+	host.free()
+
+
+## Schema 9 expression.tone: every choice is offered, a stored value comes back,
+## a missing value falls back to the service default, and save carries it.
+func _test_expression_tone() -> void:
+	var host := Node.new()
+	root.add_child(host)
+	var fake := FakeService.new()
+	host.add_child(fake)
+	var window := SettingsWindow.new()
+	window.visible = false
+	host.add_child(window)
+	await process_frame
+	window.show_status("ready", "后台服务已连接")
+	var settings := _settings()
+	settings["schema_version"] = 9
+	settings["expression"] = {
+		"enabled": true,
+		"phrases_enabled": true,
+		"tone": "sharp",
+	}
+	window.populate(settings)
+	await process_frame
+
+	check(window.expression_tone != null, "expression page has a tone option")
+	var choices: Array = []
+	for index in range(window.expression_tone.item_count):
+		choices.append(str(window.expression_tone.get_item_metadata(index)))
+	for tone in ["godette", "sharp", "clingy", "tool", "custom"]:
+		check(choices.has(tone), "tone choice %s is offered" % tone)
+	check(not window.expression_tone.disabled, "a v9 service unlocks the tone choice")
+	check(window._expression_tone_value() == "sharp", "populate restores expression.tone")
+
+	var patches: Array = []
+	window.save_requested.connect(func(value: Dictionary): patches.append(value))
+	window._save()
+	check(patches.size() == 1, "a v9 save emits one patch")
+	var patch: Dictionary = patches[0]
+	check(patch.has("expression"), "a v9 save includes the expression group")
+	check(str(patch.expression.tone) == "sharp", "save patch carries expression.tone")
+
+	# A document without a tone falls back to the service default, and that
+	# default is what the patch sends.
+	settings.erase("expression")
+	window.populate(settings)
+	await process_frame
+	check(window._expression_tone_value() == "godette",
+		"a missing tone falls back to the service default")
+	patches.clear()
+	window._save()
+	check(patches.size() == 1, "a default-tone save emits one patch")
+	check(str(patches[0].expression.tone) == "godette",
+		"the default tone travels in the save patch")
+
+	window.free()
+	host.free()
+
+
+## A schema 8 service has no expression.tone: the control stays locked and the
+## key must not reach the service, or the whole patch would be rejected.
+func _test_expression_tone_legacy_schema() -> void:
+	var host := Node.new()
+	root.add_child(host)
+	var fake := FakeService.new()
+	host.add_child(fake)
+	var window := SettingsWindow.new()
+	window.visible = false
+	host.add_child(window)
+	await process_frame
+	window.show_status("ready", "后台服务已连接")
+	var settings := _settings()
+	settings["schema_version"] = 8
+	window.populate(settings)
+	await process_frame
+
+	check(window.expression_tone.disabled,
+		"a schema 8 service leaves the tone choice locked")
+	check(window._expression_tone_value() == "godette",
+		"a schema 8 service shows the default tone")
+	var patches: Array = []
+	window.save_requested.connect(func(value: Dictionary): patches.append(value))
+	window._save()
+	check(patches.size() == 1, "a schema 8 save still emits one patch")
+	check(patches[0].has("expression"), "the expression group still saves")
+	check(not patches[0].expression.has("tone"),
+		"a schema 8 service receives no expression.tone")
 
 	window.free()
 	host.free()

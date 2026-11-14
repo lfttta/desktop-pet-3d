@@ -2,6 +2,10 @@ extends VBoxContainer
 ## Personality growth queue: pending candidates, applied history and trait
 ## locks. Every action is a service command; nothing is applied locally.
 
+## Emitted once when a candidate is applied. Growth is otherwise only visible
+## inside this panel, so the pet celebrates to make the change felt.
+signal candidate_applied
+
 const UNAVAILABLE_TEXT := "成长功能未接入。"
 const LOCK_UNAVAILABLE_TEXT := "人格锁定未接入。"
 
@@ -202,6 +206,8 @@ func _on_request_finished(id: String, type: String, payload: Dictionary) -> void
 		return
 	if type == "result":
 		status.text = "操作已提交，正在刷新…"
+		if command == "growth.approve":
+			candidate_applied.emit()
 		refresh()
 	elif message.is_empty():
 		status.text = "操作失败。"

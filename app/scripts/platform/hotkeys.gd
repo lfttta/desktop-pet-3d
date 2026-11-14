@@ -3,9 +3,10 @@ extends RefCounted
 ##
 ## The settings file stores bindings as "Ctrl+Alt+F10" style text so they stay
 ## readable and editable. Native `configure_hotkeys` takes Win32 modifier bits
-## and virtual-key codes in one "mods,vk,mods,vk" string, which this module
-## builds. Registration is process-wide, so a failure means another program
-## already owns the combination; that outcome is reported, never hidden.
+## and virtual-key codes in one "mods,vk,mods,vk,mods,vk" string (recover, exit,
+## chat), which this module builds. Registration is process-wide, so a failure
+## means another program already owns the combination; that outcome is reported,
+## never hidden.
 
 const MOD_ALT := 0x0001
 const MOD_CONTROL := 0x0002
@@ -14,6 +15,7 @@ const MOD_WIN := 0x0008
 
 const DEFAULT_RECOVER := "Ctrl+Alt+F10"
 const DEFAULT_EXIT := "Ctrl+Alt+Q"
+const DEFAULT_CHAT := "Ctrl+Alt+C"
 
 const MODIFIER_ALIASES := {
 	"ctrl": MOD_CONTROL, "control": MOD_CONTROL,
@@ -49,15 +51,16 @@ const NAMED_KEYS := {
 
 
 static func defaults() -> Array:
-	return [DEFAULT_RECOVER, DEFAULT_EXIT]
+	return [DEFAULT_RECOVER, DEFAULT_EXIT, DEFAULT_CHAT]
 
 
-## Reads the pair out of a settings document, falling back per binding.
+## Reads the triple out of a settings document, falling back per binding.
 static func bindings(settings: Dictionary) -> Array:
 	var group: Variant = settings.get("hotkeys", {})
 	if not group is Dictionary:
 		group = {}
-	return [str(group.get("recover", DEFAULT_RECOVER)), str(group.get("exit", DEFAULT_EXIT))]
+	return [str(group.get("recover", DEFAULT_RECOVER)), str(group.get("exit", DEFAULT_EXIT)),
+		str(group.get("chat", DEFAULT_CHAT))]
 
 
 ## Parses one binding. Returns {ok, mods, vk, canonical, error}; on failure only
@@ -126,8 +129,9 @@ static func format_binding(mods: int, key_label: String) -> String:
 	return "+".join(pieces)
 
 
-static func encode(recover: Dictionary, exit: Dictionary) -> String:
-	return "%d,%d,%d,%d" % [int(recover.mods), int(recover.vk), int(exit.mods), int(exit.vk)]
+static func encode(recover: Dictionary, exit: Dictionary, chat: Dictionary) -> String:
+	return "%d,%d,%d,%d,%d,%d" % [int(recover.mods), int(recover.vk), int(exit.mods),
+		int(exit.vk), int(chat.mods), int(chat.vk)]
 
 
 static func canonical(spec: String) -> String:
@@ -135,58 +139,100 @@ static func canonical(spec: String) -> String:
 	return str(parsed.canonical) if parsed.ok else ""
 
 
-## Registers both bindings through the native bridge. Returns {ok, recover,
-## exit, applied, message}; `ok` is true only when both hotkeys are live and
-## `applied` is true when the native call was actually made.
-static func apply(bridge, recover_spec: String, exit_spec: String) -> Dictionary:
+## Registers all three bindings through the native bridge. Returns
+## {ok, recover, exit, chat, applied, message}; `ok` is true only when all three
+## hotkeys are live and `applied` is true when the native call was actually made.
+static func apply(bridge, recover_spec: String, exit_spec: String,
+		chat_spec: String = DEFAULT_CHAT) -> Dictionary:
+	var failed_all := {"ok": false, "recover": false, "exit": false, "chat": false,
+		"applied": false}
 	if bridge == null or not bridge.has_method("configure_hotkeys"):
-		return {"ok": false, "recover": false, "exit": false, "applied": false,
-			"message": "当前原生模块不支持自定义热键，仍使用 " + DEFAULT_RECOVER + " / " + DEFAULT_EXIT + "。"}
+		failed_all["message"] = ("当前原生模块不支持自定义热键，仍使用 " + DEFAULT_RECOVER
+			+ " / " + DEFAULT_EXIT + " / " + DEFAULT_CHAT + "。")
+		return failed_all
 	var recover := parse(recover_spec)
 	if not recover.ok:
-		return {"ok": false, "recover": false, "exit": false, "applied": false,
-			"message": "找回热键无效：" + str(recover.error)}
+		failed_all["message"] = "找回热键无效：" + str(recover.error)
+		return failed_all
 	var exit := parse(exit_spec)
 	if not exit.ok:
-		return {"ok": false, "recover": false, "exit": false, "applied": false,
-			"message": "退出热键无效：" + str(exit.error)}
-	if int(recover.mods) == int(exit.mods) and int(recover.vk) == int(exit.vk):
-		return {"ok": false, "recover": false, "exit": false, "applied": false,
-			"message": "找回和退出不能是同一个热键。"}
-	var bits := int(bridge.configure_hotkeys(encode(recover, exit)))
+		failed_all["message"] = "退出热键无效：" + str(exit.error)
+		return failed_all
+	var chat := parse(chat_spec)
+	if not chat.ok:
+		failed_all["message"] = "聊天热键无效：" + str(chat.error)
+		return failed_all
+	var parsed := {"recover": recover, "exit": exit, "chat": chat}
+	var labels := {"recover": "找回", "exit": "退出", "chat": "聊天"}
+	var names := ["recover", "exit", "chat"]
+	for first_index in range(names.size()):
+		for second_index in range(first_index + 1, names.size()):
+			var first: Dictionary = parsed[names[first_index]]
+			var second: Dictionary = parsed[names[second_index]]
+			if int(first.mods) == int(second.mods) and int(first.vk) == int(second.vk):
+				failed_all["message"] = "%s和%s不能是同一个热键。" % [
+					str(labels[names[first_index]]), str(labels[names[second_index]])]
+				return failed_all
+	var bits := int(bridge.configure_hotkeys(encode(recover, exit, chat)))
 	var recover_live := (bits & 1) != 0
 	var exit_live := (bits & 2) != 0
-	if recover_live and exit_live:
-		return {"ok": true, "recover": true, "exit": true, "applied": true, "message": ""}
+	var chat_live := (bits & 4) != 0
+	if recover_live and exit_live and chat_live:
+		return {"ok": true, "recover": true, "exit": true, "chat": true,
+			"applied": true, "message": ""}
 	var failed: Array[String] = []
 	if not recover_live:
 		failed.append(str(recover.canonical))
 	if not exit_live:
 		failed.append(str(exit.canonical))
-	return {"ok": false, "recover": recover_live, "exit": exit_live, "applied": true,
-		"message": " / ".join(failed) + " 已被其它程序占用，没能生效。"}
+	if not chat_live:
+		failed.append(str(chat.canonical))
+	return {"ok": false, "recover": recover_live, "exit": exit_live, "chat": chat_live,
+		"applied": true, "message": " / ".join(failed) + " 已被其它程序占用，没能生效。"}
 
 
-## Applies the wanted pair and, when native registration failed, puts the
-## previously working pair back. Returns {ok, active, message}: `active` is what
+## Applies the wanted triple and, when native registration failed, puts the
+## previously working set back. Returns {ok, active, message}: `active` is what
 ## is really registered, so the caller can persist a corrected document instead
-## of leaving the file and the process out of sync.
+## of leaving the file and the process out of sync. `active` is empty when even
+## the fallback could not be registered; the caller must then avoid writing any
+## hotkey back. `wanted_chat` is optional so two-binding callers keep working;
+## without it chat stays at the native default and is not reported in `active`.
 static func resolve(bridge, wanted_recover: String, wanted_exit: String,
-		active: Array) -> Dictionary:
-	var outcome := apply(bridge, wanted_recover, wanted_exit)
+		active: Array, wanted_chat: String = "") -> Dictionary:
+	var managed := not wanted_chat.is_empty()
+	var chat := wanted_chat if managed else DEFAULT_CHAT
+	var outcome := apply(bridge, wanted_recover, wanted_exit, chat)
+	var wanted := [canonical(wanted_recover), canonical(wanted_exit), canonical(chat)]
+	var wanted_size := 3 if managed else 2
 	if outcome.ok:
-		outcome["active"] = [canonical(wanted_recover), canonical(wanted_exit)]
+		outcome["active"] = wanted.slice(0, wanted_size)
 		return outcome
 	var fallback: Array = []
 	for index in range(active.size()):
 		fallback.append(str(active[index]))
-	if fallback.size() != 2:
-		fallback = defaults()
-		if bool(outcome.get("applied", false)):
-			apply(bridge, fallback[0], fallback[1])
-	elif bool(outcome.get("applied", false)):
-		# A conflict already unregistered both bindings; restore the pair that
-		# worked so the pet stays recoverable and closable.
-		apply(bridge, fallback[0], fallback[1])
+	if managed:
+		if fallback.size() != 3:
+			fallback = defaults()
+	else:
+		# A legacy caller only knows recover/exit; keep that pair so it can be
+		# persisted back when a conflict forced the defaults.
+		if fallback.size() < 2:
+			fallback = defaults().slice(0, 2)
+		else:
+			fallback = fallback.slice(0, 2)
+	if bool(outcome.get("applied", false)):
+		# A conflict already unregistered the bindings; restore the set that
+		# worked so the pet stays recoverable and closable. A two-binding caller
+		# cannot vouch for chat, so it returns to the native default.
+		var restore_chat := str(fallback[2]) if fallback.size() > 2 else chat
+		var restored := apply(bridge, str(fallback[0]), str(fallback[1]), restore_chat)
+		if not restored.ok:
+			# Even the defaults are taken. Claiming them as active would make the
+			# caller persist a triple that is not registered, which is exactly the
+			# "settings says it works but the key does nothing" failure.
+			outcome["active"] = []
+			outcome["message"] = "当前没有可用的全局热键；请在设置里换一组组合。"
+			return outcome
 	outcome["active"] = fallback
 	return outcome

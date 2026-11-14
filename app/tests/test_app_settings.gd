@@ -10,11 +10,11 @@ func _initialize() -> void:
 	var bigger := Rect2(250, 125, 250, 750)
 	var restored := Settings.position_from(saved, bigger, work)
 	assert(absf(restored.y + bigger.end.y - 900) <= 1)
-	var displays := [{"id": "primary", "primary": true}, {"id": "other", "primary": false}]
-	assert(Settings.select_display(displays, "other").display.id == "other")
-	var fallback := Settings.select_display(displays, "unplugged")
-	assert(fallback.fallback and fallback.display.id == "primary")
-	assert(not Settings.select_display(displays, "").fallback)
+	# Utility windows never exceed the primary work area; a small screen shrinks
+	# them instead of hanging controls off the desktop.
+	assert(Settings.fit_window_size(Vector2i(720, 560), Rect2i(0, 0, 1024, 768), 16) == Vector2i(720, 560))
+	assert(Settings.fit_window_size(Vector2i(720, 560), Rect2i(0, 0, 640, 480), 16) == Vector2i(608, 448))
+	assert(Settings.fit_window_size(Vector2i(520, 400), Rect2i(0, 0, 400, 300), 0) == Vector2i(400, 300))
 	var edges := Vector2i(1, 1)
 	var pinned := ScreenMath.pin_edges(Settings.position_from(saved, subject, work), subject, work, edges)
 	assert(pinned + Vector2i(subject.end) == work.end)

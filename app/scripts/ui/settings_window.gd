@@ -3,6 +3,8 @@ extends Window
 signal save_requested(patch: Dictionary)
 signal recover_requested
 signal retry_requested
+## Emitted when the user applies a growth candidate, so the pet can react.
+signal growth_applied
 
 const MemoryPanel = preload("res://scripts/ui/memory_panel.gd")
 const ExpressionPanel = preload("res://scripts/ui/expression_panel.gd")
@@ -53,16 +55,28 @@ const EMBEDDING_DEFAULTS := {
 	"dimensions": 0,
 }
 const VOICE_DEFAULTS := {
-	# Paused by default: synthesis runs on the service thread, so a long line
-	# stalls every other request. See service/settings.py VOICE_DEFAULTS.
-	"enabled": false,
+	# Speech is on by default: synthesis runs on the service's speech worker, so
+	# a long line no longer blocks the loop. A stored `false` in an existing
+	# settings file is honoured as it is — never migrated back on. See
+	# service/settings.py VOICE_DEFAULTS.
+	"enabled": true,
 	"voice": "",
 	"rate": 0,
 	"volume": 70,
 }
+# Mirrors service/settings.py EXPRESSION_TONES; expression.tone only exists
+# from schema v9, and the service rejects any value outside this list.
+const EXPRESSION_TONES := {
+	"godette": "Godette",
+	"sharp": "犀利",
+	"clingy": "黏人",
+	"tool": "工具感",
+	"custom": "自定义",
+}
 const EXPRESSION_DEFAULTS := {
 	"enabled": true,
 	"phrases_enabled": true,
+	"tone": "godette",
 }
 ## `desktop.dnd_policy` only accepts these two; the service rejects anything else.
 const DND_POLICIES := ["silent", "minimal"]
@@ -118,6 +132,7 @@ const GREETING_COOLDOWN_MAX := 1440
 const HOTKEYS_DEFAULTS := {
 	"recover": "Ctrl+Alt+F10",
 	"exit": "Ctrl+Alt+Q",
+	"chat": "Ctrl+Alt+C",
 }
 ## Offsets offered for the manual quiet action; the service accepts 5..240,
 ## and a stored value outside this list is kept as an extra option.
@@ -155,7 +170,6 @@ const DESKTOP_LABELS := {
 
 var tabs: TabContainer
 var name_input: LineEdit
-var display_choice: OptionButton
 var size_slider: HSlider
 var size_value: Label
 var status: Label
@@ -188,6 +202,7 @@ var memory_max_injected: SpinBox
 var memory_max_entry_chars: SpinBox
 var expression_enabled: CheckButton
 var expression_phrases: CheckButton
+var expression_tone: OptionButton
 var autonomy_min_gap: SpinBox
 var autonomy_max_hour: SpinBox
 var desktop_poll: SpinBox
@@ -224,6 +239,7 @@ var behavior_enabled: CheckButton
 var autostart_enabled: CheckButton
 var hotkey_recover: LineEdit
 var hotkey_exit: LineEdit
+var hotkey_chat: LineEdit
 var idle_fps: SpinBox
 var drag_fps: SpinBox
 var hidden_fps: SpinBox
@@ -240,7 +256,6 @@ var bubble_show_replies: CheckButton
 var greeting_enabled: CheckButton
 var greeting_on_start: CheckButton
 var greeting_cooldown: SpinBox
-var _display_ids: Array[String] = []
 var _service
 var _requests := {}
 var _service_state := "stopped"
@@ -352,8 +367,6 @@ func _build_basic_page() -> void:
 	name_input = LineEdit.new()
 	name_input.max_length = 80
 	_row(page, "称呼", name_input)
-	display_choice = OptionButton.new()
-	_row(page, "显示器", display_choice)
 	var slider_row := HBoxContainer.new()
 	size_slider = HSlider.new()
 	size_slider.min_value = 0.5
@@ -381,6 +394,10 @@ func _build_basic_page() -> void:
 	hotkey_exit.max_length = 40
 	hotkey_exit.placeholder_text = HOTKEYS_DEFAULTS.exit
 	_row(page, "退出", hotkey_exit)
+	hotkey_chat = LineEdit.new()
+	hotkey_chat.max_length = 40
+	hotkey_chat.placeholder_text = HOTKEYS_DEFAULTS.chat
+	_row(page, "打开聊天", hotkey_chat)
 	_section(page, "性能")
 	idle_fps = _spin(IDLE_FPS_MIN, IDLE_FPS_MAX, 1)
 	_row(page, "待机帧率", idle_fps)
@@ -525,8 +542,14 @@ func _build_expression_page() -> void:
 	expression_enabled.text = "启用表达（表情与语气）"
 	_row(page, "表达", expression_enabled)
 	expression_phrases = CheckButton.new()
-	expression_phrases.text = "启用台词库"
+	expression_phrases.text = "启用台词库（仅本地兜底）"
+	expression_phrases.tooltip_text = "关闭后只是不再使用本地台词库；云端主动消息仍会发送。要完全关闭主动消息，请到「主动」页关闭总开关。"
 	_row(page, "台词库", expression_phrases)
+	expression_tone = OptionButton.new()
+	for tone in EXPRESSION_TONES:
+		expression_tone.add_item(str(EXPRESSION_TONES[tone]))
+		expression_tone.set_item_metadata(expression_tone.item_count - 1, str(tone))
+	_row(page, "口吻", expression_tone)
 	expression_panel = ExpressionPanel.new()
 	expression_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	page.add_child(expression_panel)
@@ -642,6 +665,7 @@ func _build_growth_page() -> void:
 	_row(page, "冷却天数", growth_cooldown_days)
 	growth_panel = GrowthPanel.new()
 	growth_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	growth_panel.candidate_applied.connect(func(): growth_applied.emit())
 	page.add_child(growth_panel)
 
 func _build_usage_page() -> void:
@@ -711,27 +735,13 @@ func _feature_available(name: String) -> bool:
 	var feature: Variant = features.get(name, {})
 	return feature is Dictionary and bool(feature.get("available", false))
 
-func populate(settings: Dictionary, displays: Array) -> void:
+func populate(settings: Dictionary) -> void:
+	# The pet always lives on the primary screen, so there is no display list to
+	# choose from any more.
 	_schema_version = int(settings.get("schema_version", 0))
 	name_input.text = str(settings.get("user_name", "你"))
 	size_slider.value = float(settings.get("scale", 1))
 	size_value.text = "%d%%" % roundi(size_slider.value * 100)
-	display_choice.clear()
-	_display_ids.clear()
-	display_choice.add_item("主显示器（自动）")
-	_display_ids.append("")
-	var wanted := str(settings.get("screen_id", ""))
-	var selected := 0
-	for display: Dictionary in displays:
-		display_choice.add_item(str(display.get("name", display.id)))
-		_display_ids.append(str(display.id))
-		if str(display.id) == wanted:
-			selected = _display_ids.size() - 1
-	if not wanted.is_empty() and selected == 0:
-		display_choice.add_item("已保存的显示器（暂时未连接）")
-		_display_ids.append(wanted)
-		selected = _display_ids.size() - 1
-	display_choice.select(selected)
 	var ai := _group(settings, "ai")
 	ai_provider.text = str(ai.get("provider", AI_DEFAULTS.provider))
 	ai_base_url.text = str(ai.get("base_url", AI_DEFAULTS.base_url))
@@ -778,6 +788,7 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	var expression := _group(settings, "expression")
 	expression_enabled.button_pressed = bool(expression.get("enabled", EXPRESSION_DEFAULTS.enabled))
 	expression_phrases.button_pressed = bool(expression.get("phrases_enabled", EXPRESSION_DEFAULTS.phrases_enabled))
+	_select_expression_tone(str(expression.get("tone", EXPRESSION_DEFAULTS.tone)))
 	if expression_panel:
 		expression_panel.populate_style(_group(expression, "style"))
 	var growth := _group(settings, "growth")
@@ -806,6 +817,7 @@ func populate(settings: Dictionary, displays: Array) -> void:
 	var hotkeys := _group(settings, "hotkeys")
 	hotkey_recover.text = str(hotkeys.get("recover", HOTKEYS_DEFAULTS.recover))
 	hotkey_exit.text = str(hotkeys.get("exit", HOTKEYS_DEFAULTS.exit))
+	hotkey_chat.text = str(hotkeys.get("chat", HOTKEYS_DEFAULTS.chat))
 	# The spin boxes clamp an out-of-range saved value to their own bounds.
 	var performance := _group(settings, "performance")
 	idle_fps.value = clampf(float(performance.get("idle_fps", PERFORMANCE_DEFAULTS.idle_fps)), float(IDLE_FPS_MIN), float(IDLE_FPS_MAX))
@@ -848,7 +860,6 @@ func _save() -> void:
 	var patch := {
 		"user_name": name_input.text,
 		"scale": size_slider.value,
-		"screen_id": _display_ids[display_choice.selected],
 		"ai": {
 			"provider": ai_provider.text.strip_edges(),
 			"base_url": ai_base_url.text.strip_edges(),
@@ -953,22 +964,43 @@ func _save() -> void:
 	hotkey_exit.text = str(exit_binding.canonical)
 	if _supports_schema(8):
 		patch["hotkeys"] = {"recover": hotkey_recover.text, "exit": hotkey_exit.text}
+		# hotkeys.chat only exists from schema v10; an older service rejects the
+		# whole patch when it sees the key.
+		if _supports_schema(10):
+			var chat_binding := Hotkeys.parse(hotkey_chat.text)
+			if not chat_binding.ok:
+				show_message("聊天热键：" + str(chat_binding.error), true)
+				hotkey_chat.grab_focus()
+				return
+			if str(chat_binding.canonical) == str(recover_binding.canonical) \
+					or str(chat_binding.canonical) == str(exit_binding.canonical):
+				show_message("打开聊天不能和找回或退出用同一个热键。", true)
+				return
+			hotkey_chat.text = str(chat_binding.canonical)
+			patch["hotkeys"]["chat"] = hotkey_chat.text
 	if expression_panel:
-		patch["expression"] = {
+		var expression := {
 			"enabled": expression_enabled.button_pressed,
 			"phrases_enabled": expression_phrases.button_pressed,
 			"style": expression_panel.style_values(),
 		}
+		# expression.tone exists from schema v9; an older service rejects the
+		# whole patch when it sees the key.
+		if _supports_schema(9):
+			expression["tone"] = _expression_tone_value()
+		patch["expression"] = expression
 	_apply_autostart()
 	save_requested.emit(patch)
 
-## Puts the pair that is really registered back into the fields, so a rejected
+## Puts the set that is really registered back into the fields, so a rejected
 ## binding never lingers in the UI after the service stored something else.
 func show_hotkeys(active: Array) -> void:
-	if active.size() != 2:
+	if active.size() < 2:
 		return
 	hotkey_recover.text = str(active[0])
 	hotkey_exit.text = str(active[1])
+	if active.size() >= 3:
+		hotkey_chat.text = str(active[2])
 
 ## Applies the autostart checkbox to the registry. This is not part of the
 ## settings patch: the entry describes this installation, not the persona.
@@ -1025,6 +1057,25 @@ func _quiet_minutes_value() -> int:
 	if index < 0:
 		return int(AUTONOMY_DEFAULTS.default_quiet_minutes)
 	return int(quiet_minutes.get_item_metadata(index))
+
+## Selects a stored tone, appending an unknown value so saving never silently
+## rewrites a setting this build does not know about.
+func _select_expression_tone(tone: String) -> void:
+	if tone.is_empty():
+		tone = str(EXPRESSION_DEFAULTS.tone)
+	for index in range(expression_tone.item_count):
+		if str(expression_tone.get_item_metadata(index)) == tone:
+			expression_tone.select(index)
+			return
+	expression_tone.add_item(tone)
+	expression_tone.set_item_metadata(expression_tone.item_count - 1, tone)
+	expression_tone.select(expression_tone.item_count - 1)
+
+func _expression_tone_value() -> String:
+	var index := expression_tone.selected
+	if index < 0:
+		return str(EXPRESSION_DEFAULTS.tone)
+	return str(expression_tone.get_item_metadata(index))
 
 func _valid_time(value: String) -> bool:
 	if value.length() != 5 or value[2] != ":":
@@ -1222,6 +1273,10 @@ func _refresh_controls() -> void:
 	var hotkeys_ready := ready and _supports_schema(8)
 	hotkey_recover.editable = hotkeys_ready
 	hotkey_exit.editable = hotkeys_ready
+	# hotkeys.chat exists from schema v10; an older service rejects the key.
+	hotkey_chat.editable = ready and _supports_schema(10)
+	# expression.tone exists from schema v9; an older service rejects the key.
+	expression_tone.disabled = not (ready and _supports_schema(9))
 	# cloud_enabled only exists from schema v5; a legacy service would reject it.
 	cloud_proactive.disabled = not (ready and _supports_desktop())
 	# Desktop controls stay unavailable once the service reported the command

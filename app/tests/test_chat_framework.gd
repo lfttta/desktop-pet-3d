@@ -1,5 +1,6 @@
 extends SceneTree
 
+const MainWindow = preload("res://scripts/main.gd")
 const ChatWindow = preload("res://scripts/ui/chat_window.gd")
 const ChatSession = preload("res://scripts/chat/chat_session.gd")
 
@@ -115,17 +116,110 @@ func _run() -> void:
 	# Memory candidates used to be counted and dropped, so a reply said "记住了"
 	# while nothing was stored. The window now filters the pending ones so it can
 	# offer 记住 / 忽略.
-	var pending := ChatWindow.pending_memory_candidates([
+	var pending := ChatWindow.pending_memory_entries([
 		{"operation": "propose", "status": "pending", "content": "  我喜欢猫  "},
 		{"operation": "propose", "status": "stored", "content": "已写入"},
 		{"operation": "propose", "status": "pending", "content": "   "},
 		{"operation": "delete", "status": "pending", "content": "x"},
 		"not a dict",
 	])
-	check(pending == ["我喜欢猫"], "only trimmed pending proposals are offered, got %s" % [pending])
+	check(pending.size() == 1, "only pending proposals are offered, got %s" % [pending])
+	check(str(pending[0].get("text", "")) == "我喜欢猫",
+		"a pending proposal is trimmed, got %s" % [pending])
+	check(str(pending[0].get("category", "")) == "general",
+		"a candidate without a category saves as general")
+	check(is_equal_approx(float(pending[0].get("importance", 0.0)), 0.5),
+		"a candidate without importance gets the manual default")
+
+	await _main_phrase_wiring()
 
 	print("CHAT_FRAMEWORK_TESTS checks=", checks, " failures=", failures)
 	quit(0 if failures == 0 else 1)
+
+
+## main.gd wires the chat session to the pet's apology and waiting pools, so
+## neither library stays unreachable: a request that really failed lets the pet
+## apologize once, and one still streaming past the waiting threshold earns a
+## single waiting line. Every terminal signal settles the measurement.
+##
+## The probe subclass records the phrase calls: the real say_apology would need
+## a window in the tree, and main.gd must never enter the tree in tests (its
+## _ready starts the service).
+func _main_phrase_wiring() -> void:
+	var fake := FakeClient.new()
+	fake.personas = [{"id": "godette", "display_name": "Godette"}]
+	var chat: Window = ChatWindow.new()
+	chat.visible = false
+	root.add_child(chat)
+	await process_frame
+	fake.features = {"chat": {"available": true, "commands": ["chat.send"]}}
+	chat.configure_chat(fake, {"persona_id": "godette"})
+
+	var main := PhraseProbe.new()
+	# The waiting measurement reads the injected clock, so the threshold is
+	# crossed by moving it instead of waiting the seconds in real time.
+	var clock := FakeClock.new()
+	main.chat_request_clock = clock.now
+	main.chat_window = chat
+	main._connect_chat_phrases()
+	check(main._chat_request_ms < 0, "no request is measured before one is sent")
+	var session = chat.get("_session")
+	check(session != null, "configure_chat created the session the wiring reads")
+
+	# A real failure (the request went out, an error frame came back) apologizes.
+	clock.ms = 1000
+	var id: String = session.send("你好")
+	check(main._chat_request_ms == 1000, "request_sent starts the waiting measurement")
+	check(main.waitings.is_empty(), "the send itself says no waiting line")
+	fake.reply(id, "error", {"code": "timeout", "message": "超时", "retryable": true})
+	check(main.apologies == 1, "a failed request apologizes, got %d" % main.apologies)
+	check(main._chat_request_ms < 0, "the failure settles the measurement")
+
+	# A local input check emits `failed` alone; nothing was answered, so the pet
+	# must not apologize for it.
+	session.send("   ")
+	check(main.apologies == 1, "a blank line sends no apology")
+	check(main._chat_request_ms < 0, "a refused line leaves the measurement alone")
+
+	# The waiting line: a young request stays silent, an aged one speaks once.
+	clock.ms = 2000
+	id = session.send("讲个故事")
+	main._announce_chat_waiting()
+	check(main.waitings.is_empty(), "a young request stays silent")
+	clock.ms = 2000 + int(MainWindow.WAITING_PHRASE_SECONDS * 1000.0) - 1
+	main._announce_chat_waiting()
+	check(main.waitings.is_empty(), "7999 ms is still inside the threshold")
+	clock.ms = 2000 + int(MainWindow.WAITING_PHRASE_SECONDS * 1000.0)
+	main._announce_chat_waiting()
+	check(main.waitings.size() == 1, "a request past the threshold says a waiting line, got %s" % [main.waitings])
+	check(is_equal_approx(float(main.waitings[0]), MainWindow.WAITING_PHRASE_SECONDS),
+		"the waiting line carries the elapsed seconds, got %s" % [main.waitings[0]])
+	main._announce_chat_waiting()
+	check(main.waitings.size() == 1, "one waiting attempt per request")
+
+	# The reply settles the request, and a settled one announces nothing again.
+	fake.reply(id, "result", {"message": "讲完了"})
+	check(main._chat_request_ms < 0, "the reply settles the measurement")
+	main._announce_chat_waiting()
+	check(main.waitings.size() == 1, "a settled request announces nothing")
+
+	# Cancelling settles too.
+	id = session.send("再来一个")
+	check(main._chat_request_ms >= 0, "a second send restarts the measurement")
+	session.cancel()
+	check(main._chat_request_ms < 0, "cancelling settles the measurement")
+	main._announce_chat_waiting()
+	check(main.waitings.size() == 1, "a cancelled request announces nothing")
+
+	# `not_available` settles through `unavailable`; it is a missing capability,
+	# not an answer that went wrong, so it stays apology-free.
+	id = session.send("在吗")
+	fake.reply(id, "error", {"code": "not_available", "message": "Chat is not implemented"})
+	check(main.apologies == 1, "a not_available error does not apologize")
+	check(main._chat_request_ms < 0, "unavailable settles the measurement")
+
+	chat.free()
+	main.free()
 
 class FakeClient:
 	signal request_finished(id: String, type: String, payload: Dictionary)
@@ -147,3 +241,28 @@ class FakeClient:
 
 	func event(id: String, type: String, payload: Dictionary) -> void:
 		event_received.emit(id, type, payload)
+
+
+## main.gd must never enter the tree in tests (its _ready starts the service),
+## so the wiring test records the phrase calls through this subclass instead of
+## showing real bubbles.
+class PhraseProbe extends MainWindow:
+	var apologies := 0
+	var waitings: Array = []
+
+	func say_apology() -> bool:
+		apologies += 1
+		return true
+
+	func say_waiting(elapsed_seconds: float) -> bool:
+		waitings.append(elapsed_seconds)
+		return true
+
+
+## Tick source for `chat_request_clock`, so the test moves past the waiting
+## threshold in one assignment.
+class FakeClock extends RefCounted:
+	var ms := 0
+
+	func now() -> int:
+		return ms

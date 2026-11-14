@@ -6,6 +6,10 @@ extends Node3D
 signal bubble_reply_submitted(text: String)
 ## Emitted by the reply bar's "聊天" button.
 signal bubble_chat_requested
+## Emitted when a click phrase or the start greeting was picked, so main.gd can
+## also read the line aloud through the TTS player. The player itself checks
+## voice.enabled, so a disabled switch keeps the line bubble-only.
+signal local_line_spoken(text: String)
 
 const DragState = preload("res://scripts/drag_state.gd")
 const HitRegions = preload("res://scripts/hit_regions.gd")
@@ -13,19 +17,60 @@ const ScreenMath = preload("res://scripts/screen_math.gd")
 const ActionMenu = preload("res://scripts/action_menu.gd")
 const MotionController = preload("res://scripts/motion/motion_controller.gd")
 const BehaviorController = preload("res://scripts/behavior/behavior_controller.gd")
+const WalkPlan = preload("res://scripts/behavior/walk_plan.gd")
 const SpeechBubble = preload("res://scripts/ui/speech_bubble.gd")
 const ReplyBar = preload("res://scripts/ui/reply_bar.gd")
 ## Pixels between the top of the head and the bottom of the bubble.
 const BUBBLE_GAP := 10.0
 ## Slack kept on each side when the bubble is limited to the window width.
 const BUBBLE_WINDOW_MARGIN := 12.0
+## A second click inside this window and this distance is a double click.
+##
+## 500 ms is the Windows default (`GetDoubleClickTime()`); the previous 350 ms
+## was shorter than the system setting, so a user double-clicking at the system
+## pace got two waves and no chat window.
+const DOUBLE_CLICK_MS := 500
+const DOUBLE_CLICK_DISTANCE := 6.0
+## How long hovering the head keeps the happy face before leaving restores it.
+const HOVER_HAPPY_SECONDS := 0.6
+## How long a head click keeps the happy face (the hover timer can extend it).
+const CLICK_HAPPY_SECONDS := 1.5
+## Menu-selected loop animations stop on their own after this long. A loop never
+## completes, so without a timeout the pet could keep sleeping forever.
+const LOOP_ACTION_SECONDS := 8.0
 ## Longest reply a bubble shows before an ellipsis. The chat window keeps the
 ## full text; only the desktop bubble is clipped so it does not cover the pet.
 const REPLY_BUBBLE_CHARS := 40
+## Click lines start from the greeting/care pool. The current expression adds
+## its own pool, so a visibly happy pet does not answer a click with a care
+## reminder and a sad one does not sound cheerful.
 const CLICK_PHRASE_CATEGORIES := ["greeting", "care"]
+## Expression name -> extra click category. Every label `character_view.gd`
+## exposes is listed, so a visibly excited pet draws from the happy pool and a
+## tired one from its own pool. Anything unmapped keeps the base pool.
+const MOOD_PHRASE_CATEGORIES := {
+	"happy": "happy", "excited": "happy",
+	"sad": "sad", "upset": "sad",
+	"tired": "tired",
+}
 ## The start greeting is a hello only; a care reminder would be a strange first
 ## line after launching the pet.
 const START_PHRASE_CATEGORIES := ["greeting"]
+## A failed chat request answers with an apology instead of silence. The local
+## library carries these; the service cooldowns do not apply to app-side lines,
+## so a short own guard keeps a retry loop from repeating the same apology.
+const APOLOGY_PHRASE_CATEGORIES := ["apology"]
+const APOLOGY_COOLDOWN_MINUTES := 5.0
+## A request still running after this long may be acknowledged with a waiting
+## line. The app has no wait indicator yet, so only the picker is exposed.
+const WAITING_PHRASE_CATEGORIES := ["waiting"]
+const WAITING_PHRASE_SECONDS := 8.0
+const WAITING_COOLDOWN_MINUTES := 5.0
+## Applying a growth candidate is worth one line. Its own category keeps the
+## excitement out of the care pool, and a short cooldown stops a batch of
+## approvals from producing a stream of identical cheers.
+const CELEBRATION_PHRASE_CATEGORIES := ["celebration"]
+const CELEBRATION_COOLDOWN_MINUTES := 1.0
 ## Wall-clock windows for phrase selection, copied from TIME_WINDOWS in
 ## service/expression/phrases.py. Each range is half-open and `night` wraps
 ## midnight; `any` stays valid at every hour.
@@ -80,6 +125,12 @@ var greeting_clock: Callable = Callable()
 ## so the first click is never held back by the cooldown.
 var _click_greeting_said := false
 var _click_greeting_minutes := 0.0
+## Timeline minutes of the last apology, waiting and celebration line, -1.0
+## meaning "never". They are app-side guards: the service's phrase_usage table
+## only covers lines the service picks itself.
+var _apology_minutes := -1.0
+var _waiting_minutes := -1.0
+var _celebration_minutes := -1.0
 ## True while a press began on the bubble, so releasing it opens chat instead of
 ## counting as a click on the pet.
 var _press_on_bubble := false
@@ -104,6 +155,21 @@ var _hold_pending := false
 var _press_cursor := Vector2i.ZERO
 ## Replaces the real desktop rect in headless tests, which report a 0x0 area.
 var work_area_override := Rect2i()
+## Last completed click, for the double-click-to-chat gesture. Screen pixels and
+## the monotonic clock, so neither the window position nor a wall-clock change
+## affects it.
+var _last_click_ms := -1000000
+var _last_click_cursor := Vector2i.ZERO
+## Hover state. `_hover_happy` is the guard that keeps the 0.6 s trigger from
+## re-firing every frame; `_expression_restore` holds the face to put back.
+var _hovering_head := false
+var _hover_head_seconds := 0.0
+var _hover_happy := false
+var _click_happy_remaining := 0.0
+var _expression_override := false
+var _expression_restore := {"emotion": "neutral", "weight": 1.0}
+## Remaining time of a menu-selected loop action, and the countdown that ends it.
+var _loop_action_remaining := 0.0
 
 ## Autonomous behaviour. The controller only decides; everything it decides is
 ## executed through the same paths a user action would take.
@@ -153,7 +219,7 @@ func _ready() -> void:
 	get_window().title = "Pet3D Stage 0"
 	get_window().close_requested.connect(_quit)
 	get_tree().auto_accept_quit = false
-	screen = maxi(0, DisplayServer.window_get_current_screen())
+	screen = maxi(0, DisplayServer.get_primary_screen())
 	dpi_scale = clampf(DisplayServer.screen_get_dpi(screen) / 96.0, 1.0, 3.0)
 	# Install no-activate/passthrough before synchronous model/resource loading.
 	if not _initialize_native():
@@ -212,10 +278,15 @@ func _fps_setting(group: Dictionary, key: String, fallback: int, low: int, high:
 
 func _active_fps() -> int:
 	if hidden:
-		return hidden_fps
+		return _hidden_fps_target()
 	if drag.active:
 		return drag_fps
 	return idle_fps
+
+## Frame cap while the pet is hidden. Subclasses raise this while a utility
+## window (settings, chat) is on screen so the UI stays responsive.
+func _hidden_fps_target() -> int:
+	return hidden_fps
 
 func _configure_action_menu() -> void:
 	# Feed the native tray menu the same flat order this class maps commands back to.
@@ -398,6 +469,9 @@ func _process(delta: float) -> void:
 		_update_bubble_position()
 		if bridge:
 			_update_input()
+			_update_hover(delta)
+		_update_happy(delta)
+		_update_loop_action(delta)
 		if status_label:
 			var status := "待机"
 			if motion.is_held():
@@ -422,8 +496,8 @@ func _update_regions() -> void:
 	else:
 		var px := get_window().size.y / camera.size
 		regions = [
-			{"a": camera.unproject_position(Vector3(0, 0.3, 0)), "b": camera.unproject_position(Vector3(0, 1.0, 0)), "radius": px * 0.23},
-			{"a": camera.unproject_position(Vector3(0, 1.42, 0)), "b": camera.unproject_position(Vector3(0, 1.42, 0)), "radius": px * 0.19}
+			{"id": "body", "a": camera.unproject_position(Vector3(0, 0.3, 0)), "b": camera.unproject_position(Vector3(0, 1.0, 0)), "radius": px * 0.23},
+			{"id": "head", "a": camera.unproject_position(Vector3(0, 1.42, 0)), "b": camera.unproject_position(Vector3(0, 1.42, 0)), "radius": px * 0.19}
 		]
 
 
@@ -639,35 +713,145 @@ func _update_input() -> void:
 		elif _hold_pending:
 			_hold_pending = false
 			print("[stage0] CLICK position=", get_window().position)
-			# A click is a user instruction: stop walking and answer it.
+			# A click is a user instruction: stop walking and answer it. The
+			# region decides whether it is only a wave (hand) or also a happy face
+			# (head), and a second click within the gesture window opens chat.
 			_finish_walk(false)
-			_play_action("wave")
-			_say_click_phrase()
+			var region := HitRegions.id_at(Vector2(cursor - get_window().position), regions)
+			_handle_body_click(cursor, region)
 		else:
 			print("[stage0] DRAG end position=", get_window().position)
 			_end_hold()
 
 
+## Handles one completed click on the body. Returns what it did, which keeps the
+## gesture testable without a native cursor: `chat`, or `wave`.
+##
+## A second click inside DOUBLE_CLICK_MS and DOUBLE_CLICK_DISTANCE opens chat
+## instead of waving again. The region id comes from `project_hit_regions`:
+## head clicks add a happy face, hand clicks only wave, everything else is a
+## plain wave.
+func _handle_body_click(cursor: Vector2i, region: String, now_ms := -1) -> String:
+	var now := Time.get_ticks_msec() if now_ms < 0 else now_ms
+	if _is_double_click(cursor, now):
+		# Consume the pair so a third click starts a fresh single click.
+		_last_click_ms = -1000000
+		bubble_chat_requested.emit()
+		return "chat"
+	_last_click_ms = now
+	_last_click_cursor = cursor
+	_play_action("wave")
+	_say_click_phrase()
+	if region == "head":
+		_trigger_click_happy()
+	return "wave"
+
+
+func _is_double_click(cursor: Vector2i, now_ms: int) -> bool:
+	if now_ms - _last_click_ms > DOUBLE_CLICK_MS:
+		return false
+	return Vector2(cursor - _last_click_cursor).length() <= DOUBLE_CLICK_DISTANCE
+
+
+## --- Hover and part reactions -------------------------------------------------
+
+## Reads the cursor and advances the head-hover timer. Only the head has a
+## hover reaction; the body and hands still report clicks.
+func _update_hover(delta: float) -> void:
+	if bridge == null or not is_instance_valid(actor):
+		return
+	var cursor: Vector2i = bridge.get_cursor_position()
+	var region := HitRegions.id_at(Vector2(cursor - get_window().position), regions)
+	_advance_hover(region, delta)
+
+
+## Accumulates hover time on the head. Entering the head starts the clock; the
+## happy face is applied exactly once when it reaches HOVER_HAPPY_SECONDS, so a
+## still cursor cannot retrigger it every frame. Leaving restores the face.
+func _advance_hover(region: String, delta: float) -> void:
+	if region != "head":
+		_hovering_head = false
+		_hover_head_seconds = 0.0
+		if _hover_happy:
+			_hover_happy = false
+			if _click_happy_remaining <= 0.0:
+				_release_happy()
+		return
+	if not _hovering_head:
+		_hovering_head = true
+		_hover_head_seconds = 0.0
+	_hover_head_seconds += delta
+	if not _hover_happy and _hover_head_seconds >= HOVER_HAPPY_SECONDS:
+		_hover_happy = true
+		_apply_happy()
+
+
+## A head click shows the happy face immediately and keeps it for
+## CLICK_HAPPY_SECONDS. Repeated clicks refresh the timer without re-applying the
+## expression; the hover timer still owns the face while it is active.
+func _trigger_click_happy() -> void:
+	_click_happy_remaining = CLICK_HAPPY_SECONDS
+	_apply_happy()
+
+
+func _update_happy(delta: float) -> void:
+	if _click_happy_remaining <= 0.0:
+		return
+	_click_happy_remaining = maxf(0.0, _click_happy_remaining - delta)
+	if _click_happy_remaining <= 0.0 and not _hover_happy:
+		_release_happy()
+
+
+## Applies happy once, remembering the expression to restore. The actor's own
+## emotion is snapshotted, so a service-driven sad/happy presentation is not
+## replaced by a hard-coded neutral when the hover ends.
+func _apply_happy() -> bool:
+	if not is_instance_valid(actor) or not actor.has_method("set_emotion"):
+		return false
+	if not _expression_override:
+		_expression_restore = {
+			"emotion": str(actor.get("emotion")) if actor.get("emotion") != null else "neutral",
+			"weight": float(actor.get("emotion_weight")) if actor.get("emotion_weight") != null else 1.0,
+		}
+	if bool(actor.set_emotion("happy", 1.0)):
+		_expression_override = true
+		return true
+	return false
+
+
+func _release_happy() -> void:
+	if not _expression_override:
+		return
+	if is_instance_valid(actor) and actor.has_method("set_emotion"):
+		actor.set_emotion(str(_expression_restore.get("emotion", "neutral")),
+			float(_expression_restore.get("weight", 1.0)))
+	_expression_override = false
+
+
 ## Says one greeting or care phrase when the pet is clicked. The library is
 ## optional: a missing or unreadable file leaves the click silent instead of
-## failing, so a package without the data folder still works.
+## failing, so a package without the data folder still works. The line is also
+## offered to the speech player, which reads it only while voice.enabled is on.
 func _say_click_phrase() -> void:
 	var phrase := _pick_click_phrase()
 	if not phrase.is_empty():
 		show_bubble(phrase, _bubble_duration)
+		local_line_spoken.emit(phrase)
 
 ## Says one greeting phrase after the window first appears, when the service's
 ## greeting.on_start is on.
 ##
 ## Starting is not a click, so the click cooldown does not apply here. The
 ## phrase still has to match the wall-clock window, and `show_bubble` keeps
-## honouring bubble.enabled.
+## honouring bubble.enabled. Like the click line, the greeting is offered to
+## the speech player and stays bubble-only while voice.enabled is off.
 func greet_on_start() -> void:
 	if not _greetings_on() or not bool(greeting.get("on_start", true)):
 		return
 	var phrase := _pick_start_phrase()
 	if not phrase.is_empty():
 		show_bubble(phrase, _bubble_duration)
+		local_line_spoken.emit(phrase)
 
 ## Picks one click phrase valid for the current wall-clock window.
 ##
@@ -675,18 +859,137 @@ func greet_on_start() -> void:
 ## click from replacing the words of a recent one: the pet still waves, it just
 ## does not speak again. Time windows are half-open and match
 ## service/expression/phrases.py, so "早上好" never shows at midnight.
+##
+## The current expression adds its own pool on top of greeting/care. The mood
+## pool alone is not enough for every hour, so the base pool always stays in;
+## this is why a sad pet late at night still has a line the library actually
+## carries.
 func _pick_click_phrase() -> String:
 	if not _greetings_on():
 		return ""
 	var now := _greeting_now()
 	if not _click_greeting_ready(float(now.get("minutes", 0.0))):
 		return ""
-	var choices := _phrase_choices(CLICK_PHRASE_CATEGORIES, time_window_for(int(now.get("hour", 0))))
+	var categories: Array = CLICK_PHRASE_CATEGORIES.duplicate()
+	var mood := _mood_phrase_category()
+	if not mood.is_empty() and not categories.has(mood):
+		categories.append(mood)
+	var choices := _phrase_choices(categories, time_window_for(int(now.get("hour", 0))))
 	if choices.is_empty():
 		return ""
 	_click_greeting_said = true
 	_click_greeting_minutes = float(now.get("minutes", 0.0))
 	return choices[randi() % choices.size()]
+
+## The extra click category matching the character's current expression.
+##
+## `character_view.gd` exposes neutral/happy/sad plus the rich excited/tired/
+## upset labels; every non-neutral one has an entry in the table above, so the
+## click draws from a pool that matches the face. Whether that pool has a line
+## for this hour is the merged choice's business; adding a category with no
+## valid line simply contributes nothing.
+func _mood_phrase_category() -> String:
+	if not is_instance_valid(actor) or not ("emotion" in actor):
+		return ""
+	var value: Variant = actor.get("emotion")
+	if value == null:
+		return ""
+	return str(MOOD_PHRASE_CATEGORIES.get(str(value), ""))
+
+## Says one apology line in the desktop bubble after a chat request failed.
+##
+## `chat_session.gd` only reports a failure to the chat window, so the pet stays
+## mute unless someone calls this. The return value says whether a line was
+## shown; a missing apology pool leaves the failure to the chat window's status
+## text instead of inventing words.
+func say_apology() -> bool:
+	var phrase := _pick_apology_phrase()
+	if phrase.is_empty():
+		return false
+	show_bubble(phrase, _bubble_duration)
+	return true
+
+## Picks an enabled apology line, honouring the same wall-clock windows as the
+## other app-side lines. The greeting switch does not gate it: a failed chat is
+## not a greeting, and silencing apologies because greetings are off would hide
+## the only sign the pet noticed. Repeated failures inside
+## APOLOGY_COOLDOWN_MINUTES stay silent so a retry loop cannot spam the bubble.
+func _pick_apology_phrase() -> String:
+	if not _bubble_enabled:
+		return ""
+	var now := _greeting_now()
+	if not _timed_phrase_ready(_apology_minutes, float(now.get("minutes", 0.0)),
+			APOLOGY_COOLDOWN_MINUTES):
+		return ""
+	var choices := _phrase_choices(APOLOGY_PHRASE_CATEGORIES,
+			time_window_for(int(now.get("hour", 0))))
+	if choices.is_empty():
+		return ""
+	_apology_minutes = float(now.get("minutes", 0.0))
+	return choices[randi() % choices.size()]
+
+## Says one waiting line when a request has been outstanding for at least
+## WAITING_PHRASE_SECONDS. `main.gd` calls this once per outstanding chat
+## request as soon as it crosses the threshold. Returns false while the request
+## is still young or nothing is usable.
+func say_waiting(elapsed_seconds: float) -> bool:
+	var phrase := _pick_waiting_phrase(elapsed_seconds)
+	if phrase.is_empty():
+		return false
+	show_bubble(phrase, _bubble_duration)
+	return true
+
+## Picks a waiting line once `elapsed_seconds` reached the 8 s threshold,
+## without repeating one inside WAITING_COOLDOWN_MINUTES.
+func _pick_waiting_phrase(elapsed_seconds: float) -> String:
+	if elapsed_seconds < WAITING_PHRASE_SECONDS:
+		return ""
+	if not _bubble_enabled:
+		return ""
+	var now := _greeting_now()
+	if not _timed_phrase_ready(_waiting_minutes, float(now.get("minutes", 0.0)),
+			WAITING_COOLDOWN_MINUTES):
+		return ""
+	var choices := _phrase_choices(WAITING_PHRASE_CATEGORIES,
+			time_window_for(int(now.get("hour", 0))))
+	if choices.is_empty():
+		return ""
+	_waiting_minutes = float(now.get("minutes", 0.0))
+	return choices[randi() % choices.size()]
+
+## Says one celebration line after a growth candidate was applied, so the
+## change is felt outside the settings panel instead of only appearing in it.
+## The celebration pool is its own category; a missing pool leaves the success
+## to the panel's status text rather than borrowing an unrelated line.
+func say_celebration() -> bool:
+	var phrase := _pick_celebration_phrase()
+	if phrase.is_empty():
+		return false
+	show_bubble(phrase, _bubble_duration)
+	local_line_spoken.emit(phrase)
+	return true
+
+## Picks one celebration line for the current wall-clock window.
+func _pick_celebration_phrase() -> String:
+	if not _bubble_enabled:
+		return ""
+	var now := _greeting_now()
+	if not _timed_phrase_ready(_celebration_minutes, float(now.get("minutes", 0.0)),
+			CELEBRATION_COOLDOWN_MINUTES):
+		return ""
+	var choices := _phrase_choices(CELEBRATION_PHRASE_CATEGORIES,
+			time_window_for(int(now.get("hour", 0))))
+	if choices.is_empty():
+		return ""
+	_celebration_minutes = float(now.get("minutes", 0.0))
+	return choices[randi() % choices.size()]
+
+## True when the last line of this kind is old enough, or none was said yet.
+## -1.0 is the "never" sentinel: the first line is never held back.
+func _timed_phrase_ready(last_minutes: float, minutes: float, cooldown: float) -> bool:
+	if last_minutes < 0.0:
+		return true
+	return minutes - last_minutes >= cooldown
 
 ## Picks one enabled start greeting for the current wall-clock window.
 func _pick_start_phrase() -> String:
@@ -925,6 +1228,24 @@ func _begin_walk(direction: int, cycles: int) -> bool:
 		return false
 	if not motion.is_grounded():
 		return false
+	# The walk clip replaces whatever is playing; only start from idle so an
+	# ambient action is never cut off mid-pose.
+	if current_action != "idle":
+		return false
+	# Placement/scale changes move the window before the motion controller runs.
+	# Sync that actual starting point; headless tests supply the anchor explicitly.
+	# This has to happen before the ground-line guard: with a fresh 0x0 work area
+	# both `anchor.y` and `ground_y()` are 0, so the guard would wave through a
+	# restored floating pet and `begin_walk` would teleport it to the desktop
+	# bottom the moment the menu walk started.
+	var work := _work_area()
+	_last_work_area = work
+	if motion.work_area.size.x <= 0 or motion.work_area.size.y <= 0:
+		_ensure_motion_bounds()
+	else:
+		motion.set_bounds(work, _subject_rect().size)
+		if DisplayServer.get_name() != "headless":
+			_sync_motion_anchor(_subject_rect())
 	# This stage walks along the bottom edge only, and `begin_walk` pins the soles
 	# to the ground line. A pet left floating by a saved placement would be
 	# teleported a full body height the instant the chain decided to walk, so it
@@ -932,17 +1253,6 @@ func _begin_walk(direction: int, cycles: int) -> bool:
 	# there; until then it idles instead of jumping.
 	if absf(motion.anchor.y - motion.ground_y()) > 0.5:
 		return false
-	# The walk clip replaces whatever is playing; only start from idle so an
-	# ambient action is never cut off mid-pose.
-	if current_action != "idle":
-		return false
-	# Placement/scale changes move the window before the motion controller runs.
-	# Sync that actual starting point; headless tests supply the anchor explicitly.
-	var work := _work_area()
-	_last_work_area = work
-	if DisplayServer.get_name() != "headless":
-		_sync_motion_anchor(_subject_rect())
-	motion.set_bounds(work, _subject_rect().size)
 	var stride := _walk_stride_px()
 	var cycle_seconds := float(actor.walk_cycle_length())
 	if stride <= 0.0 or cycle_seconds <= 0.0:
@@ -958,6 +1268,9 @@ func _begin_walk(direction: int, cycles: int) -> bool:
 	if actor.has_method("face_direction"):
 		actor.face_direction(direction)
 	_walk_cycles_done = 0
+	# `walk` is a loop clip but the plan owns its end, so the generic loop timeout
+	# must stay off for the whole segment.
+	_loop_action_remaining = 0.0
 	_walk_active = true
 	# Freeze the subject rect for the whole segment: its bottom edge feeds the
 	# window y and its centre feeds the window x, so a breathing gait box would
@@ -1023,6 +1336,11 @@ func _apply_walk_to_window() -> void:
 
 
 ## Ends a walk segment. `completed` false means it was interrupted.
+##
+## Only a completed plan persists the new position: an interrupted walk may be
+## mid-stride or owned by a drag/fall, and the drag path saves the placement it
+## ends at. A running walk cannot be ended by the generic loop timeout (see
+## `_on_action_changed`), so an 8 s menu walk still reaches its target and saves.
 func _finish_walk(completed: bool) -> void:
 	if not _walk_active:
 		motion.cancel_walk()
@@ -1030,6 +1348,7 @@ func _finish_walk(completed: bool) -> void:
 	_walk_active = false
 	motion.cancel_walk()
 	_walk_request = -1
+	_loop_action_remaining = 0.0
 	if is_instance_valid(actor):
 		if actor.has_method("release_walk_facing"):
 			actor.release_walk_facing()
@@ -1243,7 +1562,7 @@ func _handle_tray(action: int) -> void:
 			if hidden:
 				close_reply_bar()
 			_apply_actor_state()
-			Engine.max_fps = hidden_fps if hidden else idle_fps
+			Engine.max_fps = _hidden_fps_target() if hidden else idle_fps
 			if bridge:
 				bridge.set_interactive(false)
 				previous_interactive = false
@@ -1259,6 +1578,17 @@ func _handle_tray(action: int) -> void:
 			_quit()
 
 func _play_action(action: String) -> void:
+	# `walk` from the menu/tray is a real travelling segment, not an in-place
+	# loop clip that would slide the body. Anything else (busy, held, airborne,
+	# or a clip that cannot be measured) falls through to the ordinary path.
+	if action == "walk":
+		# Re-selecting Walk while the segment is running must not replay the clip:
+		# the restart would seek to 0 and the wrap detector would read that jump
+		# as a completed cycle, yanking the anchor forward by up to a full stride.
+		if _walk_active:
+			return
+		if _begin_menu_walk():
+			return
 	# Any action request replaces the walk clip, so the plan must stop driving
 	# the position in the same frame. The behaviour chain only ever asks for an
 	# action while standing idle, so this cannot cut a walk short from inside.
@@ -1269,9 +1599,67 @@ func _play_action(action: String) -> void:
 	else:
 		_on_action_changed(action)
 
+## Starts a menu-requested walk in the direction with more room. Returns false
+## when the pet is not idle on the ground line, or the clip has no usable
+## stride, so the caller can play the loop clip in place instead.
+func _begin_menu_walk() -> bool:
+	if current_action != "idle":
+		return false
+	if not is_instance_valid(actor):
+		return false
+	if motion.is_held() or motion.is_falling() or _motion_active:
+		return false
+	# A restored placement can reach the menu before anything has told the motion
+	# controller where the desktop is; with 0x0 bounds its anchor is (0,0) and the
+	# ground guard would pass against `ground_y() == 0`. Sync first so the guard
+	# sees the real soles height.
+	if motion.work_area.size.x <= 0 or motion.work_area.size.y <= 0:
+		_ensure_motion_bounds()
+	if not motion.is_grounded():
+		return false
+	var room := _walk_room()
+	var stride := _walk_stride_px()
+	var cycles := WalkPlan.cycles_that_fit(maxf(float(room.left), float(room.right)),
+		stride, 2)
+	if cycles <= 0:
+		return false
+	var direction := 1 if float(room.right) >= float(room.left) else -1
+	return _begin_walk(direction, cycles)
+
 func _on_action_changed(action: String) -> void:
 	current_action = action
+	# Loop clips never complete, so a menu-selected one needs its own stop to
+	# avoid latching forever (sleeping_idle, running, old_man_walk, ...).
+	#
+	# `walk` is also a loop clip, but a travelling segment ends at the plan's own
+	# target; an 8 s timeout would cut a long walk short and skip the position
+	# save. The fallback in-place walk (held, airborne, no room) still needs the
+	# stop, so only a running segment is exempt.
+	_loop_action_remaining = LOOP_ACTION_SECONDS if action != "idle" \
+		and _action_mode(action) == "loop" \
+		and not (action == "walk" and _walk_active) else 0.0
 	print("[stage0] ACTION ", action)
+
+func _action_mode(name_: String) -> String:
+	var entry: Variant = action_library.get(name_, {})
+	if entry is Dictionary:
+		return str((entry as Dictionary).get("mode", "once"))
+	return "once"
+
+## Counts down a loop action and returns to idle when it expires. Re-checks the
+## mode so a one-shot that replaced the loop in the meantime is left alone.
+func _update_loop_action(delta: float) -> void:
+	if _loop_action_remaining <= 0.0:
+		return
+	# The walk plan owns its own end; a loop timeout here would interrupt the
+	# travelling segment and skip the position save.
+	if _walk_active:
+		return
+	_loop_action_remaining = maxf(0.0, _loop_action_remaining - delta)
+	if _loop_action_remaining > 0.0:
+		return
+	if current_action != "idle" and _action_mode(current_action) == "loop":
+		_play_action("idle")
 
 
 ## Plays an animation a chat reply asked for.
@@ -1390,7 +1778,7 @@ func _cancel_drag() -> void:
 		_motion_active = true
 	if bridge:
 		bridge.end_capture()
-	Engine.max_fps = hidden_fps if hidden else idle_fps
+	Engine.max_fps = _hidden_fps_target() if hidden else idle_fps
 
 func _build_diagnostics() -> void:
 	var layer := CanvasLayer.new()

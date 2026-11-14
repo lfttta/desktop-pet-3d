@@ -290,7 +290,7 @@ func _on_completed(_message: String, usage: Dictionary, memory_ops: Array, state
 	# With auto_capture off the service hands back candidates instead of writing
 	# them, and the reply used to say "记忆 N 条" while nothing was stored. Offer
 	# the choice instead of counting them.
-	var pending := pending_memory_candidates(memory_ops)
+	var pending := pending_memory_entries(memory_ops)
 	if not pending.is_empty():
 		_render_memory_candidates(pending)
 		notes.append("%d 条记忆待确认" % pending.size())
@@ -305,11 +305,13 @@ func _on_completed(_message: String, usage: Dictionary, memory_ops: Array, state
 	if state_delta.has("presentation"):
 		state_updated.emit(state_delta)
 
-## The candidates a reply asked us to remember but did not store.
+## The pending proposals a reply asked us to remember, with the metadata the
+## service attached to them. Missing fields fall back to the manual defaults so
+## a plain-text candidate still saves as a general memory.
 ##
 ## Static so the filter can be tested without building the whole window.
-static func pending_memory_candidates(memory_ops: Array) -> Array[String]:
-	var lines: Array[String] = []
+static func pending_memory_entries(memory_ops: Array) -> Array:
+	var entries: Array = []
 	for op in memory_ops:
 		if typeof(op) != TYPE_DICTIONARY:
 			continue
@@ -319,19 +321,39 @@ static func pending_memory_candidates(memory_ops: Array) -> Array[String]:
 		if str(entry.get("status", "")) != "pending":
 			continue
 		var text := str(entry.get("content", "")).strip_edges()
-		if not text.is_empty():
-			lines.append(text)
-	return lines
+		if text.is_empty():
+			continue
+		var category := str(entry.get("category", "general")).strip_edges()
+		if category.is_empty():
+			category = "general"
+		var importance_value: Variant = entry.get("importance", 0.5)
+		var importance := 0.5
+		if typeof(importance_value) in [TYPE_INT, TYPE_FLOAT]:
+			importance = clampf(float(importance_value), 0.0, 1.0)
+		var source_type := str(entry.get("source_type", "")).strip_edges()
+		entries.append({
+			"text": text,
+			"category": category,
+			"importance": importance,
+			"source_type": source_type,
+		})
+	return entries
 
-func _render_memory_candidates(lines: Array[String]) -> void:
+func _render_memory_candidates(entries: Array) -> void:
 	var block := VBoxContainer.new()
 	var title := Label.new()
 	title.text = "AI 想记住："
 	block.add_child(title)
-	for line in lines:
+	for item in entries:
+		if typeof(item) != TYPE_DICTIONARY:
+			continue
+		var entry: Dictionary = item
+		var text := str(entry.get("text", ""))
+		if text.is_empty():
+			continue
 		var row := HBoxContainer.new()
 		var label := Label.new()
-		label.text = line
+		label.text = text
 		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		row.add_child(label)
@@ -339,21 +361,30 @@ func _render_memory_candidates(lines: Array[String]) -> void:
 		keep.text = "记住"
 		var drop := Button.new()
 		drop.text = "忽略"
-		keep.pressed.connect(_remember_candidate.bind(label, keep, drop, line))
-		drop.pressed.connect(_dismiss_candidate.bind(label, keep, drop, line))
+		keep.pressed.connect(_remember_candidate.bind(label, keep, drop, entry))
+		drop.pressed.connect(_dismiss_candidate.bind(label, keep, drop, text))
 		row.add_child(keep)
 		row.add_child(drop)
 		block.add_child(row)
 	messages.add_child(block)
 	_scroll_to_bottom()
 
-func _remember_candidate(label: Label, keep: Button, drop: Button, text: String) -> void:
+func _remember_candidate(label: Label, keep: Button, drop: Button, entry: Dictionary) -> void:
 	keep.disabled = true
 	drop.disabled = true
+	var text := str(entry.get("text", ""))
 	if _service == null:
 		label.text = text + "（服务未连接）"
 		return
-	if _service.request("memory.propose", {"text": text}, 10.0).is_empty():
+	var payload := {
+		"text": text,
+		"category": str(entry.get("category", "general")),
+		"importance": clampf(float(entry.get("importance", 0.5)), 0.0, 1.0),
+	}
+	var source_type := str(entry.get("source_type", ""))
+	if not source_type.is_empty():
+		payload["source_type"] = source_type
+	if _service.request("memory.propose", payload, 10.0).is_empty():
 		label.text = text + "（保存失败）"
 		return
 	label.text = text + "（已记住）"

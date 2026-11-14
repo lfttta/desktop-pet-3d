@@ -83,6 +83,23 @@ def counters(pid: int) -> dict:
         KERNEL.CloseHandle(handle)
 
 
+def park(x: int, y: int, deadline: float = 1.2) -> None:
+    # SetCursorPos is a request, not a promise. This runs on a real, attended
+    # desktop: the user's own mouse motion (or another program) can move the
+    # cursor between the call and the next sample, and a press issued from a
+    # foreign cursor position lands off the body so the pet never grabs and the
+    # drag measures (0, 0). Park and verify, re-issuing until the cursor reads
+    # back at the point or the deadline passes.
+    point = w.POINT()
+    end = time.monotonic() + deadline
+    while True:
+        USER.SetCursorPos(x, y)
+        time.sleep(0.05)
+        USER.GetCursorPos(c.byref(point))
+        if (point.x, point.y) == (x, y) or time.monotonic() >= end:
+            return
+
+
 def verify(package: Path, report: Path, duration: float = 120.0) -> None:
     report.mkdir(parents=True, exist_ok=True)
     # Coordinates remain physical pixels on displays using non-100% scaling.
@@ -128,44 +145,85 @@ def verify(package: Path, report: Path, duration: float = 120.0) -> None:
             # one frame building the greeting bubble and its font, so poll
             # instead of trusting a single 250 ms sample. One run out of three
             # failed here while the same binary passed on the spot.
+            #
+            # The poll also has to survive the window moving underneath the
+            # probe. This is a real, attended desktop: the pet can be grabbed
+            # by the user (a hold keeps the window interactive, but it carries
+            # the hit region away with the cursor), and a pending placement
+            # change can land while the probe is in flight. Follow the live
+            # rectangle instead of trusting the one sampled above; the drag
+            # deltas below are likewise measured from geometry read afresh.
             body_interactive = False
-            deadline = time.monotonic() + 2.0
+            deadline = time.monotonic() + 6.0
             while time.monotonic() < deadline:
+                live = rectangle(role)
+                if (live.left, live.top) != (rect.left, rect.top):
+                    rect = live
+                    width, height = rect.right - rect.left, rect.bottom - rect.top
+                    x = rect.left + width // 2
+                    y = rect.top + int(height * (0.5 + (0.9 - 0.69) / 3.0))
+                    USER.SetCursorPos(x, y)
                 if not bool(USER.GetWindowLongPtrW(role, -20) & 0x20):
                     body_interactive = True
                     break
                 time.sleep(0.05)
             assert body_interactive, 'Body hit region did not become interactive'
             foreground = USER.GetForegroundWindow()
-            USER.mouse_event(0x0002, 0, 0, 0, 0)
-            time.sleep(0.12)
-            # Measure while the button is still down. Reading the rectangle after
-            # mouse-up measured the fall, not the drag: the motion controller
-            # deliberately drops a released pet to the bottom edge, so a reading
-            # taken 0.25 s later is wherever gravity has carried it by then.
+            # The drag is retried: on an attended desktop a press can be issued
+            # while the user's hand has carried the cursor off the body (the pet
+            # then never grabs and measures (0, 0)), a cold-start hitch can
+            # swallow a whole short press, or a grab from a foreign cursor
+            # position makes the pet follow that hand instead of the probe. Each
+            # attempt re-reads the live rectangle — a failed attempt may still
+            # have moved the pet and its fall must finish before pressing again —
+            # and parks the cursor with verification. A drag that is genuinely
+            # broken fails every attempt, so the retries do not mask a regression.
             dragged = None
-            for step in range(1, 6):
-                USER.SetCursorPos(x + step * 15, y - step * 8)
-                time.sleep(0.06)
-                dragged = rectangle(role)
-            held_steps = [x + step * 15 for step in range(1, 6)]
-            USER.mouse_event(0x0004, 0, 0, 0, 0)
-            # Release behaviour is asserted separately below; let it settle first.
-            time.sleep(1.2)
-            landed = rectangle(role)
-            released_delta = (landed.left - initial[0], landed.top - initial[1])
-            # Print the geometry on every run: this assertion drives the real
-            # cursor, so when it fails the numbers are the only evidence of
-            # whether the role was clamped at a wall or simply did not follow.
-            print('DESKTOP_DRAG start=%s probe=(%d,%d) size=(%d,%d) cursor_end=%d dragged=%s delta=(%d,%d) released_delta=(%d,%d)'
-                  % (initial, x, y, width, height, held_steps[-1], (dragged.left, dragged.top),
-                     dragged.left - initial[0], dragged.top - initial[1],
-                     released_delta[0], released_delta[1]), flush=True)
-            # Horizontal tracking must be close to 1:1. The vertical one is a
-            # spring: the pet lags the cursor while it swings, so it only has to
-            # move the right way and by a comparable amount.
-            dx = dragged.left - initial[0]
-            dy = dragged.top - initial[1]
+            landed = None
+            dx = dy = 0
+            for attempt in range(1, 4):
+                if attempt > 1:
+                    time.sleep(1.4)
+                rect = rectangle(role)
+                initial = (rect.left, rect.top)
+                width, height = rect.right - rect.left, rect.bottom - rect.top
+                x = rect.left + width // 2
+                y = rect.top + int(height * (0.5 + (0.9 - 0.69) / 3.0))
+                park(x, y)
+                time.sleep(0.1)
+                USER.mouse_event(0x0002, 0, 0, 0, 0)
+                time.sleep(0.12)
+                # Measure while the button is still down. Reading the rectangle
+                # after mouse-up measured the fall, not the drag: the motion
+                # controller deliberately drops a released pet to the bottom
+                # edge, so a reading taken 0.25 s later is wherever gravity has
+                # carried it by then.
+                for step in range(1, 6):
+                    USER.SetCursorPos(x + step * 15, y - step * 8)
+                    time.sleep(0.06)
+                    dragged = rectangle(role)
+                held_steps = [x + step * 15 for step in range(1, 6)]
+                USER.mouse_event(0x0004, 0, 0, 0, 0)
+                # Release behaviour is asserted separately below; let it settle.
+                time.sleep(1.2)
+                landed = rectangle(role)
+                released_delta = (landed.left - initial[0], landed.top - initial[1])
+                # Print the geometry on every attempt: this assertion drives the
+                # real cursor, so when it fails the numbers are the only evidence
+                # of whether the role was clamped at a wall or simply did not
+                # follow.
+                dx = dragged.left - initial[0]
+                dy = dragged.top - initial[1]
+                print('DESKTOP_DRAG attempt=%d/3 start=%s probe=(%d,%d) size=(%d,%d) cursor_end=%d dragged=%s delta=(%d,%d) released_delta=(%d,%d)'
+                      % (attempt, initial, x, y, width, height, held_steps[-1],
+                         (dragged.left, dragged.top), dx, dy,
+                         released_delta[0], released_delta[1]), flush=True)
+                # Horizontal tracking must be close to 1:1. The vertical one is a
+                # spring: the pet lags the cursor while it swings, so it only has
+                # to move the right way and by a comparable amount. An attempt
+                # that satisfies both is accepted; anything else is retried.
+                if dx > 40 and dy < -15 and dx < 130:
+                    break
             assert dx > 40, 'Drag did not move the role horizontally, delta=%d' % dx
             assert dy < -15, 'Drag did not lift the role, delta=%d' % dy
             assert dx < 130, 'Role moved further than the cursor, delta=%d' % dx

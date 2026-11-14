@@ -9,18 +9,18 @@ func run() -> void:
 	window.visible = false
 	root.add_child(window)
 	await process_frame
-	window.populate({"user_name": "Test", "scale": 1.0, "screen_id": ""}, [])
+	window.populate({"user_name": "Test", "scale": 1.0, "screen_id": ""})
 	var failures := 0
 	if catalog.size() != 1 or catalog[0].id != "godette":
 		failures += 1
-	# The display selector still exists; the desktop policy selectors added by
-	# the v3 settings page are not character pickers.
-	if window.display_choice == null or window.find_children("*", "OptionButton", true, false).is_empty():
+	# The pet lives on the primary screen only, so the old display selector is
+	# gone; the settings window must not grow one back.
+	if window.get("display_choice") != null:
 		failures += 1
 	var patches: Array = []
 	window.save_requested.connect(func(value): patches.append(value))
 	window._save()
-	if patches.size() != 1 or patches[0].has("character_id"):
+	if patches.size() != 1 or patches[0].has("character_id") or patches[0].has("screen_id"):
 		failures += 1
 	window.free()
 	print("STAGE2_CATALOG_TESTS checks=3 failures=", failures)

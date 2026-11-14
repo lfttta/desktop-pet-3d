@@ -9,8 +9,10 @@ extends Window
 
 ## Emitted when the typed line is ready. The text is trimmed and never empty.
 signal submitted(text: String)
-## Emitted on Escape or when the bar loses focus.
-signal cancelled
+## Emitted on Escape or when the bar loses focus. The current text travels with
+## it, and the next open restores it, so a glance at another window does not
+## throw the draft away.
+signal cancelled(text: String)
 ## Emitted by the "聊天" button: open the full chat window.
 signal chat_requested
 
@@ -21,6 +23,9 @@ const PADDING := 8
 var entry: LineEdit
 var chat_button: Button
 var _built := false
+## Last text the bar was dismissed with. `open_at` puts it back so a lost focus
+## (clicking the desktop, switching apps) does not discard what was typed.
+var draft := ""
 
 
 func _init() -> void:
@@ -71,17 +76,23 @@ func _ensure_nodes() -> void:
 
 
 ## Shows the bar at `screen_position` (the bubble's top-left in screen pixels)
-## and gives the field the caret.
+## and gives the field the caret. A draft kept from the last dismissal is
+## restored, with the caret at its end.
 func open_at(screen_position: Vector2i) -> void:
 	_ensure_nodes()
 	position = screen_position
-	entry.text = ""
+	entry.text = draft
 	show()
 	grab_focus()
 	entry.grab_focus.call_deferred()
+	entry.caret_column = entry.text.length()
 
 
 func close() -> void:
+	# Any dismissal keeps what is typed; only a successful submit clears it
+	# explicitly after closing.
+	if _built and entry != null:
+		draft = entry.text
 	visible = false
 
 
@@ -93,6 +104,8 @@ func _on_submitted(text: String) -> void:
 	var body := text.strip_edges()
 	if body.is_empty():
 		return
+	entry.clear()
+	draft = ""
 	close()
 	submitted.emit(body)
 
@@ -100,17 +113,22 @@ func _on_submitted(text: String) -> void:
 func _on_entry_gui_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key != null and key.pressed and key.keycode == KEY_ESCAPE:
-		close()
-		cancelled.emit()
+		_cancel()
 
 
 func _on_chat_pressed() -> void:
-	close()
+	_cancel()
 	chat_requested.emit()
 
 
 func _on_focus_exited() -> void:
 	if not visible:
 		return
+	_cancel()
+
+
+## Remembers the current text so `open_at` can restore it, then closes.
+func _cancel() -> void:
+	draft = entry.text
 	close()
-	cancelled.emit()
+	cancelled.emit(draft)

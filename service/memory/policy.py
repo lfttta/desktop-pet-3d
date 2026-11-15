@@ -5,7 +5,7 @@ repetition adds saturated value, and confidence covers how sure the source was.
 Nothing here reads or writes storage.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import re
 import unicodedata
 
@@ -155,6 +155,120 @@ def within_window(value, now=None, seconds=DEDUPE_WINDOW_SECONDS):
 def timestamp_value(value):
     parsed = parse_timestamp(value)
     return parsed.timestamp() if parsed is not None else 0.0
+
+
+# -- fact occurrence time -------------------------------------------------
+#
+# 事实发生时间（occurred_at）的最小确定性解析器。依据：Graphiti/Zep 把每条
+# 事实的世界时间线（valid_at）与系统时间线（created_at）分开，检索排序应使用
+# 世界时间；Mem0 以对话发生日（Observation Date）为锚解析相对表达
+# （'User went to Paris last week is useless 6 months later'），decay 在缺失
+# event_date 时回退 updated_at。本仓库取其最小子集：只认下面这个封闭集合，
+# 解析不出一律返回 None，绝不猜（Graphiti extract_timestamps 的
+# 'NEVER hallucinate dates' 原则），由调用方回退 created_at。
+
+_OCCURRENCE_DATE_FULL = re.compile(
+    r'(\d{4})\s*[-/年.]\s*(\d{1,2})\s*[-/月.]\s*(\d{1,2})\s*[日号]?')
+_OCCURRENCE_DATE_SHORT = re.compile(r'(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]')
+# 冒号时刻是 24 小时制；点/时时刻支持上午/下午/凌晨等前缀修正。
+_OCCURRENCE_CLOCK_COLON = re.compile(r'(?<!\d)(\d{1,2})[:：](\d{2})(?!\d)')
+_OCCURRENCE_CLOCK_DIAN = re.compile(
+    r'(上午|中午|下午|晚上|凌晨|早上|傍晚)?\s*(\d{1,2})\s*[点时]\s*'
+    r'(?:(\d{1,2})\s*分?)?')
+# 相对表达只做这一组，以写入时刻为锚。(?<![大前]) 挡住「大后天」——不在
+# 支持集合内时宁可整体放弃，也不误读成后天。
+_OCCURRENCE_RELATIVE = re.compile(
+    r'今天|今日|明天|明日|(?<![大前])后天|(\d{1,3})\s*天[后後]|下周([一二三四五六日天])')
+_AFTERNOON_PREFIXES = ('下午', '晚上', '傍晚')
+_WEEKDAY_INDEX = {'一': 0, '二': 1, '三': 2, '四': 3, '五': 4, '六': 5,
+                  '日': 6, '天': 6}
+
+
+def _occurrence_date(text, anchor):
+    for match in _OCCURRENCE_DATE_FULL.finditer(text):
+        try:
+            return datetime(int(match.group(1)), int(match.group(2)),
+                            int(match.group(3)), tzinfo=timezone.utc).date()
+        except ValueError:
+            continue
+    # 无年份的月日取锚定年，不做进退年猜测。
+    for match in _OCCURRENCE_DATE_SHORT.finditer(text):
+        try:
+            return datetime(anchor.year, int(match.group(1)),
+                            int(match.group(2)), tzinfo=timezone.utc).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _occurrence_relative_day(text, anchor):
+    for match in _OCCURRENCE_RELATIVE.finditer(text):
+        if match.group(1) is not None:
+            return anchor.date() + timedelta(days=int(match.group(1)))
+        if match.group(2) is not None:
+            # 周一为一周之首：下周X = 本周剩余天数 + X 的序数。
+            return anchor.date() + timedelta(
+                days=(7 - anchor.weekday()) + _WEEKDAY_INDEX[match.group(2)])
+        word = match.group()
+        if word in ('今天', '今日'):
+            return anchor.date()
+        if word in ('明天', '明日'):
+            return anchor.date() + timedelta(days=1)
+        if word == '后天':
+            return anchor.date() + timedelta(days=2)
+    return None
+
+
+def _occurrence_clock(text):
+    """Return (hour, minute) from the earliest parseable clock token."""
+    candidates = []
+    for match in _OCCURRENCE_CLOCK_COLON.finditer(text):
+        hour, minute = int(match.group(1)), int(match.group(2))
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            candidates.append((match.start(), hour, minute))
+            break
+    for match in _OCCURRENCE_CLOCK_DIAN.finditer(text):
+        hour = int(match.group(2))
+        if match.group(1) in _AFTERNOON_PREFIXES and hour < 12:
+            hour += 12
+        minute = int(match.group(3) or 0)
+        if 0 <= hour <= 23 and 0 <= minute <= 59:
+            candidates.append((match.start(), hour, minute))
+            break
+    if not candidates:
+        return None
+    _, hour, minute = min(candidates)
+    return hour, minute
+
+
+def occurred_at_for(text, now_str):
+    """Parse the fact time a memory text points at; None when unparseable.
+
+    纯函数：``text`` 为记忆原文，``now_str`` 为写入时刻（created_at），
+    相对表达（今天/明天/后天/N天后/下周X）以它为锚。日期只给到日时取当日
+    00:00 UTC；绝对日期与相对词同时出现时绝对日期优先；只有时刻没有日期时
+    取写入当天。只认上方的封闭集合，其余一律返回 None。
+    """
+    anchor = parse_timestamp(now_str)
+    if anchor is None:
+        return None
+    if type(text) is not str or not text.strip():
+        return None
+    day = _occurrence_date(text, anchor)
+    if day is None:
+        day = _occurrence_relative_day(text, anchor)
+    clock = _occurrence_clock(text)
+    if day is None and clock is None:
+        return None
+    if day is None:
+        day = anchor.date()
+    hour, minute = clock if clock is not None else (0, 0)
+    try:
+        moment = datetime(day.year, day.month, day.day, hour, minute,
+                          tzinfo=timezone.utc)
+    except ValueError:
+        return None
+    return moment.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
 
 # -- fuzz levels ---------------------------------------------------------

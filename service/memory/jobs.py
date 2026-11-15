@@ -357,6 +357,31 @@ def _run_dedupe(store, memory_id, moment):
     return {'status': 'superseded', 'kept': keeper['id']}
 
 
+def _fact_expired(item, cutoff):
+    """True when the row pointed at a future moment that has since passed.
+
+    仅影响「写入时指向未来（occurred_at > created_at）、且该时刻已过去超过
+    窗口」的行，如写入两个月前的「我下周三去上海」。过去时事实
+    （occurred_at < created_at，如「2024年在北京工作」）与无时间 token 的
+    行完全不受影响。
+    """
+    occurred = policy.timestamp_value(item.get('occurred_at'))
+    created = policy.timestamp_value(item.get('created_at'))
+    if occurred <= 0 or created <= 0:
+        return False
+    if occurred <= created:
+        return False
+    return occurred < cutoff
+
+
+def _staleness_stamp(item, cutoff):
+    """Archive staleness 的行级新鲜度时间戳：正常行取 updated_at/created_at，
+    已过期的事实行取 occurred_at（事件早已过去，不该再保持话题新鲜）。"""
+    if _fact_expired(item, cutoff):
+        return policy.timestamp_value(item.get('occurred_at'))
+    return policy.timestamp_value(item.get('updated_at') or item.get('created_at'))
+
+
 def _run_archive(store, settings, moment, topic_key=None):
     config = _memory_settings(settings).get('archive', {})
     if not config.get('enabled', True):
@@ -371,8 +396,7 @@ def _run_archive(store, settings, moment, topic_key=None):
     for members in groups.values():
         if not members:
             continue
-        latest = max(policy.timestamp_value(item.get('updated_at')
-                                            or item.get('created_at')) for item in members)
+        latest = max(_staleness_stamp(item, cutoff) for item in members)
         if latest >= cutoff:
             continue
         for item in members:
@@ -508,9 +532,7 @@ def _scan(store, settings, moment):
         for key, members in groups.items():
             if queued >= MAX_PER_SCAN or not members:
                 break
-            latest = max(policy.timestamp_value(item.get('updated_at')
-                                                or item.get('created_at'))
-                         for item in members)
+            latest = max(_staleness_stamp(item, cutoff) for item in members)
             if latest >= cutoff or _has_topic_job(store, key):
                 continue
             if enqueue(store, None, JOB_ARCHIVE, {'topic_key': key},

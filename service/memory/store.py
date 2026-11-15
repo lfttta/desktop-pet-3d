@@ -47,6 +47,9 @@ EXTRA_COLUMNS = (
     ('memory_level', "TEXT DEFAULT 'short'"),
     ('topic_id', 'TEXT'),
     ('protected', 'INTEGER DEFAULT 0'),
+    # 事实发生时间（双时态最小子集，只取 valid 侧）：可空，存量行为 NULL，
+    # 读取侧回退 updated_at。解析不出时间时写入侧回退 created_at。
+    ('occurred_at', 'TEXT'),
 )
 
 MEMORY_COLUMNS = (
@@ -55,6 +58,7 @@ MEMORY_COLUMNS = (
     'body_hash', 'mention_count', 'session_count', 'recall_count', 'confidence',
     'strength', 'last_reinforced_at', 'dedupe_key', 'superseded_by',
     'supersedes_id', 'fuzz_level', 'memory_level', 'topic_id', 'protected',
+    'occurred_at',
 )
 
 WRITABLE_COLUMNS = frozenset(MEMORY_COLUMNS) - {'id'}
@@ -98,6 +102,7 @@ def memory_summary(row):
         'status': row.get('status', 'active'),
         'created_at': row.get('created_at'),
         'updated_at': row.get('updated_at'),
+        'occurred_at': row.get('occurred_at'),
         'last_reinforced_at': row.get('last_reinforced_at'),
         'fuzz_level': int(row.get('fuzz_level') or 0),
         'memory_level': row.get('memory_level') or 'short',
@@ -302,11 +307,21 @@ class MemoryStore:
         columns = [name for name in MEMORY_COLUMNS if name in record]
         if 'id' not in columns or 'content' not in columns:
             raise ValueError('memory records require id and content')
+        values = [record[name] for name in columns]
+        if 'occurred_at' not in columns:
+            # 写入时回填事实发生时间（fail-open）：解析不出就回退 created_at，
+            # 与旧行为等价；存量行该列为 NULL，读取侧回退 updated_at。
+            # 延迟导入避免 store↔policy 环（同 record_recall 先例）。
+            from service.memory import policy
+            anchor = record.get('created_at')
+            values.append(
+                policy.occurred_at_for(record.get('content'), anchor) or anchor)
+            columns.append('occurred_at')
         placeholders = ','.join('?' for _ in columns)
         verb = 'INSERT OR IGNORE' if or_ignore else 'INSERT'
         connection.execute(
             f'{verb} INTO memories({",".join(columns)}) VALUES ({placeholders})',
-            [record[name] for name in columns])
+            values)
 
     def update_memory(self, connection, memory_id, fields, subject_user_id=SUBJECT_USER_ID):
         updates = {name: value for name, value in fields.items() if name in WRITABLE_COLUMNS}

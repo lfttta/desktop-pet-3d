@@ -273,8 +273,13 @@ def _recall_weight(count):
     return 1.0 - 1.0 / (1.0 + count)
 
 
-def _recency_weight(updated_at, now):
-    stamp = policy.timestamp_value(updated_at)
+def _recency_weight(summary, now):
+    # 事实发生时间优先（双时态检索侧最小子集）：「我下周三去上海」过期后
+    # recency 应随事实时间轴衰减，而不是随被再次提起的 updated_at 回春。
+    # 存量行与无时间 token 行没有 occurred_at，回退 updated_at
+    # （Mem0 decay 的 event_date→updated_at 回退链）。
+    stamp = policy.timestamp_value(summary.get('occurred_at')
+                                   or summary.get('updated_at'))
     if stamp <= 0:
         return 0.0
     age = max(0.0, now - stamp)
@@ -284,7 +289,7 @@ def _recency_weight(updated_at, now):
 def _rank_score(summary, relevance, now):
     strength = policy.clamp(summary.get('strength') or 0.0)
     recall = _recall_weight(summary.get('recall_count') or 0)
-    recency = _recency_weight(summary.get('updated_at'), now)
+    recency = _recency_weight(summary, now)
     return (RANK_RELEVANCE_WEIGHT * policy.clamp(relevance)
             + RANK_STRENGTH_WEIGHT * strength
             + RANK_RECALL_WEIGHT * recall
@@ -313,7 +318,9 @@ def _ranked_entries(entries, now):
         -item[1],
         -float(item[2].get('strength') or 0.0),
         -int(item[2].get('recall_count') or 0),
-        -policy.timestamp_value(item[2].get('updated_at')),
+        # 平局裁决同样以事实发生时间优先，无则回退 updated_at。
+        -policy.timestamp_value(item[2].get('occurred_at')
+                                or item[2].get('updated_at')),
     ))
     return [item[2] for item in ranked]
 

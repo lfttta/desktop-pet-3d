@@ -2,8 +2,10 @@
 
 FTS5's unicode61 tokenizer treats a run of CJK characters as one token, so the
 index text is expanded with per-character and bigram tokens. Queries are
-expanded the same way and scored in Python, which keeps ordering independent of
-the tokenizer and makes the LIKE fallback behave like the FTS path.
+expanded the same way. When the FTS index is available, candidates are ranked
+by bm25 (which carries IDF, so common filler words cannot outrank distinctive
+terms) and that relevance order is preserved through Python scoring; the LIKE
+fallback keeps the Python hit-count ordering.
 
 Keyword hits are returned unchanged. Only when the keyword path finds nothing
 and ``ai.embedding`` is enabled does the caller-supplied embedder get used, and
@@ -150,13 +152,24 @@ def _keyword_candidates(store, query, candidate_limit, subject_user_id):
         if score <= 0:
             continue
         scored.append((score, row))
-    scored.sort(key=lambda item: (
-        -item[0],
-        -float(item[1].get('importance') or 0.0),
-        -int(item[1].get('mention_count') or 0),
-        -policy.timestamp_value(item[1].get('last_reinforced_at')),
-        -policy.timestamp_value(item[1].get('updated_at')),
-    ))
+    if scored and 'fts_rank' in scored[0][1]:
+        # FTS 候选已按 bm25 相关性升序给出；保持这一相关性次序，
+        # Python 分只在 bm25 同分时作次级裁决。LIKE 兜底路径无
+        # fts_rank，沿用原有的词命中排序。
+        scored.sort(key=lambda item: (
+            float(item[1]['fts_rank']),
+            -item[0],
+            -int(item[1].get('mention_count') or 0),
+            -policy.timestamp_value(item[1].get('updated_at')),
+        ))
+    else:
+        scored.sort(key=lambda item: (
+            -item[0],
+            -float(item[1].get('importance') or 0.0),
+            -int(item[1].get('mention_count') or 0),
+            -policy.timestamp_value(item[1].get('last_reinforced_at')),
+            -policy.timestamp_value(item[1].get('updated_at')),
+        ))
     return scored, terms
 
 
@@ -237,12 +250,18 @@ def _keyword_relevance(score, terms):
 
 
 def _keyword_entries(scored, terms):
+    # bm25 次序本身就是相关性信号：按位次给出 (0,1] 的单调衰减相关度，
+    # 让上下文融合（strength/recall/recency）建立在真实的词频相关性上，
+    # 而不是无 IDF 的词命中计数。LIKE 兜底路径仍用原有关键词相关度。
+    by_rank = bool(scored) and 'fts_rank' in scored[0][1]
     entries = []
-    for score, row in scored:
+    for position, (score, row) in enumerate(scored):
+        relevance = (1.0 / (1.0 + position)) if by_rank \
+            else _keyword_relevance(score, terms)
         summary = memory_summary(row)
         summary['snippet'] = _snippet(row.get('content', ''))
         summary['score'] = score
-        entries.append((_keyword_relevance(score, terms), summary))
+        entries.append((relevance, summary))
     return entries
 
 

@@ -527,12 +527,19 @@ class MemoryStore:
             return False
 
     def fts_candidates(self, subject_user_id, expression, limit):
+        """按 FTS5 bm25 相关性升序返回候选（数值越小越相关）。
+
+        bm25 自带 IDF，常见虚词不会与关键实词同权；候选上限因此只影响
+        召回余量而不影响排序质量（LIMIT 在排序之后生效）。附带
+        ``fts_rank`` 列供上层在 Python 侧保持这一相关性次序。
+        """
         cursor = self.connection.execute(
-            "SELECT * FROM memories WHERE subject_user_id=? AND status='active' "
-            "AND deleted_at IS NULL AND id IN "
-            "(SELECT memory_id FROM memory_fts WHERE memory_fts MATCH ?) "
-            "ORDER BY updated_at DESC, created_at DESC LIMIT ?",
-            (subject_user_id, expression, limit))
+            "SELECT m.*, bm25(memory_fts) AS fts_rank FROM memory_fts "
+            "JOIN memories AS m ON m.id = memory_fts.memory_id "
+            "WHERE memory_fts MATCH ? AND m.subject_user_id=? "
+            "AND m.status='active' AND m.deleted_at IS NULL "
+            "ORDER BY fts_rank LIMIT ?",
+            (expression, subject_user_id, limit))
         return _rows(cursor)
 
     @staticmethod

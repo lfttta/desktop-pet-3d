@@ -62,7 +62,9 @@ const START_PHRASE_CATEGORIES := ["greeting"]
 const APOLOGY_PHRASE_CATEGORIES := ["apology"]
 const APOLOGY_COOLDOWN_MINUTES := 5.0
 ## A request still running after this long may be acknowledged with a waiting
-## line. The app has no wait indicator yet, so only the picker is exposed.
+## line. `main.gd` announces it once per request through `say_waiting`, which
+## reports back whether it actually spoke; the picker and the cooldown decide
+## that, so this block only owns the threshold and the pool it selects from.
 const WAITING_PHRASE_CATEGORIES := ["waiting"]
 const WAITING_PHRASE_SECONDS := 8.0
 const WAITING_COOLDOWN_MINUTES := 5.0

@@ -229,6 +229,15 @@ class ServiceStagingHygieneTests(unittest.TestCase):
         self.source = Path(self._tmp.name) / "repo"
         (self.source / "service").mkdir(parents=True)
         (self.source / "service/main.py").write_text("# fixture\n", encoding="utf-8")
+        # build_service hard-fails without the persona card (data/persona is
+        # read at runtime, not imported), so the fixture tree needs one too.
+        persona = self.source / "data/persona"
+        persona.mkdir(parents=True)
+        (persona / "godette.json").write_text(
+            '{"version": 1, "id": "godette", "display_name": "Godette", '
+            '"summary": "fixture summary", "voice": "fixture voice", '
+            '"prompt": "fixture prompt", "boundaries": ["fixture boundary"]}\n',
+            encoding="utf-8")
 
     def _run_main(self, output: Path):
         def fake_run(command, **kwargs):
@@ -236,6 +245,10 @@ class ServiceStagingHygieneTests(unittest.TestCase):
             bundle.mkdir(parents=True, exist_ok=True)
             (bundle / "pet-service.exe").write_bytes(b"MZ")
             (bundle / "fresh.dll").write_bytes(b"new")
+            # --add-data bundles the source data tree into _internal/data.
+            (bundle / "_internal/data/persona").mkdir(parents=True, exist_ok=True)
+            (bundle / "_internal/data/persona/godette.json").write_bytes(
+                (self.source / "data/persona/godette.json").read_bytes())
             return _completed()
         argv = ["build_service.py", "--source-root", str(self.source), "--output", str(output)]
         with patch.object(service, "check_python", return_value=""), \

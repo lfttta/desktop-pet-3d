@@ -8,12 +8,13 @@
 自认未闭环项、2026-11-11 全仓审查修复新增功能。
 
 分支归属说明：本文写于审查修复轮，当时所有条目同处一个工作区。随后这批改动按主题
-拆分为多次提交。其中依赖 `service/vision.py`、`service/background.py`、
-`app/scripts/ui/chat_bubble.gd` 与 `behavior.walk_enabled` 的条目（#9、#14、#16）
-随这些模块移入 `fix/pending-wiring` 分支，并已在该分支完成接线：气泡由 `main.gd`
-实例化并分发 `chat.delta` / `chat.done` / `autonomy.bubble`，行走开关由设置页写入
-`behavior` 控制器，落屏按实际所在显示器切换活动屏。因此这三条**需在
-`fix/pending-wiring` 分支上执行**，`fix/review-hardening` 分支不含这些模块。
+拆分为多次提交，并已 cherry-pick 进集成分支 `integrate/local-work`（基于
+`origin/main` 75af4ae + 20 条 cherry-pick）。依赖 `service/vision.py`、
+`service/background.py`、`app/scripts/ui/speech_bubble.gd` 与
+`behavior.walk_enabled` 的条目（#9、#14、#16）已在该分支完成接线：气泡由
+`main.gd` 镜像会话的 `bubble_received` / `assistant_message` 到桌面窗口，行走
+开关由设置页写入 `behavior` 控制器，识屏由心跳钩子 `tick` 触发主动截屏。因此
+本清单统一在 `integrate/local-work` 分支上执行。
 #15 的 TTS 端点能力在本轮之前即为 `not_available`，不在修复范围内。
 
 ## 一、阶段三遗留 7 条（stage-3-plan §5.3）

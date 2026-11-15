@@ -6,6 +6,12 @@ transaction, so a failed body write leaves the original memory untouched.
 Deletes are two-phase: a transaction marks the row ``deleting`` and enqueues an
 outbox row, then process_outbox (called from the runtime tick) removes the
 Markdown body and marks the row ``deleted``.
+
+propose additionally resolves chat-vs-chat key-field contradictions at write
+time: when the incoming chat memory conflicts with an unprotected chat row
+already active, the new version supersedes the old one in the same
+transaction (new information wins, the old body stays for history); manual
+or protected sides keep the existing detect/人工 flow.
 """
 
 import json
@@ -15,7 +21,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from service.database import SUBJECT_USER_ID
-from service.memory import policy
+from service.memory import conflicts, policy
 from service.memory.store import (
     DEFAULT_CATEGORY, DEFAULT_CONFIDENCE, DEFAULT_IMPORTANCE, memory_summary,
     utc_now,
@@ -173,6 +179,16 @@ def propose(store, text, category=DEFAULT_CATEGORY, importance=DEFAULT_IMPORTANC
                 policy.is_same_topic(row.get('content', ''), cleaned):
             return _merge(store, row, cleaned, importance, source_type, subject_user_id)
 
+    # 写路径自动 supersede 的候选：仅 chat 来源、同主题且 key-field 冲突的
+    # active 行（判定与 conflicts.detect 一致）。manual/correction 等人工
+    # 来源不收集，维持交给 detect/人工。这里沿用 200 行上限；若后续要彻底
+    # 去掉这次扫描，应新增只取同主题候选的查询，而不是退回全表扫描。
+    conflicting_rows = []
+    if source_type == 'chat':
+        for row in store.find_active(subject_user_id, limit=DEDUPE_SCAN_LIMIT):
+            if conflicts._conflicting(row, {'content': cleaned}):
+                conflicting_rows.append(row)
+
     memory_id = uuid.uuid4().hex
     now = utc_now()
     body_hash = ''
@@ -180,9 +196,20 @@ def propose(store, text, category=DEFAULT_CATEGORY, importance=DEFAULT_IMPORTANC
         body_hash = store.write_body(memory_id, cleaned)
     except OSError:
         body_hash = ''
+    # 写路径自动 supersede（Graphiti「新信息胜出」）：仅 chat 来源、旧行同
+    # 为 chat 且未受保护时生效；manual/correction 等人工来源与受保护旧行
+    # 完全不触发，交给 detect/人工。正文写失败走 QUEUED 兜底时同样不动
+    # 旧行，等 outbox 恢复后再由 detect 收敛。
+    supersede_targets = []
+    if body_hash and source_type == 'chat':
+        supersede_targets = [row for row in conflicting_rows
+                             if row.get('source_type') == 'chat'
+                             and not row.get('protected')]
     record = _new_record(memory_id, cleaned, category, importance, source_type,
                          'active' if body_hash else 'pending', body_hash, now,
-                         subject_user_id, source_message_id)
+                         subject_user_id, source_message_id,
+                         supersedes_id=(supersede_targets[0]['id']
+                                        if supersede_targets else None))
     status = COMMITTED if body_hash else QUEUED
     try:
         with store.database.transaction() as connection:
@@ -191,12 +218,22 @@ def propose(store, text, category=DEFAULT_CATEGORY, importance=DEFAULT_IMPORTANC
                                    {'status': status}, status=status)
             if not body_hash:
                 store.enqueue(connection, memory_id, 'write_body', {'text': cleaned})
+            for target in supersede_targets:
+                store.update_memory(connection, target['id'], {
+                    'status': 'superseded',
+                    'superseded_by': memory_id,
+                    'updated_at': now,
+                }, subject_user_id=subject_user_id)
+                store.record_operation(connection, target['id'], 'supersede', {
+                    'superseded_by': memory_id, 'reason': 'auto_conflict'})
     except sqlite3.Error:
         if body_hash:
             store.delete_body(memory_id)
         raise
     if body_hash:
         store.index_memory(memory_id, cleaned)
+        for target in supersede_targets:
+            store.remove_index(target['id'])
         return {'status': COMMITTED, 'memory': _summary(store, memory_id, subject_user_id)}
     return {'status': QUEUED, 'reason': 'body_write_failed',
             'memory': _summary(store, memory_id, subject_user_id)}

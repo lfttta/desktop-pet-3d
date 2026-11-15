@@ -22,6 +22,7 @@ USER.GetWindowTextW.argtypes = [w.HWND, w.LPWSTR, c.c_int]
 USER.GetWindowRect.argtypes = [w.HWND, c.POINTER(w.RECT)]
 USER.GetWindowLongPtrW.argtypes = [w.HWND, c.c_int]
 USER.GetWindowLongPtrW.restype = c.c_ssize_t
+USER.GetClassNameW.argtypes = [w.HWND, w.LPWSTR, c.c_int]
 USER.SendMessageW.argtypes = [w.HWND, w.UINT, w.WPARAM, w.LPARAM]
 USER.PostMessageW.argtypes = [w.HWND, w.UINT, w.WPARAM, w.LPARAM]
 USER.WindowFromPoint.argtypes = [w.POINT]
@@ -63,6 +64,61 @@ def rectangle(handle):
     if not USER.GetWindowRect(handle, c.byref(value)):
         raise c.WinError(c.get_last_error())
     return value
+
+
+def window_title(handle) -> str:
+    title = c.create_unicode_buffer(256)
+    USER.GetWindowTextW(handle, title, 256)
+    return title.value
+
+
+def engine_windows(pid: int) -> set:
+    """Handles of this process's Godot windows.
+
+    Godot creates every window the app owns — the pet, the reply bar, the chat
+    window, the settings dialog — with the `Engine` window class. Restricting the
+    focus check to that class keeps the IME helper windows Windows attaches to a
+    focused thread out of it: those appear and disappear with focus itself and
+    would otherwise read as the app stealing the foreground.
+    """
+    result = set()
+
+    @CALLBACK
+    def visit(handle, _):
+        owner = w.DWORD()
+        USER.GetWindowThreadProcessId(handle, c.byref(owner))
+        if owner.value == pid:
+            klass = c.create_unicode_buffer(64)
+            USER.GetClassNameW(handle, klass, 64)
+            if klass.value == 'Engine':
+                result.add(handle)
+        return True
+
+    USER.EnumWindows(visit, 0)
+    return result
+
+
+def settled_rectangle(handle, samples: int = 6, timeout: float = 4.0):
+    """Waits until the window has stopped moving and returns its rectangle.
+
+    The pet is placed at a saved spot and then settles onto the bottom edge, so
+    its window is still moving for a moment after start-up. A press computed
+    from a rectangle read before that settles lands somewhere else inside the
+    window: once it landed on the greeting bubble, which opened the reply bar and
+    took the foreground, failing the focus check for a reason that has nothing to
+    do with dragging.
+    """
+    previous = None
+    repeats = 0
+    end = time.monotonic() + timeout
+    while True:
+        live = rectangle(handle)
+        current = (live.left, live.top, live.right, live.bottom)
+        repeats = repeats + 1 if current == previous else 0
+        previous = current
+        if repeats >= samples or time.monotonic() >= end:
+            return live
+        time.sleep(0.05)
 
 
 def counters(pid: int) -> dict:
@@ -168,29 +224,47 @@ def verify(package: Path, report: Path, duration: float = 120.0) -> None:
                     break
                 time.sleep(0.05)
             assert body_interactive, 'Body hit region did not become interactive'
+            # The foreground baseline is the window the user was using, or the
+            # pet window itself when Windows handed it the foreground at start-up.
+            # Comparing against this exact handle after the drag would fail
+            # whenever the user switches applications while the probe runs, which
+            # says nothing about the pet. What matters instead is that the app
+            # does not end up owning the foreground: it did not have it at the
+            # start, so it may not have it at the end either, and it may never
+            # open a new window that holds it.
             foreground = USER.GetForegroundWindow()
+            baseline_owned = foreground in engine_windows(app.pid)
             # The drag is retried: on an attended desktop a press can be issued
             # while the user's hand has carried the cursor off the body (the pet
-            # then never grabs and measures (0, 0)), a cold-start hitch can
-            # swallow a whole short press, or a grab from a foreign cursor
-            # position makes the pet follow that hand instead of the probe. Each
-            # attempt re-reads the live rectangle — a failed attempt may still
-            # have moved the pet and its fall must finish before pressing again —
-            # and parks the cursor with verification. A drag that is genuinely
-            # broken fails every attempt, so the retries do not mask a regression.
+            # then never grabs and measures (0, 0)), or a cold-start hitch can
+            # swallow a whole short press. Each attempt waits for the window to
+            # stop moving before deriving the press point — a stale point lands
+            # on the bubble instead of the body — and re-reads the live rectangle.
+            # A drag that is genuinely broken fails every attempt, so the retries
+            # do not mask a regression. Stealing the foreground is not retried:
+            # that is a defect the first time it happens.
             dragged = None
             landed = None
             dx = dy = 0
             for attempt in range(1, 4):
                 if attempt > 1:
                     time.sleep(1.4)
-                rect = rectangle(role)
-                initial = (rect.left, rect.top)
-                width, height = rect.right - rect.left, rect.bottom - rect.top
-                x = rect.left + width // 2
-                y = rect.top + int(height * (0.5 + (0.9 - 0.69) / 3.0))
-                park(x, y)
-                time.sleep(0.1)
+                # Settle first, then derive and park the press point against the
+                # rectangle actually in effect. If the window moves anyway (a
+                # placement change landing), park again rather than pressing from
+                # a point that no longer means the body.
+                for _settle in range(2):
+                    rect = settled_rectangle(role)
+                    initial = (rect.left, rect.top)
+                    width, height = rect.right - rect.left, rect.bottom - rect.top
+                    x = rect.left + width // 2
+                    y = rect.top + int(height * (0.5 + (0.9 - 0.69) / 3.0))
+                    park(x, y)
+                    time.sleep(0.1)
+                    live = rectangle(role)
+                    if (live.left, live.top) == initial:
+                        break
+                owned = engine_windows(app.pid)
                 USER.mouse_event(0x0002, 0, 0, 0, 0)
                 time.sleep(0.12)
                 # Measure while the button is still down. Reading the rectangle
@@ -208,16 +282,27 @@ def verify(package: Path, report: Path, duration: float = 120.0) -> None:
                 time.sleep(1.2)
                 landed = rectangle(role)
                 released_delta = (landed.left - initial[0], landed.top - initial[1])
+                after = USER.GetForegroundWindow()
+                # The app must not own the foreground after the drag. It did not
+                # have it when the drag started, and the pet window is created
+                # `no_focus` — Windows cannot drop that style at runtime — so an
+                # Engine window holding the foreground now was opened by the
+                # interaction and is a real focus steal: a desktop pet may not
+                # take the keyboard away from whatever the user was typing in.
+                stole = after in engine_windows(app.pid) and (
+                    not baseline_owned or after not in owned)
                 # Print the geometry on every attempt: this assertion drives the
                 # real cursor, so when it fails the numbers are the only evidence
                 # of whether the role was clamped at a wall or simply did not
                 # follow.
                 dx = dragged.left - initial[0]
                 dy = dragged.top - initial[1]
-                print('DESKTOP_DRAG attempt=%d/3 start=%s probe=(%d,%d) size=(%d,%d) cursor_end=%d dragged=%s delta=(%d,%d) released_delta=(%d,%d)'
+                print('DESKTOP_DRAG attempt=%d/3 start=%s probe=(%d,%d) size=(%d,%d) cursor_end=%d dragged=%s delta=(%d,%d) released_delta=(%d,%d) foreground=%r stole=%s'
                       % (attempt, initial, x, y, width, height, held_steps[-1],
                          (dragged.left, dragged.top), dx, dy,
-                         released_delta[0], released_delta[1]), flush=True)
+                         released_delta[0], released_delta[1],
+                         window_title(after), stole), flush=True)
+                assert not stole, 'Role opened a window that took focus during drag: %r' % window_title(after)
                 # Horizontal tracking must be close to 1:1. The vertical one is a
                 # spring: the pet lags the cursor while it swings, so it only has
                 # to move the right way and by a comparable amount. An attempt
@@ -227,7 +312,6 @@ def verify(package: Path, report: Path, duration: float = 120.0) -> None:
             assert dx > 40, 'Drag did not move the role horizontally, delta=%d' % dx
             assert dy < -15, 'Drag did not lift the role, delta=%d' % dy
             assert dx < 130, 'Role moved further than the cursor, delta=%d' % dx
-            assert USER.GetForegroundWindow() == foreground, 'Role stole focus during drag'
             # A released pet falls back to the work area's bottom edge. This is
             # the documented behaviour of the physics branch and must not be
             # passed off as a drag failure.

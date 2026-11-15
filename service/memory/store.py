@@ -47,8 +47,9 @@ EXTRA_COLUMNS = (
     ('memory_level', "TEXT DEFAULT 'short'"),
     ('topic_id', 'TEXT'),
     ('protected', 'INTEGER DEFAULT 0'),
-    # 事实发生时间（双时态最小子集，只取 valid 侧）：可空，存量行为 NULL，
-    # 读取侧回退 updated_at。解析不出时间时写入侧回退 created_at。
+    # 事实发生时间（双时态最小子集，只取 valid 侧）：可空。写入时从原文
+    # 确定性解析，解析不出就存 NULL（fail-open），读取侧回退 updated_at，
+    # 与旧行为等价。
     ('occurred_at', 'TEXT'),
 )
 
@@ -309,13 +310,14 @@ class MemoryStore:
             raise ValueError('memory records require id and content')
         values = [record[name] for name in columns]
         if 'occurred_at' not in columns:
-            # 写入时回填事实发生时间（fail-open）：解析不出就回退 created_at，
-            # 与旧行为等价；存量行该列为 NULL，读取侧回退 updated_at。
+            # 写入时回填事实发生时间。解析不出就存 NULL：读取侧回退
+            # updated_at，recency 仍随「最后提起」衰减，与旧行为等价。
+            # 若在此处落 created_at，occurred_at 读取优先会让无时间 token
+            # 的行在再次提起后按「首次写入」衰减，偏离旧行为。
             # 延迟导入避免 store↔policy 环（同 record_recall 先例）。
             from service.memory import policy
-            anchor = record.get('created_at')
-            values.append(
-                policy.occurred_at_for(record.get('content'), anchor) or anchor)
+            values.append(policy.occurred_at_for(
+                record.get('content'), record.get('created_at')))
             columns.append('occurred_at')
         placeholders = ','.join('?' for _ in columns)
         verb = 'INSERT OR IGNORE' if or_ignore else 'INSERT'

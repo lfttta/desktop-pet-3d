@@ -364,6 +364,10 @@ def _fact_expired(item, cutoff):
     窗口」的行，如写入两个月前的「我下周三去上海」。过去时事实
     （occurred_at < created_at，如「2024年在北京工作」）与无时间 token 的
     行完全不受影响。
+
+    已知边界：merge 不重锚 occurred_at（同文重复提起不改变事实指向的
+    时刻），因此周期性重复的未来计划会在事件过去超过窗口后被归档；
+    重复计划的重锚语义留待后续轮次。
     """
     occurred = policy.timestamp_value(item.get('occurred_at'))
     created = policy.timestamp_value(item.get('created_at'))

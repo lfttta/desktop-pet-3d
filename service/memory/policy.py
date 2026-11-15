@@ -164,21 +164,27 @@ def timestamp_value(value):
 # 世界时间；Mem0 以对话发生日（Observation Date）为锚解析相对表达
 # （'User went to Paris last week is useless 6 months later'），decay 在缺失
 # event_date 时回退 updated_at。本仓库取其最小子集：只认下面这个封闭集合，
-# 解析不出一律返回 None，绝不猜（Graphiti extract_timestamps 的
-# 'NEVER hallucinate dates' 原则），由调用方回退 created_at。
+# 解析不出一律返回 None（写入侧落 NULL，读取侧回退 updated_at），绝不猜
+# （Graphiti extract_timestamps 的 'NEVER hallucinate dates' 原则）。
+#
+# 已知边界（均确定性、fail-open，留待后续轮次）：
+# - 「中午1点」按 01:00 原样解析（口语的 13:00 与 11:00 有歧义，不猜）；
+# - URL/表格里的日期会被当作事实时间（排除它们需要分词级上下文，超出本轮）；
+# - 日界按 UTC，与仓库全 UTC 约定一致。
 
 _OCCURRENCE_DATE_FULL = re.compile(
-    r'(\d{4})\s*[-/年.]\s*(\d{1,2})\s*[-/月.]\s*(\d{1,2})\s*[日号]?')
-_OCCURRENCE_DATE_SHORT = re.compile(r'(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]')
+    r'(?<!\d)(\d{4})\s*[-/年.]\s*(\d{1,2})\s*[-/月.]\s*(\d{1,2})\s*[日号]?(?!\d)')
+_OCCURRENCE_DATE_SHORT = re.compile(r'(?<!\d)(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]')
 # 冒号时刻是 24 小时制；点/时时刻支持上午/下午/凌晨等前缀修正。
 _OCCURRENCE_CLOCK_COLON = re.compile(r'(?<!\d)(\d{1,2})[:：](\d{2})(?!\d)')
 _OCCURRENCE_CLOCK_DIAN = re.compile(
     r'(上午|中午|下午|晚上|凌晨|早上|傍晚)?\s*(\d{1,2})\s*[点时]\s*'
     r'(?:(\d{1,2})\s*分?)?')
-# 相对表达只做这一组，以写入时刻为锚。(?<![大前]) 挡住「大后天」——不在
-# 支持集合内时宁可整体放弃，也不误读成后天。
+# 相对表达只做这一组，以写入时刻为锚。(?<![大前]) 挡住「大后天」，(?<!\d)
+# 挡住「1000天后」尾随命中「0天后」——不在支持集合内时宁可整体放弃。
 _OCCURRENCE_RELATIVE = re.compile(
-    r'今天|今日|明天|明日|(?<![大前])后天|(\d{1,3})\s*天[后後]|下周([一二三四五六日天])')
+    r'今天|今日|明天|明日|(?<![大前])后天|(?<!\d)(\d{1,3})\s*天[后後]'
+    r'|下周([一二三四五六日天])')
 _AFTERNOON_PREFIXES = ('下午', '晚上', '傍晚')
 _WEEKDAY_INDEX = {'一': 0, '二': 1, '三': 2, '四': 3, '五': 4, '六': 5,
                   '日': 6, '天': 6}
@@ -186,8 +192,13 @@ _WEEKDAY_INDEX = {'一': 0, '二': 1, '三': 2, '四': 3, '五': 4, '六': 5,
 
 def _occurrence_date(text, anchor):
     for match in _OCCURRENCE_DATE_FULL.finditer(text):
+        year = int(match.group(1))
+        # 年份远离锚点的多为 URL/编号/表格碎片（语料实测出现过
+        # 9255-09-27 这类解析），宁可放弃。
+        if not 1900 <= year <= anchor.year + 100:
+            continue
         try:
-            return datetime(int(match.group(1)), int(match.group(2)),
+            return datetime(year, int(match.group(2)),
                             int(match.group(3)), tzinfo=timezone.utc).date()
         except ValueError:
             continue
@@ -247,7 +258,8 @@ def occurred_at_for(text, now_str):
     纯函数：``text`` 为记忆原文，``now_str`` 为写入时刻（created_at），
     相对表达（今天/明天/后天/N天后/下周X）以它为锚。日期只给到日时取当日
     00:00 UTC；绝对日期与相对词同时出现时绝对日期优先；只有时刻没有日期时
-    取写入当天。只认上方的封闭集合，其余一律返回 None。
+    取写入当天。只认上方的封闭集合，其余一律返回 None（写入侧落 NULL，
+    读取侧回退 updated_at）。
     """
     anchor = parse_timestamp(now_str)
     if anchor is None:

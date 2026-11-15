@@ -106,10 +106,11 @@ def test_propose_backfills_occurred_at(tmp_path):
         row = store.get_memory(outcome['memory']['id'])
         assert row['occurred_at'] == '2026-11-20T15:00:00.000000Z'
 
-        # 无时间 token：fail-open 回退 created_at，与旧行为等价。
+        # 无时间 token：解析不出就存 NULL（fail-open），读取侧回退
+        # updated_at——recency 仍随最后提起衰减，与旧行为等价。
         plain = writer.propose(store, '我喜欢吃苹果')
         plain_row = store.get_memory(plain['memory']['id'])
-        assert plain_row['occurred_at'] == plain_row['created_at']
+        assert plain_row['occurred_at'] is None
     finally:
         database.close()
 
@@ -139,6 +140,9 @@ def test_propose_backfills_occurred_at(tmp_path):
     ('去年冬天很冷', None),
     ('大后天见', None),
     ('前天去爬山', None),
+    ('1000天后', None),       # 尾随「0天后」不允许命中
+    ('9255-09-27', None),     # 年份远离锚点：URL/编号碎片，放弃
+    ('2026-11-201', None),    # 日子粘着更长数字串，放弃
     ('', None),
 ])
 def test_occurred_at_for_table(text, expected):
@@ -187,6 +191,28 @@ def test_null_occurred_at_keeps_updated_at_ordering(ranking_env):
     assert ids == ['fact-old', 'fact-new']
 
 
+def test_rementioned_memory_without_time_token_keeps_updated_at_recency(ranking_env):
+    database, store = ranking_env
+    now = datetime.now(timezone.utc)
+    # 无时间 token 的记忆 30 天前写入、今天再次提起（merge 只更新
+    # updated_at，不写 occurred_at）：recency 必须按「最后提起」算。
+    # 若写入侧把 created_at 落进 occurred_at，读取侧 occurred_at 优先会让
+    # 它按「首次写入」衰减、被更新更早但更强(mention=2)的静态行反超——
+    # 本用例钉住该回归（静态行 score≈0.593 vs 正确 0.678 / 出错 0.583）。
+    _insert(store, 'mem-merged', '我喜欢吃苹果',
+            created_at=_stamp(30, now), updated_at=_stamp(0, now),
+            last_reinforced_at=_stamp(0, now))
+    _insert(store, 'mem-static', '我喜欢吃苹果',
+            created_at=_stamp(30, now), updated_at=_stamp(30, now),
+            mention_count=2)
+
+    texts, ids = search_for_context(database, '喜欢吃苹果', {}, 5, 500,
+                                    with_ids=True)
+
+    assert texts == ['我喜欢吃苹果', '我喜欢吃苹果']
+    assert ids == ['mem-merged', 'mem-static']
+
+
 # -- 过期事实降权 -------------------------------------------------------------
 
 
@@ -200,7 +226,8 @@ def test_future_pointing_fact_gets_archived_after_window(tmp_path):
         _insert(store, 'fact-future', '我下周三去上海',
                 created_at=_stamp(90, now), updated_at=_stamp(1, now),
                 occurred_at=_stamp(30, now))
-        # 过去时事实：occurred_at < created_at，完全不参与该判定。
+        # 过去时事实（直接插入的守卫单测：occurred_at < created_at；真实
+        # propose 写路径见 test_past_time_fact_via_propose_not_archived）。
         _insert(store, 'fact-past', '我2024年在北京工作',
                 created_at=_stamp(90, now), updated_at=_stamp(1, now),
                 occurred_at='2024-01-01T00:00:00.000000Z')
@@ -219,5 +246,26 @@ def test_future_pointing_fact_gets_archived_after_window(tmp_path):
             'status': 'archived', 'archived': 1}
         assert store.get_memory('fact-future')['status'] == 'archived'
         assert store.get_memory('fact-past')['status'] == 'active'
+    finally:
+        database.close()
+
+
+def test_past_time_fact_via_propose_not_archived(tmp_path):
+    database = Database(tmp_path / 'pet.db')
+    store = MemoryStore(database)
+    try:
+        now = datetime.now(timezone.utc)
+        outcome = writer.propose(store, '我2024年5月20日搬到了北京')
+        assert outcome['status'] == writer.COMMITTED
+        row = store.get_memory(outcome['memory']['id'])
+        # 真实写路径产出的过去时事实：解析出的时刻早于写入时刻。
+        assert row['occurred_at'] == '2024-05-20T00:00:00.000000Z'
+        assert row['occurred_at'] < row['created_at']
+
+        # occurred_at 过期判定只针对未来时事实，该行不受影响、不入队。
+        queued = jobs._scan(store, {'memory': {'archive': {
+            'enabled': True, 'topic_stale_days': 14}}}, now)
+        assert queued == 0
+        assert jobs.list_jobs(store, status='pending') == []
     finally:
         database.close()

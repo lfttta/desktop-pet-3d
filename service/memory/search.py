@@ -276,8 +276,8 @@ def _recall_weight(count):
 def _recency_weight(summary, now):
     # 事实发生时间优先（双时态检索侧最小子集）：「我下周三去上海」过期后
     # recency 应随事实时间轴衰减，而不是随被再次提起的 updated_at 回春。
-    # 存量行与无时间 token 行没有 occurred_at，回退 updated_at
-    # （Mem0 decay 的 event_date→updated_at 回退链）。
+    # 存量行与解析不出时间的行没有 occurred_at（写入侧落 NULL），回退
+    # updated_at（Mem0 decay 的 event_date→updated_at 回退链）。
     stamp = policy.timestamp_value(summary.get('occurred_at')
                                    or summary.get('updated_at'))
     if stamp <= 0:

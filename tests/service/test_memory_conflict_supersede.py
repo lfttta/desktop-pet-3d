@@ -276,3 +276,20 @@ def test_detect_on_200_active_rows_is_fast(env):
 
     assert created == []
     assert elapsed < 0.2, f'detect() 耗时 {elapsed:.3f}s（200 行，阈值 0.2s）'
+
+
+def test_detect_respects_pair_budget(env, monkeypatch):
+    """合并 PR #1 后 detect 遍历全库；配对预算必须真的截断扫描。"""
+    for index in range(4):
+        _insert_chat(env, f'我下午{index}点有会')
+
+    compared = []
+
+    def fake_conflicting(left, right):
+        compared.append((left['id'], right['id']))
+        return False
+
+    monkeypatch.setattr(conflicts, '_facts_conflicting', fake_conflicting)
+    monkeypatch.setattr(conflicts, 'MAX_CONFLICT_PAIRS', 3)
+    assert conflicts.detect(env.memory) == []
+    assert len(compared) == 3

@@ -3,6 +3,7 @@
 状态：**待执行**（§一 7 条除外——已由远端 `docs/stage-3-plan.md` §5.3 的实测结论替代；
 §二 #11、§三 #23 随锁主屏移除）。本清单在 Linux 开发环境整理，其余条目需要 Windows 实机
 （真实显示器、Godot 4.7.2 导出包）执行。执行后在本文件追加结果列与日期，不改写既有结论。
+2026-11-16 本机补跑：#8/#19/#21/#22 自动化通过；#16 标为后端-only；其余人工条目仍待执行。
 
 依据：`docs/stage-3-plan.md` §5.3「桌面人工验收」7 条（写作时该节编号为 §5.2）、`docs/reports/`  foot-pose-repair
 自认未闭环项、2026-11-11 全仓审查修复新增功能。
@@ -13,8 +14,8 @@
 `service/background.py`、`app/scripts/ui/speech_bubble.gd` 与
 `behavior.walk_enabled` 的条目（#9、#14、#16）已在该分支完成接线：气泡由
 `main.gd` 镜像会话的 `bubble_received` / `assistant_message` 到桌面窗口，行走
-开关由设置页写入 `behavior` 控制器，识屏由心跳钩子 `tick` 触发主动截屏。因此
-本清单统一在 `integrate/local-work` 分支上执行。
+开关由设置页写入 `behavior` 控制器，识屏由心跳钩子 `tick` 触发主动截屏（仅服务层；
+应用侧未接入口，见 #16）。因此本清单统一在 `integrate/local-work` 分支上执行。
 #15 的 TTS 端点能力在本轮之前即为 `not_available`，不在修复范围内。
 
 ## 一、阶段三遗留 7 条（stage-3-plan §5.3）
@@ -37,7 +38,7 @@
 
 | # | 操作 | 通过标准 | 结果 |
 |---|---|---|---|
-| 8 | 任务管理器结束 pet-service.exe 两次以上 | 每次都能自动重连（退避递增），宠物恢复可用，不再永久 failed | 待执行 |
+| 8 | 任务管理器结束 pet-service.exe 两次以上 | 每次都能自动重连（退避递增），宠物恢复可用，不再永久 failed | ✅ 自动化通过（2026-11-16）：GDScript 连续 4 次 kill 均恢复 ready；打包版 service-restart 测试也通过（新 pid 接管） |
 | 9 | 设置里关闭「自主行走」再开启 | 关闭后不再自主起走（手动菜单动作不受影响），重启后开关状态保持 | 待执行 |
 | 10 | 行走中拖拽打断后重启 | 打断时的位置被存档，重启回到打断处（§4.6 瑕疵修复） | 待执行 |
 | 11 | ~~双屏：把宠物拖到第二显示器松手~~ | 可跨屏拖动；落屏后活动屏切换，行走沿新屏底边；重启保持 | ⛔ 已移除：锁主屏（dde5100，按用户决定删除多屏）后宠物固定主显示器工作区、设置页不再有显示器选择、`screen_id` 不再读取，跨屏拖拽与落屏切换已不存在；同场景条目已在 stage-3-plan §5.3 #7 移除 |
@@ -45,18 +46,18 @@
 | 13 | 聊天让模型做动作（如「挥挥手」） | chat.done 的 action 被播放；65 动作白名单内均可触发；非法动作被忽略 | 待执行 |
 | 14 | 聊天收到回复 / 主动消息 | 头顶气泡显示、跟随宠物、不抢焦点、点击穿透、数秒后自动消失 | 待执行 |
 | 15 | 配置 TTS 后聊天 | tts.synthesize 返回音频并播放（需可用 TTS 端点）；未配置时明确报错不崩溃 | 待执行 |
-| 16 | 开启 vision.enabled 后触发识屏 | 截屏→视觉描述返回；关闭时明确 not_available；图像不落盘 | 待执行 |
+| 16 | 开启 vision.enabled 后触发识屏 | 截屏→视觉描述返回；关闭时明确 not_available；图像不落盘 | 后端-only（本轮不做 UI）：`vision.analyze` 与主动截屏 tick 已实现并通过服务层测试；应用侧没有 `vision.enabled` 开关/触发入口，`vision.proactive` 也被客户端 `_dispatch` 丢弃。UI 接线留待下一轮；本条不阻塞本轮合并 |
 | 17 | 全屏播放视频 10 分钟 | 宠物降档渲染（帧率下降），GPU 占用明显低于修复前；恢复交互后回到 30fps | 待执行 |
 | 18 | 长会话聊天（200+ 条）流式回复 | 不越来越卡；旧消息被裁剪；最终文本完整 | 待执行 |
-| 19 | 打包版托盘动作菜单 | 菜单非空、命令号与动作一一对应（action_menu.json 已进 include_filter） | 待执行 |
+| 19 | 打包版托盘动作菜单 | 菜单非空、命令号与动作一一对应（action_menu.json 已进 include_filter） | ✅ 打包版实测通过（2026-11-16）：READY 日志 ACTION_MENU groups=8 actions=65；export_filters 守卫通过 |
 | 20 | 服务不可达时发送聊天/设置 | UI 不冻结（管道写非阻塞），给出明确错误提示 | 待执行 |
 
 ## 三、foot-pose-repair 自认未闭环项
 
 | # | 项目 | 结果 |
 |---|---|---|
-| 21 | 整包导出（build_stage1 + build_stage2）在修复后重跑通过 | 待执行 |
-| 22 | 全量 Python 测试在 Windows / 3.13.14 环境通过（含 DPAPI 往返，Linux 上跳过） | 待执行 |
+| 21 | 整包导出（build_stage1 + build_stage2）在修复后重跑通过 | ✅ 本机实测通过（2026-11-16）：build_stage2 → GODETTE_STAGE2_BUILD_OK（含 native、导出、9 例视觉、110s 桌面采样）；build_stage1 未单独复跑 |
+| 22 | 全量 Python 测试在 Windows / 3.13.14 环境通过（含 DPAPI 往返，Linux 上跳过） | ✅ 本机实测通过（2026-11-16）：service+assets 1060 passed / 4 skipped；frozen 1025 / 4；package_guard 34 passed |
 | 23 | ~~多屏矩阵（不同分辨率/缩放组合）~~ | ⛔ 已移除：锁主屏（dde5100）后多屏功能删除、宠物固定主显示器，多屏分辨率/缩放矩阵不复存在；单屏缩放覆盖由 §一 #6（0.5–2 倍）与 §二 #12（150% DPI）承担，stage-3-plan §5.3 #7 已同步移除同场景条目 |
 | 24 | 长时稳定性（≥4 小时挂机，观察内存；首跑 +90MB 阶跃与拖动偶发失败需在此轮定位） | 待执行 |
 | 25 | 58 个新动作逐个目视核对 mode/root_motion（本轮已加 tests/assets/test_action_metadata.py 结构校验，但滑步只能肉眼判断） | 待执行 |

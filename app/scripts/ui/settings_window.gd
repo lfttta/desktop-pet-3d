@@ -925,10 +925,12 @@ func _save() -> void:
 		"privacy": {"log_prompts": privacy_log_prompts.button_pressed},
 	}
 	if _supports_schema(6):
-		patch["behavior"] = {
-			"enabled": behavior_enabled.button_pressed,
-			"walk_enabled": walk_enabled.button_pressed,
-		}
+		# `walk_enabled` is schema v11; sending it to a v6-v10 service would
+		# reject the whole behavior group, so only the base key goes out there.
+		var behavior_patch := {"enabled": behavior_enabled.button_pressed}
+		if _supports_walk_enabled():
+			behavior_patch["walk_enabled"] = walk_enabled.button_pressed
+		patch["behavior"] = behavior_patch
 		patch["performance"] = {
 			"idle_fps": int(idle_fps.value),
 			"drag_fps": int(drag_fps.value),
@@ -1038,10 +1040,10 @@ func _supports_schema(minimum: int) -> bool:
 func _supports_desktop() -> bool:
 	return _supports_schema(5)
 
-## The behavior group arrived with schema v6; sending it to an older service
-## would get the entire patch rejected.
-func _supports_behavior() -> bool:
-	return _schema_version >= 6
+## The behavior group arrived with schema v6, but `walk_enabled` only arrived
+## with v11; sending it to a v6-v10 service would get the entire patch rejected.
+func _supports_walk_enabled() -> bool:
+	return _schema_version >= 11
 
 func _autonomy_patch(quiet_start: String, quiet_end: String) -> Dictionary:
 	var patch := {
@@ -1296,8 +1298,8 @@ func _refresh_controls() -> void:
 	expression_tone.disabled = not (ready and _supports_schema(9))
 	# cloud_enabled only exists from schema v5; a legacy service would reject it.
 	cloud_proactive.disabled = not (ready and _supports_desktop())
-	# The behavior group arrived with schema v6.
-	walk_enabled.disabled = not (ready and _supports_behavior())
+	# The walk gate only arrived with schema v11.
+	walk_enabled.disabled = not (ready and _supports_walk_enabled())
 	# Desktop controls stay unavailable once the service reported the command
 	# as missing, or when the service is too old to accept the desktop group:
 	# saving a setting the service cannot honour silently drops the choice.

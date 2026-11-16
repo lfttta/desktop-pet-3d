@@ -23,6 +23,7 @@ func _run() -> void:
 	await _test_unavailable()
 	await _test_legacy_schema()
 	await _test_behavior_performance_settings()
+	await _test_walk_enabled_v11()
 	await _test_behavior_legacy_schema()
 	await _test_bubble_greeting_settings()
 	await _test_expression_tone()
@@ -299,6 +300,8 @@ func _test_behavior_performance_settings() -> void:
 	check(window.hidden_fps.min_value == 1 and window.hidden_fps.max_value == 15,
 		"hidden fps covers the service range 1 to 15")
 	check(not window.behavior_enabled.disabled, "a v6 service unlocks the behavior switch")
+	check(window.walk_enabled != null, "autonomy page has a walk switch")
+	check(window.walk_enabled.disabled, "a v6 service leaves the walk switch locked")
 	check(window.idle_fps.editable and window.drag_fps.editable and window.hidden_fps.editable,
 		"a v6 service unlocks the frame rate inputs")
 	check(not window.behavior_enabled.button_pressed,
@@ -331,6 +334,8 @@ func _test_behavior_performance_settings() -> void:
 	var patch: Dictionary = patches[0]
 	check(patch.has("behavior") and patch.behavior.enabled == false,
 		"save patch carries behavior.enabled")
+	check(not patch.behavior.has("walk_enabled"),
+		"a v6 save omits behavior.walk_enabled")
 	check(patch.has("performance"), "save patch includes the performance group")
 	check(int(patch.performance.idle_fps) == 60 and int(patch.performance.drag_fps) == 30
 		and int(patch.performance.hidden_fps) == 15,
@@ -347,6 +352,42 @@ func _test_behavior_performance_settings() -> void:
 	check(int(quiet_request.payload.minutes) == 120,
 		"the quiet action uses the selected duration, got %s" % [quiet_request.payload.minutes])
 
+	window.free()
+	host.free()
+
+
+## Schema 11 `behavior.walk_enabled`: populate restores it, a v11 service
+## unlocks the switch, and save sends it back inside the behavior group.
+func _test_walk_enabled_v11() -> void:
+	var host := Node.new()
+	root.add_child(host)
+	var fake := FakeService.new()
+	host.add_child(fake)
+	var window := SettingsWindow.new()
+	window.visible = false
+	host.add_child(window)
+	await process_frame
+	window.show_status("ready", "后台服务已连接")
+	var settings := _settings()
+	settings["schema_version"] = 11
+	settings["behavior"] = {"enabled": true, "walk_enabled": false}
+	settings["performance"] = {"idle_fps": 30, "drag_fps": 60, "hidden_fps": 5}
+	window.populate(settings)
+	await process_frame
+
+	check(not window.walk_enabled.disabled, "a v11 service unlocks the walk switch")
+	check(not window.walk_enabled.button_pressed,
+		"populate restores behavior.walk_enabled")
+
+	var patches: Array = []
+	window.save_requested.connect(func(value: Dictionary): patches.append(value))
+	window._save()
+	check(patches.size() == 1, "a v11 save emits one patch")
+	check(patches[0].has("behavior") and patches[0].behavior.enabled == true,
+		"a v11 save still carries behavior.enabled")
+	check(patches[0].behavior.has("walk_enabled")
+		and patches[0].behavior.walk_enabled == false,
+		"a v11 save carries behavior.walk_enabled")
 	window.free()
 	host.free()
 

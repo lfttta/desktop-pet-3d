@@ -28,9 +28,10 @@ const LOCAL_TIMEOUT_COMMANDS := ["chat.send", "state.get", "desktop.status"]
 ## instead of leaving the pet inert after a single attempt.
 const RESTART_BASE_DELAY := 1.0
 const RESTART_MAX_DELAY := 30.0
-## OS.is_process_running is a syscall; once per second is plenty to notice a
-## crash, and it keeps the per-frame cost of the transport loop down.
-const LIVENESS_INTERVAL_MS := 1000
+## Liveness is checked every frame: reading a pipe whose child already exited
+## makes Godot log a PeekNamedPipe error, and a once-per-second cache left a
+## one-second window of exactly that. One OpenProcess/GetExitCodeProcess per
+## frame is far cheaper than the pipe reads it guards.
 var state := "stopped"
 var detail := "后台服务尚未启动"
 var process_pid := 0
@@ -51,7 +52,6 @@ var _retry_at := 0
 var _stopping := false
 var _stderr_bytes := 0
 var _liveness := true
-var _liveness_at := 0
 ## Outbound queue drained by the writer thread. Ordering is preserved by the
 ## single queue + single writer; every chunk is flushed as soon as it is written.
 var _outbound: Array[PackedByteArray] = []
@@ -89,7 +89,6 @@ func start() -> bool:
 		_failure("无法建立后台进程回收保护")
 		return false
 	_liveness = true
-	_liveness_at = Time.get_ticks_msec()
 	_start_writer()
 	request("hello", {"protocol_version": 1}, 8.0)
 	return true
@@ -217,9 +216,9 @@ func _process(_delta: float) -> void:
 	if process_pid == 0 or _pipe.is_empty():
 		return
 	var now := Time.get_ticks_msec()
-	if now - _liveness_at >= LIVENESS_INTERVAL_MS:
-		_liveness_at = now
-		_liveness = OS.is_process_running(process_pid)
+	# Always re-check before touching the pipes: a cached "alive" from up to a
+	# second ago would read a dead pipe and log an engine error.
+	_liveness = OS.is_process_running(process_pid)
 	if not _liveness:
 		_process_exit()
 		return

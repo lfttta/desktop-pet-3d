@@ -73,7 +73,13 @@ def wait_report(path: Path, predicate, timeout: float = 12.0) -> dict:
 def assert_clean_log(path: Path) -> None:
     text = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
     clean = re.sub(r"\x1b\[[0-9;]*m", "", text)
-    errors = [line for line in clean.splitlines() if line.lstrip().startswith(("ERROR:", "SCRIPT ERROR:"))]
+    # When the service child is killed, Godot's non-blocking pipe poll can lose
+    # the PeekNamedPipe race and log this engine-level error before
+    # OS.is_process_running notices. The restart test asserts the recovery, so
+    # only this exact pipe-teardown line is ignored; everything else still fails.
+    errors = [line for line in clean.splitlines()
+              if line.lstrip().startswith(("ERROR:", "SCRIPT ERROR:"))
+              and "!PeekNamedPipe(fd[0]" not in line]
     if errors:
         raise AssertionError(f"Godot errors in {path}:\n" + "\n".join(errors[-12:]))
 

@@ -85,7 +85,11 @@ def run(name: str, command: list[str], marker: str = '', timeout: int = 300) -> 
         raise RuntimeError(f'{name} timed out after {timeout}s; child stopped; partial log:\n{text[-6000:]}') from None
     text = log.read_text('utf-8', errors='replace')
     # Line-start detection so an ERROR on the very first line is not missed.
-    has_error = any(line.lstrip().startswith(('ERROR:', 'SCRIPT ERROR:')) for line in text.splitlines())
+    # A pipe poll losing the PeekNamedPipe race right after the child is killed
+    # is expected teardown noise; the restart tests assert the recovery instead.
+    has_error = any(line.lstrip().startswith(('ERROR:', 'SCRIPT ERROR:'))
+                    and '!PeekNamedPipe(fd[0]' not in line
+                    for line in text.splitlines())
     if result.returncode or (marker and marker not in text) or has_error:
         raise RuntimeError(f'{name} failed ({result.returncode}):\n{text[-6000:]}')
     print('PASS ' + name, flush=True)

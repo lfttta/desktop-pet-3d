@@ -169,6 +169,8 @@ def timestamp_value(value):
 #
 # 已知边界（均确定性、fail-open，留待后续轮次）：
 # - 「中午1点」按 01:00 原样解析（口语的 13:00 与 11:00 有歧义，不猜）；
+# - 「去年 3 月」只有月没有日：不猜具体日，仍返回 None；带日的
+#   「去年3月15日」按紧邻的年份前缀修正锚定年；
 # - URL/表格里的日期会被当作事实时间（排除它们需要分词级上下文，超出本轮）；
 # - 日界按 UTC，与仓库全 UTC 约定一致。
 
@@ -188,6 +190,23 @@ _OCCURRENCE_RELATIVE = re.compile(
 _AFTERNOON_PREFIXES = ('下午', '晚上', '傍晚')
 _WEEKDAY_INDEX = {'一': 0, '二': 1, '三': 2, '四': 3, '五': 4, '六': 5,
                   '日': 6, '天': 6}
+# 紧邻日期的相对年份前缀；长的放前面，避免「大前年」被「前年」截走。
+_YEAR_PREFIXES = (('大前年', -3), ('大后年', 3), ('前年', -2), ('后年', 2),
+                  ('去年', -1), ('今年', 0), ('明年', 1))
+
+
+def _relative_year_offset(text, start):
+    """Return the year offset of a 去年/今年/明年 token right before ``start``.
+
+    Only whitespace may sit between the token and the date; a prefix earlier in
+    the sentence is ignored so ``去年我去了北京，3月15日回来`` does not shift
+    the date by a year. No token means the anchor year (the pre-v11 behavior).
+    """
+    head = text[:start].rstrip()
+    for token, offset in _YEAR_PREFIXES:
+        if head.endswith(token):
+            return offset
+    return 0
 
 
 def _occurrence_date(text, anchor):
@@ -202,10 +221,12 @@ def _occurrence_date(text, anchor):
                             int(match.group(3)), tzinfo=timezone.utc).date()
         except ValueError:
             continue
-    # 无年份的月日取锚定年，不做进退年猜测。
+    # 无年份的月日：先用紧邻的「去年/今年/明年」修正锚定年；没有前缀时取
+    # 锚定年，不做进退年猜测。
     for match in _OCCURRENCE_DATE_SHORT.finditer(text):
+        year = anchor.year + _relative_year_offset(text, match.start())
         try:
-            return datetime(anchor.year, int(match.group(1)),
+            return datetime(year, int(match.group(1)),
                             int(match.group(2)), tzinfo=timezone.utc).date()
         except ValueError:
             continue
